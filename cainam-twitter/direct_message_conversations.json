@@ -1,0 +1,146 @@
+{
+  "conversations": [
+    {
+      "conversation_id": "1850569762965016576-1855214422265925632",
+      "messages": [
+        {
+          "id": "1872159766019203135",
+          "text": "1",
+          "sender_id": "1855214422265925632",
+          "recipient_id": "1850569762965016576",
+          "created_at": "1735192645000",
+          "media_urls": null,
+          "sender_screen_name": "justchillbotx",
+          "recipient_screen_name": "VibesGogh"
+        },
+        {
+          "id": "1872159787192062264",
+          "text": "1",
+          "sender_id": "1850569762965016576",
+          "recipient_id": "1855214422265925632",
+          "created_at": "1735192650000",
+          "media_urls": null,
+          "sender_screen_name": "VibesGogh",
+          "recipient_screen_name": "justchillbotx"
+        },
+        {
+          "id": "1872159896600523178",
+          "text": "2",
+          "sender_id": "1855214422265925632",
+          "recipient_id": "1850569762965016576",
+          "created_at": "1735192677000",
+          "media_urls": null,
+          "sender_screen_name": "justchillbotx",
+          "recipient_screen_name": "VibesGogh"
+        },
+        {
+          "id": "1872160868026487285",
+          "text": "3",
+          "sender_id": "1850569762965016576",
+          "recipient_id": "1855214422265925632",
+          "created_at": "1735192908000",
+          "media_urls": null,
+          "sender_screen_name": "VibesGogh",
+          "recipient_screen_name": "justchillbotx"
+        }
+      ],
+      "participants": [
+        { "id": "1850569762965016576", "screen_name": "VibesGogh" },
+        { "id": "1855214422265925632", "screen_name": "justchillbotx" }
+      ]
+    },
+    {
+      "conversation_id": "401019307-1855214422265925632",
+      "messages": [
+        {
+          "id": "1872159370064314383",
+          "text": "g",
+          "sender_id": "401019307",
+          "recipient_id": "1855214422265925632",
+          "created_at": "1735192551000",
+          "media_urls": null,
+          "sender_screen_name": "0xleductam",
+          "recipient_screen_name": "justchillbotx"
+        },
+        {
+          "id": "1872159897951019164",
+          "text": "2",
+          "sender_id": "1855214422265925632",
+          "recipient_id": "401019307",
+          "created_at": "1735192677000",
+          "media_urls": null,
+          "sender_screen_name": "justchillbotx",
+          "recipient_screen_name": "0xleductam"
+        },
+        {
+          "id": "1872159970810302655",
+          "text": "1",
+          "sender_id": "401019307",
+          "recipient_id": "1855214422265925632",
+          "created_at": "1735192694000",
+          "media_urls": null,
+          "sender_screen_name": "0xleductam",
+          "recipient_screen_name": "justchillbotx"
+        },
+        {
+          "id": "1872159993895801288",
+          "text": "2",
+          "sender_id": "1855214422265925632",
+          "recipient_id": "401019307",
+          "created_at": "1735192700000",
+          "media_urls": null,
+          "sender_screen_name": "justchillbotx",
+          "recipient_screen_name": "0xleductam"
+        }
+      ],
+      "participants": [
+        { "id": "401019307", "screen_name": "0xleductam" },
+        { "id": "1855214422265925632", "screen_name": "justchillbotx" }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "1850569762965016576",
+      "screen_name": "VibesGogh",
+      "name": "Apple Crab",
+      "profile_image_url": "https://pbs.twimg.com/profile_images/1869408265190432768/kgaMZvYi_normal.jpg",
+      "description": null,
+      "verified": false,
+      "protected": false,
+      "followers_count": 85,
+      "friends_count": 4
+    },
+    {
+      "id": "1855214422265925632",
+      "screen_name": "justchillbotx",
+      "name": "Just a chill bot",
+      "profile_image_url": "https://pbs.twimg.com/profile_images/1862393701365841920/z5h3OQZQ_normal.jpg",
+      "description": "GRv9SNShfSuc5EgE72wcenAo9TrHyjdqQkXLrxY7pump",
+      "verified": false,
+      "protected": false,
+      "followers_count": 40,
+      "friends_count": 4
+    },
+    {
+      "id": "401019307",
+      "screen_name": "0xleductam",
+      "name": "leductam",
+      "profile_image_url": "https://pbs.twimg.com/profile_images/1850859270377779200/tIDUy51Z_normal.jpg",
+      "description": "life has dreams, each is wonderful.",
+      "verified": false,
+      "protected": false,
+      "followers_count": 3751,
+      "friends_count": 1601
+    }
+  ],
+  "cursor": "GRwmnoDS-eTBn_szFurH2NH9mKD7MyUOAAA",
+  "last_seen_event_id": "1872160868026487285",
+  "trusted_last_seen_event_id": "1872160868026487285",
+  "untrusted_last_seen_event_id": "0",
+  "inbox_timelines": {
+    "trusted": { "status": "AT_END", "min_entry_id": "1872159993895801288" },
+    "untrusted": { "status": "AT_END", "min_entry_id": null }
+  },
+  "user_id": "1855214422265925632"
+}

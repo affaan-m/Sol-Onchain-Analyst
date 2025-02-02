@@ -1,0 +1,12 @@
+.env
+target/
+.DS_Store
+.idea/
+.vscode/
+.devcontainer/
+node_modules/
+characters/
+.goose/
+
+# Crates
+cainam-trader

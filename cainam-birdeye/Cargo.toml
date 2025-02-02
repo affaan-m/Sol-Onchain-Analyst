@@ -1,0 +1,37 @@
+[package]
+name = "cainam-birdeye"
+version = "0.1.0"
+edition = "2021"
+description = "Birdeye client for DeFi and token analytics"
+license = "MIT"
+
+[dependencies]
+rig-core = { path = "../rig-core", features = ["derive", "all"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+async-trait = "0.1"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+chrono = "0.4"
+base64 = "0.21"
+bs58 = "0.5"
+url = "2.4"
+hex = "0.4"
+tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util", "macros"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+pretty_assertions = "1.0"
+
+# Environment variables
+dotenvy = "0.15.7"
+mockall = "0.11"
+
+[lib]
+name = "cainam_birdeye"
+path = "src/lib.rs"
