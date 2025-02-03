@@ -1,0 +1,59 @@
+[package]
+name = "cainam-trader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Framework
+rig-core = { path = "../rig-core", features = ["derive", "pdf", "all"] }
+rig-postgres = { path = "../rig-postgres" }
+
+# Core dependencies
+tokio.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+# Database
+sqlx.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Time handling
+chrono.workspace = true
+
+# Environment
+dotenv = "0.15"
+
+# HTTP client
+reqwest.workspace = true
+
+# Utilities
+uuid.workspace = true
+base64 = "0.21"
+rand = "0.8"
+
+# DEX integration
+# Using Jupiter via HTTP API instead of direct SDK
+serde_qs = "0.12"  # For query string serialization
+url = "2.4"        # For URL manipulation
+
+# Social media integration
+twitter-v2 = "0.1"
+oauth2 = "4.4"
+
+# OpenAI
+openai = { version = "1.0.0-alpha.18" }
+
+# Authentication
+oauth1 = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"

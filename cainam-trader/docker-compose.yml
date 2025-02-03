@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: mgunnin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cainam_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  trader:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://mgunnin:password@postgres:5432/cainam_db
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:

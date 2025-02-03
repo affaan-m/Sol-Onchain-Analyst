@@ -1,12 +1,22 @@
+# Environment variables
 .env
+.env.local
+
+# Build
 target/
+
+# Local Artifacts
 .DS_Store
-.idea/
+
+# IDE
 .vscode/
 .devcontainer/
-node_modules/
-characters/
-.goose/
 
-# Crates
-cainam-trader
+# Node
+node_modules/
+
+# Characters
+characters/
+
+# Goose
+.goose/
