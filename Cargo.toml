@@ -22,9 +22,10 @@ members = [
     "rig-neo4j",
     "rig-postgres"
 ]
+exclude = ["cainam-trader"]
 
-[workspace.dependencies]
 # Core dependencies
+[workspace.dependencies]
 anyhow = "1.0.95"
 async-trait = "0.1.85"
 futures = "0.3"
