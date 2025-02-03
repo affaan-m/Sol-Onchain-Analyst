@@ -11,7 +11,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use chrono::Utc;
 use anyhow::Result;
-use tracing::info;
+use tracing::{info, error};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 mod agent;
 mod config;
@@ -23,6 +24,148 @@ mod models;
 mod services;
 mod utils;
 mod logging;
+
+async fn handle_user_input(
+    trader: Arc<TradingAgent>,
+    config: AgentConfig,
+    running: Arc<AtomicBool>,
+) {
+    println!("\n=== Cainam Trading Agent ===");
+    println!("The agent is running autonomously in the background.");
+    println!("\nAvailable commands:");
+    println!("  analyze <symbol> <address>    - Analyze market for a token");
+    println!("  trade <symbol> <buy|sell> <amount>  - Execute a trade");
+    println!("  status                        - Get current trading status");
+    println!("  exit                          - Exit the program");
+    println!("\nType a command and press Enter.\n");
+
+    loop {
+        if !running.load(Ordering::SeqCst) {
+            break;
+        }
+
+        print!("> ");
+        io::stdout().flush().unwrap_or_default();
+
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let parts: Vec<String> = input
+                    .trim()
+                    .split_whitespace()
+                    .map(String::from)
+                    .collect();
+                
+                if parts.is_empty() {
+                    continue;
+                }
+
+                match parts[0].as_str() {
+                    "analyze" => {
+                        if parts.len() != 3 {
+                            println!("Usage: analyze <symbol> <address>");
+                            continue;
+                        }
+                        println!("Analyzing market for {}...", parts[1]);
+                        tokio::spawn({
+                            let trader = trader.clone();
+                            let symbol = parts[1].clone();
+                            let address = parts[2].clone();
+                            async move {
+                                match trader.analyze_market(&symbol, &address).await {
+                                    Ok(Some(signal)) => {
+                                        println!("\nMarket Analysis Result:");
+                                        println!("  Signal: {:?}", signal.signal_type);
+                                        println!("  Confidence: {:.2}", signal.confidence);
+                                        println!("  Risk Score: {:.2}", signal.risk_score);
+                                    }
+                                    Ok(None) => println!("\nNo trading signals generated"),
+                                    Err(e) => println!("\nAnalysis failed: {}", e),
+                                }
+                            }
+                        });
+                    }
+                    "trade" => {
+                        if parts.len() != 4 {
+                            println!("Usage: trade <symbol> <buy|sell> <amount>");
+                            continue;
+                        }
+                        let amount = match parts[3].parse::<f64>() {
+                            Ok(val) => val,
+                            Err(_) => {
+                                println!("Invalid amount. Please provide a valid number.");
+                                continue;
+                            }
+                        };
+
+                        let signal_type = match parts[2].to_uppercase().as_str() {
+                            "BUY" => SignalType::StrongBuy,
+                            "SELL" => SignalType::StrongSell,
+                            _ => {
+                                println!("Invalid trade type. Use 'buy' or 'sell'");
+                                continue;
+                            }
+                        };
+
+                        println!("Executing {} trade for {}...", parts[2], parts[1]);
+                        tokio::spawn({
+                            let trader = trader.clone();
+                            let symbol = parts[1].clone();
+                            async move {
+                                let signal = MarketSignal {
+                                    id: None,
+                                    asset_address: symbol.clone(),
+                                    signal_type: signal_type.clone(),
+                                    confidence: f64_to_decimal(0.8),
+                                    risk_score: f64_to_decimal(0.2),
+                                    sentiment_score: Some(f64_to_decimal(0.6)),
+                                    volume_change_24h: Some(f64_to_decimal(0.15)),
+                                    price_change_24h: Some(f64_to_decimal(if signal_type == SignalType::StrongBuy { 0.05 } else { -0.05 })),
+                                    price: f64_to_decimal(10.0),
+                                    volume_change: f64_to_decimal(0.2),
+                                    timestamp: Utc::now(),
+                                    metadata: None,
+                                    created_at: None,
+                                };
+
+                                let min_confidence = f64_to_decimal(config.trade_min_confidence);
+                                if signal.confidence >= min_confidence {
+                                    match trader.execute_trade(&symbol, &signal).await {
+                                        Ok(signature) => {
+                                            println!("\nTrade executed successfully!");
+                                            println!("Transaction: {}", signature);
+                                            if let Err(e) = trader.post_trade_update(&symbol, &parts[2], amount, &signal_type).await {
+                                                println!("Failed to post trade update: {}", e);
+                                            }
+                                        }
+                                        Err(e) => println!("\nTrade execution failed: {}", e),
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    "status" => {
+                        println!("\nTrading Agent Status:");
+                        println!("  State: Active");
+                        println!("  Analysis Interval: {:?}", config.analysis_interval);
+                        println!("  Min Confidence: {:.2}", config.trade_min_confidence);
+                        println!("  Max Trade Amount: {:.2}", config.trade_max_amount);
+                    }
+                    "exit" => {
+                        println!("\nShutting down trading agent...");
+                        running.store(false, Ordering::SeqCst);
+                        break;
+                    }
+                    _ => println!("Unknown command. Type 'help' for available commands."),
+                }
+            }
+            Err(e) => {
+                error!("Error reading input: {}", e);
+                break;
+            }
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,101 +194,37 @@ async fn main() -> Result<()> {
     let config = AgentConfig::new_from_env()?;
 
     // Initialize trading agent
-    let trader = TradingAgent::new(config.clone(), db.clone(), solana_agent).await?;
+    let trader = Arc::new(TradingAgent::new(config.clone(), db.clone(), solana_agent).await?);
+    let running = Arc::new(AtomicBool::new(true));
 
-    println!("Trading Agent initialized! Available commands:");
-    println!("  analyze <symbol> <address>    - Analyze market for a token");
-    println!("  trade <symbol> <buy|sell> <amount>  - Execute a trade");
-    println!("  exit                          - Exit the program");
-
-    loop {
-        print!("Enter command (analyze/trade/exit): ");
-        io::stdout().flush().map_err(|e| anyhow::anyhow!(e))?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).map_err(|e| anyhow::anyhow!(e))?;
-
-        let parts: Vec<&str> = input.trim().split_whitespace().collect();
-        if parts.is_empty() {
-            continue;
+    // Spawn the autonomous trading agent
+    let trader_clone = trader.clone();
+    let running_clone = running.clone();
+    let trading_handle = tokio::spawn(async move {
+        info!("Starting autonomous trading...");
+        if let Err(e) = trader_clone.run().await {
+            error!("Trading agent error: {}", e);
+            running_clone.store(false, Ordering::SeqCst);
         }
+    });
 
-        match parts[0] {
-            "analyze" => {
-                if parts.len() != 3 {
-                    println!("Usage: analyze <symbol> <address>");
-                    continue;
-                }
-                match trader.analyze_market(parts[1], parts[2]).await {
-                    Ok(Some(signal)) => {
-                        println!("Signal generated: {:?} (confidence: {:.2})", signal.signal_type, signal.confidence);
-                        let min_confidence = f64_to_decimal(config.trade_min_confidence);
-                        if signal.confidence >= min_confidence {
-                            match trader.execute_trade(parts[1], &signal).await {
-                                Ok(signature) => println!("Trade executed: {}", signature),
-                                Err(e) => println!("Trade execution failed: {}", e),
-                            }
-                        }
-                    }
-                    Ok(None) => println!("No trading signals generated"),
-                    Err(e) => println!("Analysis failed: {}", e),
-                }
-            }
-            "trade" => {
-                if parts.len() != 4 {
-                    println!("Usage: trade <symbol> <buy|sell> <amount>");
-                    continue;
-                }
-                let amount = match parts[3].parse::<f64>() {
-                    Ok(val) => val,
-                    Err(_) => {
-                        println!("Invalid amount. Please provide a valid number.");
-                        continue;
-                    }
-                };
+    // Handle user input in a separate task
+    let input_handle = tokio::spawn(handle_user_input(trader.clone(), config, running.clone()));
 
-                let signal_type = match parts[2].to_uppercase().as_str() {
-                    "BUY" => SignalType::StrongBuy,
-                    "SELL" => SignalType::StrongSell,
-                    _ => {
-                        println!("Invalid trade type. Use 'buy' or 'sell'");
-                        continue;
-                    }
-                };
-
-                let signal = MarketSignal {
-                    id: None,
-                    asset_address: parts[1].to_string(),
-                    signal_type: signal_type.clone(),
-                    confidence: f64_to_decimal(0.8),
-                    risk_score: f64_to_decimal(0.2),
-                    sentiment_score: Some(f64_to_decimal(0.6)),
-                    volume_change_24h: Some(f64_to_decimal(0.15)),
-                    price_change_24h: Some(f64_to_decimal(if signal_type == SignalType::StrongBuy { 0.05 } else { -0.05 })),
-                    price: f64_to_decimal(10.0),
-                    volume_change: f64_to_decimal(0.2),
-                    timestamp: Utc::now(),
-                    metadata: None,
-                    created_at: None,
-                };
-
-                let min_confidence = f64_to_decimal(config.trade_min_confidence);
-                if signal.confidence >= min_confidence {
-                    match trader.execute_trade(parts[1], &signal).await {
-                        Ok(signature) => {
-                            println!("Trade executed: {}", signature);
-                            if let Err(e) = trader.post_trade_update(parts[1], parts[2], amount, &signal_type).await {
-                                println!("Failed to post trade update: {}", e);
-                            }
-                        }
-                        Err(e) => println!("Trade execution failed: {}", e),
-                    }
-                }
-            }
-            "exit" => break,
-            _ => println!("Unknown command. Type 'help' for available commands."),
+    // Wait for either task to complete
+    tokio::select! {
+        _ = trading_handle => {
+            info!("Trading task completed");
+        }
+        _ = input_handle => {
+            info!("User input task completed");
         }
     }
+
+    // Wait for clean shutdown
+    info!("Shutting down trading agent...");
+    running.store(false, Ordering::SeqCst);
+    trader.stop();
 
     Ok(())
 }

@@ -8,6 +8,10 @@ readme = "README.md"
 keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
 
+[[bin]]
+name = "autonomous-trader"
+path = "cainam-birdeye/examples/basic_usage.rs"
+
 [workspace]
 resolver = "2"
 members = [
@@ -16,7 +20,6 @@ members = [
     "cainam-twitter",
     "rig-core",
     "rig-neo4j",
-    "cainam-trader",
     "rig-postgres"
 ]
 
@@ -29,6 +32,9 @@ thiserror = "1.0"
 tokio = { version = "1.43.0", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json", "time"] }
+
+# AI/ML
+openai = { version = "1.0.0-alpha.18" }
 
 # Solana ecosystem
 solana-client = "2.1.12"
@@ -71,6 +77,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 futures.workspace = true
 async-trait.workspace = true
+
+# AI/ML
+openai.workspace = true
 
 # Solana
 solana-client.workspace = true
@@ -121,3 +130,4 @@ pretty_assertions = "1.0"
 test-log = { version = "0.2", features = ["trace"] }
 env_logger = "0.10"
 tokio = { version = "1.43.0", features = ["full", "test-util"] }
+mockall = "0.12.1"

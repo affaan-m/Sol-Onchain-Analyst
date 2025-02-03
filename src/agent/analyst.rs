@@ -22,7 +22,7 @@ impl AnalystAgent {
         // Get historical data for analysis
         let start_time = Utc::now() - chrono::Duration::days(7);
         let end_time = Utc::now();
-        let history = self.analytics_service.get_token_history(
+        let _history = self.analytics_service.get_token_history(
             address,
             start_time,
             end_time,
@@ -36,7 +36,7 @@ impl AnalystAgent {
         if let Some(latest) = latest {
             // Calculate volume change
             if let Some(current_volume) = analytics.volume_24h.clone() {
-                if let Some(volume_change) = self.analytics_service.calculate_volume_change(&current_volume, &latest) {
+                if let Some(_volume_change) = self.analytics_service.calculate_volume_change(&current_volume, &latest) {
                     // Generate market signals based on the analysis
                     return self.analytics_service.generate_market_signals(&analytics).await.map_err(|e| anyhow::anyhow!(e));
                 }
@@ -73,15 +73,13 @@ mod tests {
     fn setup_mock_birdeye() -> (Arc<dyn BirdeyeApi>, Arc<BirdeyeClient>) {
         let mut mock = MockBirdeyeApi::new();
         mock.expect_get_token_info()
-            .returning(|_| {
-                futures::future::ready(Ok(TokenInfo {
-                    price: 100.0,
-                    volume24h: 1000000.0,
-                    price_change_24h: 5.0,
-                    liquidity: 500000.0,
-                    trade24h: 1000,
-                })).boxed()
-            });
+            .returning(|_| Ok(TokenInfo {
+                price: 100.0,
+                volume24h: 1000000.0,
+                price_change_24h: 5.0,
+                liquidity: 500000.0,
+                trade24h: 1000,
+            }));
 
         (
             Arc::new(mock),

@@ -171,7 +171,7 @@ impl TradingAgent {
         Ok(Some(action.to_string()))
     }
 
-    pub async fn execute_trade(&self, symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
+    pub async fn execute_trade(&self, _symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
         self.trading_engine.execute_trade(signal)
             .await
             .map_err(|e| AgentError::Trading(format!("Trade execution failed: {}", e)))
@@ -179,10 +179,10 @@ impl TradingAgent {
 
     pub async fn post_trade_update(
         &self,
-        symbol: &str,
-        action: &str,
-        amount: f64,
-        signal_type: &SignalType
+        _symbol: &str,
+        _action: &str,
+        _amount: f64,
+        _signal_type: &SignalType
     ) -> AgentResult<()> {
         // TODO: Implement post-trade updates
         // - Update portfolio state
@@ -222,8 +222,9 @@ impl TradingAgent {
                 }
             }
 
-            info!("Waiting for next analysis interval...");
+            info!("Waiting for next analysis interval ({:?})...", self.config.analysis_interval);
             sleep(self.config.analysis_interval).await;
+            info!("Starting next analysis cycle");
         }
 
         info!("Trading agent stopped");

@@ -1,12 +1,10 @@
 use serde::Serialize;
 use std::time::Instant;
-use tracing::{info, warn, error, Level};
+use tracing::{info, warn, error};
+use tracing_subscriber::{fmt, EnvFilter};
 use chrono::{DateTime, Utc};
-use tracing_subscriber::{
-    fmt::time::UtcTime,
-    EnvFilter,
-};
 use uuid::Uuid;
+use anyhow::Result;
 
 #[derive(Debug, Serialize)]
 pub struct RequestLog {
@@ -129,20 +127,20 @@ pub fn log_performance(metrics: PerformanceMetrics) {
     }
 }
 
-pub fn init_logging() -> crate::error::AgentResult<()> {
-    let env_filter = EnvFilter::from_default_env()
-        .add_directive(Level::INFO.into())
-        .add_directive("cainam_core=debug".parse()?);
+pub fn init_logging() -> Result<()> {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    tracing_subscriber::fmt()
+    fmt()
         .with_env_filter(env_filter)
-        .with_timer(UtcTime::rfc_3339())
-        .with_thread_names(true)
-        .with_target(true)
-        .with_file(true)
-        .with_line_number(true)
-        .with_thread_ids(true)
-        .json()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_file(false)
+        .with_line_number(false)
+        .with_level(true)
+        .with_ansi(true)
+        .compact()
         .init();
 
     info!("Logging initialized");

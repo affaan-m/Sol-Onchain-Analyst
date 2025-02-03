@@ -29,9 +29,9 @@ pub struct TokenInfo {
     pub trade24h: i64,
 }
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
-#[cfg_attr(test, automock)]
-pub trait BirdeyeApi {
+pub trait BirdeyeApi: Send + Sync {
     async fn get_token_info(&self, symbol: &str) -> Result<TokenInfo>;
     async fn get_token_info_by_address(&self, address: &str) -> Result<TokenInfo>;
 }
@@ -121,7 +121,7 @@ impl BirdeyeClient {
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse> {
         self.rate_limit().await;
         
-        let url = format!("{}/public/token/{}", BIRDEYE_API_BASE, address);
+        let url = format!("{}/v2/tokens/token_data?address={}", BIRDEYE_API_BASE, address);
         tracing::info!("Requesting Birdeye data: {}", url);
         
         let response = self.client

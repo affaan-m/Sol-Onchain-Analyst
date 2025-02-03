@@ -10,7 +10,7 @@ use mockall::automock;
 
 #[async_trait]
 #[cfg_attr(test, automock)]
-pub trait TwitterApi {
+pub trait TwitterApi: Send + Sync {
     async fn login(&mut self) -> Result<()>;
     async fn post_tweet(&self, text: &str) -> Result<()>;
     async fn delete_tweet(&self, tweet_id: &str) -> Result<()>;

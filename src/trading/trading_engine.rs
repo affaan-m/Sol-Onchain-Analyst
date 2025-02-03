@@ -38,7 +38,7 @@ impl TradingEngine {
         }
 
         let max_size = f64_to_decimal(self.max_trade_size);
-        let amount = decimal_to_f64(&(max_size.clone() * signal.confidence.clone()).min(max_size));
+        let _amount = decimal_to_f64(&(max_size.clone() * signal.confidence.clone()).min(max_size));
         
         let action = match signal.signal_type {
             SignalType::Buy | SignalType::StrongBuy | SignalType::PriceSpike | SignalType::VolumeSurge => "BUY",
