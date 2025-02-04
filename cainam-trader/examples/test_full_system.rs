@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     // Initialize OpenAI client
     let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
     let openai_client = OpenAIClient::new(&openai_api_key);
-    let model = openai_client.completion_model("gpt-4");
+    let model = openai_client.completion_model("gpt-4o");
 
     // Initialize PostgreSQL connection
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

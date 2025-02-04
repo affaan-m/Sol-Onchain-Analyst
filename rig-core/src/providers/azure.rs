@@ -1,12 +1,12 @@
-//! OpenAI API client and Rig integration
+//! Azure OpenAI API client and Rig integration
 //!
 //! # Example
 //! ```
-//! use rig::providers::openai;
+//! use rig::providers::azure;
 //!
-//! let client = openai::Client::new("YOUR_API_KEY");
+//! let client = azure::Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
 //!
-//! let gpt4o = client.completion_model(openai::GPT_4O);
+//! let gpt4o = client.completion_model(azure::GPT_4O);
 //! ```
 use crate::{
     agent::AgentBuilder,
@@ -20,51 +20,63 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 // ================================================================
-// Main OpenAI Client
+// Main Azure OpenAI Client
 // ================================================================
-const OPENAI_API_BASE_URL: &str = "https://api.openai.com/v1";
 
 #[derive(Clone)]
 pub struct Client {
-    base_url: String,
+    api_version: String,
+    azure_endpoint: String,
     http_client: reqwest::Client,
 }
 
 impl Client {
-    /// Create a new OpenAI client with the given API key.
-    pub fn new(api_key: &str) -> Self {
-        Self::from_url(api_key, OPENAI_API_BASE_URL)
-    }
-
-    /// Create a new OpenAI client with the given API key and base API URL.
-    pub fn from_url(api_key: &str, base_url: &str) -> Self {
+    /// Creates a new Azure OpenAI client.
+    ///
+    /// # Arguments
+    ///
+    /// * `api_key` - Azure OpenAI API key required for authentication
+    /// * `api_version` - API version to use (e.g., "2024-10-21" for GA, "2024-10-01-preview" for preview)
+    /// * `azure_endpoint` - Azure OpenAI endpoint URL, for example: https://{your-resource-name}.openai.azure.com
+    pub fn new(api_key: &str, api_version: &str, azure_endpoint: &str) -> Self {
         Self {
-            base_url: base_url.to_string(),
+            api_version: api_version.to_string(),
+            azure_endpoint: azure_endpoint.to_string(),
             http_client: reqwest::Client::builder()
                 .default_headers({
                     let mut headers = reqwest::header::HeaderMap::new();
-                    headers.insert(
-                        "Authorization",
-                        format!("Bearer {}", api_key)
-                            .parse()
-                            .expect("Bearer token should parse"),
-                    );
+                    headers.insert("api-key", api_key.parse().expect("API key should parse"));
                     headers
                 })
                 .build()
-                .expect("OpenAI reqwest client should build"),
+                .expect("Azure OpenAI reqwest client should build"),
         }
     }
 
-    /// Create a new OpenAI client from the `OPENAI_API_KEY` environment variable.
-    /// Panics if the environment variable is not set.
+    /// Create a new Azure OpenAI client from the `AZURE_API_KEY`, `AZURE_API_VERSION`, and `AZURE_ENDPOINT` environment variables.
+    /// Panics if these environment variables are not set.
     pub fn from_env() -> Self {
-        let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set");
-        Self::new(&api_key)
+        let api_key = std::env::var("AZURE_API_KEY").expect("AZURE_API_KEY not set");
+        let api_version = std::env::var("AZURE_API_VERSION").expect("AZURE_API_VERSION not set");
+        let azure_endpoint = std::env::var("AZURE_ENDPOINT").expect("AZURE_ENDPOINT not set");
+        Self::new(&api_key, &api_version, &azure_endpoint)
     }
 
-    fn post(&self, path: &str) -> reqwest::RequestBuilder {
-        let url = format!("{}/{}", self.base_url, path).replace("//", "/");
+    fn post_embedding(&self, deployment_id: &str) -> reqwest::RequestBuilder {
+        let url = format!(
+            "{}/openai/deployments/{}/embeddings?api-version={}",
+            self.azure_endpoint, deployment_id, self.api_version
+        )
+        .replace("//", "/");
+        self.http_client.post(url)
+    }
+
+    fn post_chat_completion(&self, deployment_id: &str) -> reqwest::RequestBuilder {
+        let url = format!(
+            "{}/openai/deployments/{}/chat/completions?api-version={}",
+            self.azure_endpoint, deployment_id, self.api_version
+        )
+        .replace("//", "/");
         self.http_client.post(url)
     }
 
@@ -74,12 +86,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::azure::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Azure OpenAI client
+    /// let azure = Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
     ///
-    /// let embedding_model = openai.embedding_model(openai::TEXT_EMBEDDING_3_LARGE);
+    /// let embedding_model = azure.embedding_model(azure::TEXT_EMBEDDING_3_LARGE);
     /// ```
     pub fn embedding_model(&self, model: &str) -> EmbeddingModel {
         let ndims = match model {
@@ -94,12 +106,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::azure::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Azure OpenAI client
+    /// let azure = Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
     ///
-    /// let embedding_model = openai.embedding_model("model-unknown-to-rig", 3072);
+    /// let embedding_model = azure.embedding_model("model-unknown-to-rig", 3072);
     /// ```
     pub fn embedding_model_with_ndims(&self, model: &str, ndims: usize) -> EmbeddingModel {
         EmbeddingModel::new(self.clone(), model, ndims)
@@ -109,12 +121,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::azure::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Azure OpenAI client
+    /// let azure = Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
     ///
-    /// let embeddings = openai.embeddings(openai::TEXT_EMBEDDING_3_LARGE)
+    /// let embeddings = azure.embeddings(azure::TEXT_EMBEDDING_3_LARGE)
     ///     .simple_document("doc0", "Hello, world!")
     ///     .simple_document("doc1", "Goodbye, world!")
     ///     .build()
@@ -129,12 +141,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::azure::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Azure OpenAI client
+    /// let azure = Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
     ///
-    /// let gpt4 = openai.completion_model(openai::GPT_4);
+    /// let gpt4 = azure.completion_model(azure::GPT_4);
     /// ```
     pub fn completion_model(&self, model: &str) -> CompletionModel {
         CompletionModel::new(self.clone(), model)
@@ -144,12 +156,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::azure::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Azure OpenAI client
+    /// let azure = Client::new("YOUR_API_KEY", "YOUR_API_VERSION", "YOUR_ENDPOINT");
     ///
-    /// let agent = openai.agent(openai::GPT_4)
+    /// let agent = azure.agent(azure::GPT_4)
     ///    .preamble("You are comedian AI with a mission to make people laugh.")
     ///    .temperature(0.0)
     ///    .build();
@@ -180,7 +192,7 @@ enum ApiResponse<T> {
 }
 
 // ================================================================
-// OpenAI Embedding API
+// Azure OpenAI Embedding API
 // ================================================================
 /// `text-embedding-3-large` embedding model
 pub const TEXT_EMBEDDING_3_LARGE: &str = "text-embedding-3-large";
@@ -258,9 +270,8 @@ impl embeddings::EmbeddingModel for EmbeddingModel {
 
         let response = self
             .client
-            .post("/embeddings")
+            .post_embedding(&self.model)
             .json(&json!({
-                "model": self.model,
                 "input": documents,
             }))
             .send()
@@ -270,7 +281,7 @@ impl embeddings::EmbeddingModel for EmbeddingModel {
             match response.json::<ApiResponse<EmbeddingResponse>>().await? {
                 ApiResponse::Ok(response) => {
                     tracing::info!(target: "rig",
-                        "OpenAI embedding token usage: {}",
+                        "Azure embedding token usage: {}",
                         response.usage
                     );
 
@@ -309,52 +320,34 @@ impl EmbeddingModel {
 }
 
 // ================================================================
-// OpenAI Completion API
+// Azure OpenAI Completion API
 // ================================================================
+/// `o1` completion model
+pub const O1: &str = "o1";
 /// `o1-preview` completion model
 pub const O1_PREVIEW: &str = "o1-preview";
-/// `o1-preview-2024-09-12` completion model
-pub const O1_PREVIEW_2024_09_12: &str = "o1-preview-2024-09-12";
-/// `o1-mini completion model
+/// `o1-mini` completion model
 pub const O1_MINI: &str = "o1-mini";
-/// `o1-mini-2024-09-12` completion model
-pub const O1_MINI_2024_09_12: &str = "o1-mini-2024-09-12";
 /// `gpt-4o` completion model
 pub const GPT_4O: &str = "gpt-4o";
 /// `gpt-4o-mini` completion model
 pub const GPT_4O_MINI: &str = "gpt-4o-mini";
-/// `gpt-4o-2024-05-13` completion model
-pub const GPT_4O_2024_05_13: &str = "gpt-4o-2024-05-13";
+/// `gpt-4o-realtime-preview` completion model
+pub const GPT_4O_REALTIME_PREVIEW: &str = "gpt-4o-realtime-preview";
 /// `gpt-4-turbo` completion model
-pub const GPT_4_TURBO: &str = "gpt-4-turbo";
-/// `gpt-4-turbo-2024-04-09` completion model
-pub const GPT_4_TURBO_2024_04_09: &str = "gpt-4-turbo-2024-04-09";
-/// `gpt-4-turbo-preview` completion model
-pub const GPT_4_TURBO_PREVIEW: &str = "gpt-4-turbo-preview";
-/// `gpt-4-0125-preview` completion model
-pub const GPT_4_0125_PREVIEW: &str = "gpt-4-0125-preview";
-/// `gpt-4-1106-preview` completion model
-pub const GPT_4_1106_PREVIEW: &str = "gpt-4-1106-preview";
-/// `gpt-4-vision-preview` completion model
-pub const GPT_4_VISION_PREVIEW: &str = "gpt-4-vision-preview";
-/// `gpt-4-1106-vision-preview` completion model
-pub const GPT_4_1106_VISION_PREVIEW: &str = "gpt-4-1106-vision-preview";
+pub const GPT_4_TURBO: &str = "gpt-4o";
 /// `gpt-4` completion model
 pub const GPT_4: &str = "gpt-4o";
-/// `gpt-4-0613` completion model
-pub const GPT_4_0613: &str = "gpt-4-0613";
 /// `gpt-4-32k` completion model
 pub const GPT_4_32K: &str = "gpt-4-32k";
-/// `gpt-4-32k-0613` completion model
-pub const GPT_4_32K_0613: &str = "gpt-4-32k-0613";
+/// `gpt-4-32k` completion model
+pub const GPT_4_32K_0613: &str = "gpt-4-32k";
 /// `gpt-3.5-turbo` completion model
 pub const GPT_35_TURBO: &str = "gpt-3.5-turbo";
-/// `gpt-3.5-turbo-0125` completion model
-pub const GPT_35_TURBO_0125: &str = "gpt-3.5-turbo-0125";
-/// `gpt-3.5-turbo-1106` completion model
-pub const GPT_35_TURBO_1106: &str = "gpt-3.5-turbo-1106";
 /// `gpt-3.5-turbo-instruct` completion model
 pub const GPT_35_TURBO_INSTRUCT: &str = "gpt-3.5-turbo-instruct";
+/// `gpt-3.5-turbo-16k` completion model
+pub const GPT_35_TURBO_16K: &str = "gpt-3.5-turbo-16k";
 
 #[derive(Debug, Deserialize)]
 pub struct CompletionResponse {
@@ -376,7 +369,7 @@ impl From<ApiErrorResponse> for CompletionError {
 impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionResponse> {
     type Error = CompletionError;
 
-    fn try_from(value: CompletionResponse) -> Result<Self, Self::Error> {
+    fn try_from(value: CompletionResponse) -> std::prelude::v1::Result<Self, Self::Error> {
         match value.choices.as_slice() {
             [Choice {
                 message:
@@ -463,7 +456,7 @@ pub struct Function {
 #[derive(Clone)]
 pub struct CompletionModel {
     client: Client,
-    /// Name of the model (e.g.: gpt-3.5-turbo-1106)
+    /// Name of the model (e.g.: gpt-4o-mini)
     pub model: String,
 }
 
@@ -485,6 +478,7 @@ impl completion::CompletionModel for CompletionModel {
         mut completion_request: CompletionRequest,
     ) -> Result<completion::CompletionResponse<CompletionResponse>, CompletionError> {
         // Add preamble to chat history (if available)
+        // NOTE: Azure o1-preview models does not support system messages
         let mut full_history = if let Some(preamble) = &completion_request.preamble {
             vec![completion::Message {
                 role: "system".into(),
@@ -508,13 +502,11 @@ impl completion::CompletionModel for CompletionModel {
 
         let request = if completion_request.tools.is_empty() {
             json!({
-                "model": self.model,
                 "messages": full_history,
                 "temperature": completion_request.temperature,
             })
         } else {
             json!({
-                "model": self.model,
                 "messages": full_history,
                 "temperature": completion_request.temperature,
                 "tools": completion_request.tools.into_iter().map(ToolDefinition::from).collect::<Vec<_>>(),
@@ -524,7 +516,7 @@ impl completion::CompletionModel for CompletionModel {
 
         let response = self
             .client
-            .post("/chat/completions")
+            .post_chat_completion(&self.model)
             .json(
                 &if let Some(params) = completion_request.additional_params {
                     json_utils::merge(request, params)
@@ -539,7 +531,7 @@ impl completion::CompletionModel for CompletionModel {
             match response.json::<ApiResponse<CompletionResponse>>().await? {
                 ApiResponse::Ok(response) => {
                     tracing::info!(target: "rig",
-                        "OpenAI completion token usage: {:?}",
+                        "Azure completion token usage: {:?}",
                         response.usage.clone().map(|usage| format!("{usage}")).unwrap_or("N/A".to_string())
                     );
                     response.try_into()
@@ -549,5 +541,52 @@ impl completion::CompletionModel for CompletionModel {
         } else {
             Err(CompletionError::ProviderError(response.text().await?))
         }
+    }
+}
+
+#[cfg(test)]
+mod azure_tests {
+    use super::*;
+
+    use crate::completion::CompletionModel;
+    use crate::embeddings::EmbeddingModel;
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_azure_embedding() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let client = Client::from_env();
+        let model = client.embedding_model(TEXT_EMBEDDING_3_SMALL);
+        let embeddings = model
+            .embed_texts(vec!["Hello, world!".to_string()])
+            .await
+            .unwrap();
+
+        tracing::info!("Azure embedding: {:?}", embeddings);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_azure_completion() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let client = Client::from_env();
+        let model = client.completion_model(GPT_4O_MINI);
+        let completion = model
+            .completion(CompletionRequest {
+                preamble: Some("You are a helpful assistant.".to_string()),
+                chat_history: vec![],
+                prompt: "Hello, world!".to_string(),
+                documents: vec![],
+                max_tokens: Some(100),
+                temperature: Some(0.0),
+                tools: vec![],
+                additional_params: None,
+            })
+            .await
+            .unwrap();
+
+        tracing::info!("Azure completion: {:?}", completion);
     }
 }

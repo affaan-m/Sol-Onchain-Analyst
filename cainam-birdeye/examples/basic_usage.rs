@@ -58,7 +58,7 @@ impl TradingAgent {
             tool_call_id: None,
         }];
 
-        let chat_completion = ChatCompletion::builder("gpt-4", messages)
+        let chat_completion = ChatCompletion::builder("gpt-4o", messages)
             .create_async(&self.client)
             .await?;
 

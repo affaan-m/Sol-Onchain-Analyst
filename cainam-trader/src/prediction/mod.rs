@@ -101,7 +101,7 @@ impl PricePredictor {
 
         let response = self.client.chat()
             .create()
-            .model("gpt-4")
+            .model("gpt-4o")
             .messages([openai::chat::ChatCompletionMessage {
                 role: openai::chat::ChatCompletionMessageRole::User,
                 content: Some(prompt),

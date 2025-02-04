@@ -1,28 +1,29 @@
-//! OpenAI API client and Rig integration
+//! Galadriel API client and Rig integration
 //!
 //! # Example
 //! ```
-//! use rig::providers::openai;
+//! use rig::providers::galadriel;
 //!
-//! let client = openai::Client::new("YOUR_API_KEY");
+//! let client = galadriel::Client::new("YOUR_API_KEY", None);
+//! // to use a fine-tuned model
+//! // let client = galadriel::Client::new("YOUR_API_KEY", "FINE_TUNE_API_KEY");
 //!
-//! let gpt4o = client.completion_model(openai::GPT_4O);
+//! let gpt4o = client.completion_model(galadriel::GPT_4O);
 //! ```
 use crate::{
     agent::AgentBuilder,
     completion::{self, CompletionError, CompletionRequest},
-    embeddings::{self, EmbeddingError, EmbeddingsBuilder},
     extractor::ExtractorBuilder,
-    json_utils, Embed,
+    json_utils,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 // ================================================================
-// Main OpenAI Client
+// Main Galadriel Client
 // ================================================================
-const OPENAI_API_BASE_URL: &str = "https://api.openai.com/v1";
+const GALADRIEL_API_BASE_URL: &str = "https://api.galadriel.com/v1/verified";
 
 #[derive(Clone)]
 pub struct Client {
@@ -31,13 +32,21 @@ pub struct Client {
 }
 
 impl Client {
-    /// Create a new OpenAI client with the given API key.
-    pub fn new(api_key: &str) -> Self {
-        Self::from_url(api_key, OPENAI_API_BASE_URL)
+    /// Create a new Galadriel client with the given API key and optional fine-tune API key.
+    pub fn new(api_key: &str, fine_tune_api_key: Option<&str>) -> Self {
+        Self::from_url_with_optional_key(api_key, GALADRIEL_API_BASE_URL, fine_tune_api_key)
     }
 
-    /// Create a new OpenAI client with the given API key and base API URL.
-    pub fn from_url(api_key: &str, base_url: &str) -> Self {
+    /// Create a new Galadriel client with the given API key, base API URL, and optional fine-tune API key.
+    pub fn from_url(api_key: &str, base_url: &str, fine_tune_api_key: Option<&str>) -> Self {
+        Self::from_url_with_optional_key(api_key, base_url, fine_tune_api_key)
+    }
+
+    pub fn from_url_with_optional_key(
+        api_key: &str,
+        base_url: &str,
+        fine_tune_api_key: Option<&str>,
+    ) -> Self {
         Self {
             base_url: base_url.to_string(),
             http_client: reqwest::Client::builder()
@@ -49,92 +58,44 @@ impl Client {
                             .parse()
                             .expect("Bearer token should parse"),
                     );
+                    if let Some(key) = fine_tune_api_key {
+                        headers.insert(
+                            "Fine-Tune-Authorization",
+                            format!("Bearer {}", key)
+                                .parse()
+                                .expect("Bearer token should parse"),
+                        );
+                    }
                     headers
                 })
                 .build()
-                .expect("OpenAI reqwest client should build"),
+                .expect("Galadriel reqwest client should build"),
         }
     }
 
-    /// Create a new OpenAI client from the `OPENAI_API_KEY` environment variable.
-    /// Panics if the environment variable is not set.
+    /// Create a new Galadriel client from the `GALADRIEL_API_KEY` environment variable,
+    /// and optionally from the `GALADRIEL_FINE_TUNE_API_KEY` environment variable.
+    /// Panics if the `GALADRIEL_API_KEY` environment variable is not set.
     pub fn from_env() -> Self {
-        let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set");
-        Self::new(&api_key)
+        let api_key = std::env::var("GALADRIEL_API_KEY").expect("GALADRIEL_API_KEY not set");
+        let fine_tune_api_key = std::env::var("GALADRIEL_FINE_TUNE_API_KEY").ok();
+        Self::new(&api_key, fine_tune_api_key.as_deref())
     }
-
     fn post(&self, path: &str) -> reqwest::RequestBuilder {
         let url = format!("{}/{}", self.base_url, path).replace("//", "/");
         self.http_client.post(url)
-    }
-
-    /// Create an embedding model with the given name.
-    /// Note: default embedding dimension of 0 will be used if model is not known.
-    /// If this is the case, it's better to use function `embedding_model_with_ndims`
-    ///
-    /// # Example
-    /// ```
-    /// use rig::providers::openai::{Client, self};
-    ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
-    ///
-    /// let embedding_model = openai.embedding_model(openai::TEXT_EMBEDDING_3_LARGE);
-    /// ```
-    pub fn embedding_model(&self, model: &str) -> EmbeddingModel {
-        let ndims = match model {
-            TEXT_EMBEDDING_3_LARGE => 3072,
-            TEXT_EMBEDDING_3_SMALL | TEXT_EMBEDDING_ADA_002 => 1536,
-            _ => 0,
-        };
-        EmbeddingModel::new(self.clone(), model, ndims)
-    }
-
-    /// Create an embedding model with the given name and the number of dimensions in the embedding generated by the model.
-    ///
-    /// # Example
-    /// ```
-    /// use rig::providers::openai::{Client, self};
-    ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
-    ///
-    /// let embedding_model = openai.embedding_model("model-unknown-to-rig", 3072);
-    /// ```
-    pub fn embedding_model_with_ndims(&self, model: &str, ndims: usize) -> EmbeddingModel {
-        EmbeddingModel::new(self.clone(), model, ndims)
-    }
-
-    /// Create an embedding builder with the given embedding model.
-    ///
-    /// # Example
-    /// ```
-    /// use rig::providers::openai::{Client, self};
-    ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
-    ///
-    /// let embeddings = openai.embeddings(openai::TEXT_EMBEDDING_3_LARGE)
-    ///     .simple_document("doc0", "Hello, world!")
-    ///     .simple_document("doc1", "Goodbye, world!")
-    ///     .build()
-    ///     .await
-    ///     .expect("Failed to embed documents");
-    /// ```
-    pub fn embeddings<D: Embed>(&self, model: &str) -> EmbeddingsBuilder<EmbeddingModel, D> {
-        EmbeddingsBuilder::new(self.embedding_model(model))
     }
 
     /// Create a completion model with the given name.
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::galadriel::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Galadriel client
+    /// let galadriel = Client::new("your-galadriel-api-key", None);
     ///
-    /// let gpt4 = openai.completion_model(openai::GPT_4);
+    /// let gpt4 = galadriel.completion_model(galadriel::GPT_4);
     /// ```
     pub fn completion_model(&self, model: &str) -> CompletionModel {
         CompletionModel::new(self.clone(), model)
@@ -144,12 +105,12 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use rig::providers::openai::{Client, self};
+    /// use rig::providers::galadriel::{Client, self};
     ///
-    /// // Initialize the OpenAI client
-    /// let openai = Client::new("your-open-ai-api-key");
+    /// // Initialize the Galadriel client
+    /// let galadriel = Client::new("your-galadriel-api-key", None);
     ///
-    /// let agent = openai.agent(openai::GPT_4)
+    /// let agent = galadriel.agent(galadriel::GPT_4)
     ///    .preamble("You are comedian AI with a mission to make people laugh.")
     ///    .temperature(0.0)
     ///    .build();
@@ -179,46 +140,6 @@ enum ApiResponse<T> {
     Err(ApiErrorResponse),
 }
 
-// ================================================================
-// OpenAI Embedding API
-// ================================================================
-/// `text-embedding-3-large` embedding model
-pub const TEXT_EMBEDDING_3_LARGE: &str = "text-embedding-3-large";
-/// `text-embedding-3-small` embedding model
-pub const TEXT_EMBEDDING_3_SMALL: &str = "text-embedding-3-small";
-/// `text-embedding-ada-002` embedding model
-pub const TEXT_EMBEDDING_ADA_002: &str = "text-embedding-ada-002";
-
-#[derive(Debug, Deserialize)]
-pub struct EmbeddingResponse {
-    pub object: String,
-    pub data: Vec<EmbeddingData>,
-    pub model: String,
-    pub usage: Usage,
-}
-
-impl From<ApiErrorResponse> for EmbeddingError {
-    fn from(err: ApiErrorResponse) -> Self {
-        EmbeddingError::ProviderError(err.message)
-    }
-}
-
-impl From<ApiResponse<EmbeddingResponse>> for Result<EmbeddingResponse, EmbeddingError> {
-    fn from(value: ApiResponse<EmbeddingResponse>) -> Self {
-        match value {
-            ApiResponse::Ok(response) => Ok(response),
-            ApiResponse::Err(err) => Err(EmbeddingError::ProviderError(err.message)),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EmbeddingData {
-    pub object: String,
-    pub embedding: Vec<f64>,
-    pub index: usize,
-}
-
 #[derive(Clone, Debug, Deserialize)]
 pub struct Usage {
     pub prompt_tokens: usize,
@@ -235,81 +156,8 @@ impl std::fmt::Display for Usage {
     }
 }
 
-#[derive(Clone)]
-pub struct EmbeddingModel {
-    client: Client,
-    pub model: String,
-    ndims: usize,
-}
-
-impl embeddings::EmbeddingModel for EmbeddingModel {
-    const MAX_DOCUMENTS: usize = 1024;
-
-    fn ndims(&self) -> usize {
-        self.ndims
-    }
-
-    #[cfg_attr(feature = "worker", worker::send)]
-    async fn embed_texts(
-        &self,
-        documents: impl IntoIterator<Item = String>,
-    ) -> Result<Vec<embeddings::Embedding>, EmbeddingError> {
-        let documents = documents.into_iter().collect::<Vec<_>>();
-
-        let response = self
-            .client
-            .post("/embeddings")
-            .json(&json!({
-                "model": self.model,
-                "input": documents,
-            }))
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            match response.json::<ApiResponse<EmbeddingResponse>>().await? {
-                ApiResponse::Ok(response) => {
-                    tracing::info!(target: "rig",
-                        "OpenAI embedding token usage: {}",
-                        response.usage
-                    );
-
-                    if response.data.len() != documents.len() {
-                        return Err(EmbeddingError::ResponseError(
-                            "Response data length does not match input length".into(),
-                        ));
-                    }
-
-                    Ok(response
-                        .data
-                        .into_iter()
-                        .zip(documents.into_iter())
-                        .map(|(embedding, document)| embeddings::Embedding {
-                            document,
-                            vec: embedding.embedding,
-                        })
-                        .collect())
-                }
-                ApiResponse::Err(err) => Err(EmbeddingError::ProviderError(err.message)),
-            }
-        } else {
-            Err(EmbeddingError::ProviderError(response.text().await?))
-        }
-    }
-}
-
-impl EmbeddingModel {
-    pub fn new(client: Client, model: &str, ndims: usize) -> Self {
-        Self {
-            client,
-            model: model.to_string(),
-            ndims,
-        }
-    }
-}
-
 // ================================================================
-// OpenAI Completion API
+// Galadriel Completion API
 // ================================================================
 /// `o1-preview` completion model
 pub const O1_PREVIEW: &str = "o1-preview";
@@ -321,8 +169,6 @@ pub const O1_MINI: &str = "o1-mini";
 pub const O1_MINI_2024_09_12: &str = "o1-mini-2024-09-12";
 /// `gpt-4o` completion model
 pub const GPT_4O: &str = "gpt-4o";
-/// `gpt-4o-mini` completion model
-pub const GPT_4O_MINI: &str = "gpt-4o-mini";
 /// `gpt-4o-2024-05-13` completion model
 pub const GPT_4O_2024_05_13: &str = "gpt-4o-2024-05-13";
 /// `gpt-4-turbo` completion model
@@ -376,7 +222,7 @@ impl From<ApiErrorResponse> for CompletionError {
 impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionResponse> {
     type Error = CompletionError;
 
-    fn try_from(value: CompletionResponse) -> Result<Self, Self::Error> {
+    fn try_from(value: CompletionResponse) -> std::prelude::v1::Result<Self, Self::Error> {
         match value.choices.as_slice() {
             [Choice {
                 message:
@@ -385,10 +231,10 @@ impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionRe
                         ..
                     },
                 ..
-            }, ..]
-                if !calls.is_empty() =>
-            {
-                let call = calls.first().unwrap();
+            }, ..] => {
+                let call = calls.first().ok_or(CompletionError::ResponseError(
+                    "Tool selection is empty".into(),
+                ))?;
 
                 Ok(completion::CompletionResponse {
                     choice: completion::ModelChoice::ToolCall(
@@ -539,7 +385,7 @@ impl completion::CompletionModel for CompletionModel {
             match response.json::<ApiResponse<CompletionResponse>>().await? {
                 ApiResponse::Ok(response) => {
                     tracing::info!(target: "rig",
-                        "OpenAI completion token usage: {:?}",
+                        "Galadriel completion token usage: {:?}",
                         response.usage.clone().map(|usage| format!("{usage}")).unwrap_or("N/A".to_string())
                     );
                     response.try_into()

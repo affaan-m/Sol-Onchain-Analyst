@@ -144,7 +144,7 @@ use crate::{
 ///     .expect("Failed to prompt the agent");
 /// ```
 pub struct Agent<M: CompletionModel> {
-    /// Completion model (e.g.: OpenAI's gpt-4o-1106, Cohere's command-r)
+    /// Completion model (e.g.: OpenAI's gpt-3.5-turbo-1106, Cohere's command-r)
     model: M,
     /// System prompt
     preamble: String,
@@ -298,7 +298,7 @@ impl<M: CompletionModel> Chat for Agent<M> {
 ///     .build();
 /// ```
 pub struct AgentBuilder<M: CompletionModel> {
-    /// Completion model (e.g.: OpenAI's gpt-4o-1106, Cohere's command-r)
+    /// Completion model (e.g.: OpenAI's gpt-3.5-turbo-1106, Cohere's command-r)
     model: M,
     /// System prompt
     preamble: Option<String>,
