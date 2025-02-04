@@ -18,11 +18,11 @@ members = [
     "cainam-birdeye",
     "cainam-discord",
     "cainam-twitter",
+    "cainam-trader",
     "rig-core",
     "rig-neo4j",
     "rig-postgres"
 ]
-exclude = ["cainam-trader"]
 
 # Core dependencies
 [workspace.dependencies]
@@ -67,7 +67,39 @@ uuid = { version = "1.0", features = ["serde", "v4"] }
 
 # Important shared dependencies
 rustls = "0.23.15"
-tokio-tungstenite = "0.21.0"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
+base64 = "0.21"
+bs58 = "0.5"
+url = "2.4"
+hex = "0.4"
+futures-util = "0.3"
+bincode = "1.3"
+rand = "0.8"
+serde_qs = "0.12"
+twitter-v2 = "0.1"
+oauth2 = "4.4"
+oauth1 = "1.0"
+anchor-spl = "0.29"
+zeroize = "=1.7.0"
+tch = "0.15"
+cookie = "0.16"
+lazy_static = "1.4"
+totp-rs = "5.4"
+urlencoding = "2.1.3"
+regex = "1.5"
+ordered-float = "4.2.0"
+glob = "0.3.1"
+lopdf = "0.34.0"
+rayon = "1.10.0"
+worker = "0.5"
+bytes = "1.9.0"
+async-stream = "0.3.6"
+testcontainers = "0.23.1"
+httpmock = "0.7.0"
+log = "0.4.22"
+neo4rs = "0.8.0"
+textwrap = "0.16.1"
+term_size = "0.3.2"
 
 [dependencies]
 # Core dependencies
@@ -110,7 +142,7 @@ time.workspace = true
 uuid.workspace = true
 
 # Discord
-# serenity = { version = "0.12.4", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model", "http"], git = "https://github.com/serenity-rs/serenity.git", branch = "current" }
+serenity = { version = "0.11", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model", "http"] }
 
 # Environment variables
 dotenvy = "0.15.7"

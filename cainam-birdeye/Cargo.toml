@@ -26,12 +26,12 @@ openai.workspace = true
 # cainam-trader = { path = "../cainam-trader" }
 
 # Other dependencies
-base64 = "0.21"
-bs58 = "0.5"
-url = "2.4"
-hex = "0.4"
-tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
-futures-util = "0.3"
+base64.workspace = true
+bs58.workspace = true
+url.workspace = true
+hex.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
 dotenvy = "0.15.7"
 mockall = "0.11"
 
