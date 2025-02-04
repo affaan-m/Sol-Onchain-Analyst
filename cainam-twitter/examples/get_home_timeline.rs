@@ -1,11 +1,10 @@
 use cainam_twitter::error::Result;
 use cainam_twitter::scraper::Scraper;
-use dotenv::dotenv;
 use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
+    dotenvy::dotenv().ok();
     let mut scraper = Scraper::new().await?;
     
     scraper.login(
