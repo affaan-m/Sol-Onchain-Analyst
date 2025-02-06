@@ -67,6 +67,7 @@ solana-program.workspace = true
 anchor-client.workspace = true
 anchor-lang.workspace = true
 anchor-spl.workspace = true
+helius = { workspace = true }
 zeroize.workspace = true
 
 # Machine Learning

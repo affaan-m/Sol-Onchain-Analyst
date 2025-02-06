@@ -38,12 +38,17 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json", "ti
 openai = { version = "1.0.0-alpha.18" }
 
 # Solana ecosystem
-solana-client = "2.1.12"
-solana-sdk = "2.1.12"
-solana-program = "2.1.12"
-anchor-client = "0.29"
-anchor-lang = "0.29"
-helius = "0.2.4"
+solana-client = "=2.1.4"
+solana-sdk = "=2.1.4"
+solana-program = "=2.1.4"
+solana-account-decoder = "=2.1.4"
+anchor-client = "=0.27.0"
+anchor-lang = "=0.27.0"
+anchor-spl = "=0.27.0"
+helius = { version = "0.2.4", default-features = false, features = ["rustls"] }
+curve25519-dalek = "=3.0.0"
+ed25519-dalek = "=1.0.1"
+zeroize = "=1.7.0"
 
 # Database
 sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio", "tls-native-tls", "chrono", "bigdecimal", "uuid", "json", "macros", "time", "migrate", "any", "derive"] }
@@ -66,7 +71,7 @@ time = { version = "0.3", features = ["serde"] }
 uuid = { version = "1.0", features = ["serde", "v4"] }
 
 # Important shared dependencies
-rustls = "0.23.15"
+rustls = "=0.23.15"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 base64 = "0.21"
 bs58 = "0.5"
@@ -79,8 +84,6 @@ serde_qs = "0.12"
 twitter-v2 = "0.1"
 oauth2 = "4.4"
 oauth1 = "1.0"
-anchor-spl = "0.29"
-zeroize = "=1.7.0"
 tch = "0.15"
 cookie = "0.16"
 lazy_static = "1.4"
@@ -100,6 +103,8 @@ log = "0.4.22"
 neo4rs = "0.8.0"
 textwrap = "0.16.1"
 term_size = "0.3.2"
+dotenvy = "0.15.7"
+serenity = { version = "0.11", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model", "http"] }
 
 [dependencies]
 # Core dependencies
@@ -117,7 +122,10 @@ openai.workspace = true
 # Solana
 solana-client.workspace = true
 solana-sdk.workspace = true
-helius.workspace = true
+solana-program.workspace = true
+solana-account-decoder.workspace = true
+helius = { workspace = true }
+zeroize.workspace = true
 
 # Database
 sqlx.workspace = true
@@ -142,10 +150,7 @@ time.workspace = true
 uuid.workspace = true
 
 # Discord
-serenity = { version = "0.11", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model", "http"] }
-
-# Environment variables
-dotenvy = "0.15.7"
+serenity.workspace = true
 
 # Framework
 rig-core = { path = "rig-core", features = ["all", "derive"] }
