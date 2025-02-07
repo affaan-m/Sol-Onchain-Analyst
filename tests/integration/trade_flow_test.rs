@@ -1,6 +1,6 @@
 use cainam_core::{
     agent::trader::{AgentConfig, TradingAgent},
-    config::MarketConfig,
+    config::{MarketConfig, mongodb::MongoConfig, pool::MongoPoolConfig},
     error::AgentResult,
     models::{
         market_signal::{MarketSignal, SignalType},
@@ -10,21 +10,32 @@ use cainam_core::{
     SolanaAgentKit,
 };
 use chrono::Utc;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use rig_mongodb::MongoDbPool;
 use std::sync::Arc;
 use bigdecimal::BigDecimal;
+use std::time::Duration;
 
-async fn setup_test_db() -> Arc<PgPool> {
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set for tests");
-        
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
+async fn setup_test_db() -> Arc<MongoDbPool> {
+    let config = MongoConfig {
+        database: "cainam_test".to_string(),
+        pool: MongoPoolConfig {
+            min_pool_size: 1,
+            max_pool_size: 2,
+            connect_timeout: Duration::from_secs(5),
+        },
+        ..Default::default()
+    };
+    
+    config.create_pool()
         .await
-        .expect("Failed to create database pool");
-        
-    Arc::new(pool)
+        .expect("Failed to create database pool")
+}
+
+async fn cleanup_test_db(pool: &MongoDbPool) {
+    pool.database("cainam_test")
+        .drop()
+        .await
+        .expect("Failed to cleanup test database");
 }
 
 async fn setup_test_config() -> AgentConfig {
@@ -84,6 +95,8 @@ async fn test_full_trade_flow() -> AgentResult<()> {
         }
     }
     
+    // Cleanup test data
+    cleanup_test_db(&db).await;
     Ok(())
 }
 
@@ -115,6 +128,7 @@ async fn test_concurrent_market_analysis() -> AgentResult<()> {
         assert!(result.is_some());
     }
     
+    cleanup_test_db(&db).await;
     Ok(())
 }
 
@@ -135,7 +149,7 @@ async fn test_error_recovery() -> AgentResult<()> {
     };
     
     // Let it run for a bit
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
     
     // Stop the agent
     agent.stop();
@@ -144,6 +158,7 @@ async fn test_error_recovery() -> AgentResult<()> {
     let result = agent_handle.await.expect("Task panicked");
     assert!(result.is_ok());
     
+    cleanup_test_db(&db).await;
     Ok(())
 }
 
@@ -169,5 +184,6 @@ async fn test_performance() -> AgentResult<()> {
     assert!(duration.as_secs() < 5);
     assert!(signal.is_some());
     
+    cleanup_test_db(&db).await;
     Ok(())
 }

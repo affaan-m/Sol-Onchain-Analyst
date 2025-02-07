@@ -1,6 +1,6 @@
 use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::{DateTime, Utc, Datelike, Timelike};
-use sqlx::{PgPool, Postgres, Transaction};
+use rig_mongodb::{Collection, MongoDbPool, MongoDbVectorIndex, SearchParams, bson::doc};
 use std::sync::Arc;
 use crate::birdeye::{BirdeyeApi, TokenInfo};
 use crate::models::market_signal::{MarketSignal, SignalType, MarketSignalBuilder};
@@ -17,39 +17,47 @@ use serde_json::{self, Value};
 use time::PrimitiveDateTime;
 
 pub struct TokenAnalyticsService {
-    db: Arc<PgPool>,
+    db: Arc<MongoDbPool>,
+    collection: Collection<TokenAnalytics>,
+    signals_collection: Collection<MarketSignal>,
+    vector_index: MongoDbVectorIndex,
     birdeye: Arc<dyn BirdeyeApi>,
     birdeye_extended: Arc<BirdeyeExtendedClient>,
     market_config: MarketConfig,
 }
 
 impl TokenAnalyticsService {
-    pub fn new(
-        db: Arc<PgPool>,
+    pub async fn new(
+        db: Arc<MongoDbPool>,
         birdeye: Arc<dyn BirdeyeApi>,
         birdeye_extended: Arc<BirdeyeExtendedClient>,
         market_config: Option<MarketConfig>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        let db_name = "cainam";
+        let collection = db.database(db_name).collection("token_analytics");
+        let signals_collection = db.database(db_name).collection("market_signals");
+        
+        // Initialize vector index for semantic search
+        let vector_index = MongoDbVectorIndex::new(
+            collection.clone(),
+            openai_client.embedding_model(TEXT_EMBEDDING_ADA_002),
+            "token_vector_index",
+            SearchParams::new()
+        ).await?;
+        
+        Ok(Self {
             db,
+            collection,
+            signals_collection,
+            vector_index,
             birdeye,
             birdeye_extended,
             market_config: market_config.unwrap_or_default(),
-        }
+        })
     }
 
     pub async fn fetch_and_store_token_info(&self, symbol: &str, address: &str) -> AgentResult<TokenAnalytics> {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
-
-        // Start a transaction
-        let mut tx = match self.db.begin().await {
-            Ok(tx) => tx,
-            Err(e) => {
-                let err = AgentError::transaction(format!("Failed to begin transaction: {}", e));
-                logger.error(&err.to_string());
-                return Err(err);
-            }
-        };
 
         // Fetch basic token info from Birdeye using address
         let token_info = match self.birdeye.get_token_info_by_address(address).await {
@@ -101,13 +109,13 @@ impl TokenAnalyticsService {
             }
         };
         
-        // Store in database within transaction
-        let stored = self.store_token_analytics_tx(&mut tx, &analytics).await?;
+        // Store in database
+        let stored = self.store_token_analytics(&analytics).await?;
         
-        // Generate and process market signals within the same transaction
+        // Generate and process market signals
         let signal = self.generate_market_signals(&stored).await?;
         
-        // Validate market signal before committing
+        // Store the signal if present
         if let Some(ref signal) = signal {
             let zero = BigDecimal::from(0);
             let one = BigDecimal::from(1);
@@ -119,13 +127,8 @@ impl TokenAnalyticsService {
                 return Err(AgentError::validation("Risk score must be between 0 and 1"));
             }
             
-            // Store the signal if validation passes
-            self.store_market_signal_tx(&mut tx, signal).await?;
+            self.store_market_signal(signal).await?;
         }
-
-        // Commit the transaction
-        tx.commit().await
-            .map_err(|e| AgentError::transaction(format!("Failed to commit transaction: {}", e)))?;
         
         Ok(stored)
     }
@@ -236,116 +239,40 @@ impl TokenAnalyticsService {
         .build()
     }
 
-    async fn store_market_signal_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        signal: &MarketSignal,
-    ) -> AgentResult<()> {
-        sqlx::query!(
-            r#"
-            INSERT INTO market_signals (
-                asset_address, signal_type, confidence, risk_score,
-                sentiment_score, volume_change_24h, price_change_24h,
-                timestamp, metadata
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            "#,
-            signal.asset_address,
-            signal.signal_type.to_string(),
-            signal.confidence,
-            signal.risk_score,
-            signal.sentiment_score,
-            signal.volume_change_24h,
-            signal.price_change_24h,
-            datetime_to_offset(signal.timestamp),
-            signal.metadata
-        )
-        .execute(&mut **tx)
-        .await
-        .map_err(|e| AgentError::Database(e))?;
-
+    async fn store_market_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
+        self.signals_collection
+            .insert_one(signal)
+            .await
+            .map_err(|e| AgentError::Database(format!("Failed to store market signal: {}", e)))?;
+            
         Ok(())
     }
 
     pub async fn get_previous_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
-        let analytics = sqlx::query_as!(
-            TokenAnalytics,
-            r#"
-            SELECT 
-                id as "id?: Uuid",
-                token_address,
-                token_name,
-                token_symbol,
-                price as "price!: BigDecimal",
-                volume_24h as "volume_24h?: BigDecimal",
-                market_cap as "market_cap?: BigDecimal",
-                total_supply as "total_supply?: BigDecimal",
-                holder_count as "holder_count?: i32",
-                timestamp as "timestamp!: DateTime<Utc>",
-                created_at as "created_at?: DateTime<Utc>",
-                metadata as "metadata?: Value"
-            FROM token_analytics
-            WHERE token_address = $1
-              AND timestamp < NOW()
-            ORDER BY timestamp DESC
-            LIMIT 1
-            "#,
-            address,
-        )
-        .fetch_optional(&*self.db)
-        .await
-        .map_err(|e| AgentError::Database(e))?;
+        let filter = Document::new()
+            .add("token_address", address)
+            .add("timestamp", Document::new().add("$lt", Bson::from(Utc::now())));
+
+        let options = rig_mongodb::FindOneOptions::builder()
+            .sort(Document::new().add("timestamp", -1))
+            .build();
+
+        let analytics = self.collection
+            .find_one(filter, options)
+            .await
+            .map_err(|e| AgentError::Database(format!("Failed to fetch previous analytics: {}", e)))?;
 
         Ok(analytics)
     }
 
-    pub async fn store_token_analytics_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        analytics: &TokenAnalytics,
-    ) -> AgentResult<TokenAnalytics> {
-        let default_metadata = serde_json::json!({});
-        let metadata = analytics.metadata.as_ref().unwrap_or(&default_metadata);
-        
-        let stored = sqlx::query_as!(
-            TokenAnalytics,
-            r#"
-            INSERT INTO token_analytics (
-                token_address, token_name, token_symbol,
-                price, volume_24h, market_cap, total_supply,
-                holder_count, timestamp, created_at, metadata
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING 
-                id as "id?: Uuid",
-                token_address,
-                token_name,
-                token_symbol,
-                price as "price!: BigDecimal",
-                volume_24h as "volume_24h?: BigDecimal",
-                market_cap as "market_cap?: BigDecimal",
-                total_supply as "total_supply?: BigDecimal",
-                holder_count as "holder_count?: i32",
-                timestamp as "timestamp!: DateTime<Utc>",
-                created_at as "created_at?: DateTime<Utc>",
-                metadata as "metadata?: Value"
-            "#,
-            analytics.token_address,
-            analytics.token_name,
-            analytics.token_symbol,
-            analytics.price,
-            analytics.volume_24h,
-            analytics.market_cap,
-            analytics.total_supply,
-            analytics.holder_count,
-            datetime_to_offset(analytics.timestamp),
-            analytics.created_at.map(datetime_to_offset),
-            metadata
-        )
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|e| AgentError::Database(e))?;
-
+    async fn store_token_analytics(&self, analytics: &TokenAnalytics) -> AgentResult<TokenAnalytics> {
+        let result = self.collection
+            .insert_one(analytics, None)
+            .await
+            .map_err(|e| AgentError::Database(format!("Failed to store analytics: {}", e)))?;
+            
+        let mut stored = analytics.clone();
+        stored.id = Some(result.inserted_id.as_object_id().unwrap());
         Ok(stored)
     }
 
@@ -357,69 +284,43 @@ impl TokenAnalyticsService {
         limit: i64,
         offset: i64,
     ) -> AgentResult<Vec<TokenAnalytics>> {
-        let analytics = sqlx::query_as!(
-            TokenAnalytics,
-            r#"
-            SELECT 
-                id as "id?: Uuid",
-                token_address,
-                token_name,
-                token_symbol,
-                price as "price!: BigDecimal",
-                volume_24h as "volume_24h?: BigDecimal",
-                market_cap as "market_cap?: BigDecimal",
-                total_supply as "total_supply?: BigDecimal",
-                holder_count as "holder_count?: i32",
-                timestamp as "timestamp!: DateTime<Utc>",
-                created_at as "created_at?: DateTime<Utc>",
-                metadata as "metadata?: Value"
-            FROM token_analytics
-            WHERE token_address = $1
-              AND timestamp BETWEEN $2 AND $3
-            ORDER BY timestamp DESC
-            LIMIT $4
-            OFFSET $5
-            "#,
-            address,
-            datetime_to_offset(start_time),
-            datetime_to_offset(end_time),
-            limit,
-            offset,
-        )
-        .fetch_all(&*self.db)
-        .await
-        .map_err(|e| AgentError::Database(e))?;
+        let filter = Document::new()
+            .add("token_address", address)
+            .add("timestamp", Document::new()
+                .add("$gte", Bson::from(start_time))
+                .add("$lte", Bson::from(end_time)));
+
+        let options = rig_mongodb::FindOptions::builder()
+            .sort(Document::new().add("timestamp", -1))
+            .skip(Some(offset as u64))
+            .limit(Some(limit))
+            .build();
+
+        let mut cursor = self.collection
+            .find(filter, options)
+            .await
+            .map_err(|e| AgentError::Database(format!("Failed to fetch token history: {}", e)))?;
+
+        let mut analytics = Vec::new();
+        while let Some(result) = cursor.try_next().await.map_err(|e| AgentError::Database(format!("Failed to iterate results: {}", e)))? {
+            analytics.push(result);
+        }
 
         Ok(analytics)
     }
 
     pub async fn get_latest_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
-        let analytics = sqlx::query_as!(
-            TokenAnalytics,
-            r#"
-            SELECT 
-                id as "id?: Uuid",
-                token_address,
-                token_name,
-                token_symbol,
-                price as "price!: BigDecimal",
-                volume_24h as "volume_24h?: BigDecimal",
-                market_cap as "market_cap?: BigDecimal",
-                total_supply as "total_supply?: BigDecimal",
-                holder_count as "holder_count?: i32",
-                timestamp as "timestamp!: DateTime<Utc>",
-                created_at as "created_at?: DateTime<Utc>",
-                metadata as "metadata?: Value"
-            FROM token_analytics
-            WHERE token_address = $1
-            ORDER BY timestamp DESC
-            LIMIT 1
-            "#,
-            address,
-        )
-        .fetch_optional(&*self.db)
-        .await
-        .map_err(|e| AgentError::Database(e))?;
+        let filter = Document::new()
+            .add("token_address", address);
+
+        let options = rig_mongodb::FindOneOptions::builder()
+            .sort(Document::new().add("timestamp", -1))
+            .build();
+
+        let analytics = self.collection
+            .find_one(filter, options)
+            .await
+            .map_err(|e| AgentError::Database(format!("Failed to fetch latest token analytics: {}", e)))?;
 
         Ok(analytics)
     }
@@ -434,6 +335,13 @@ impl TokenAnalyticsService {
             };
             (current - prev_vol) / prev_value
         })
+    }
+
+    pub async fn semantic_search(&self, query: &str, limit: usize) -> Result<Vec<TokenAnalytics>, Error> {
+        self.vector_index
+            .top_n::<TokenAnalytics>(query, limit)
+            .await
+            .map_err(Error::from)
     }
 }
 
@@ -508,20 +416,18 @@ fn datetime_to_offset(dt: DateTime<Utc>) -> OffsetDateTime {
 mod tests {
     use super::*;
     use crate::birdeye::MockBirdeyeApi;
-    use sqlx::postgres::PgPoolOptions;
+    use rig_mongodb::options::ClientOptions;
     use futures::future::FutureExt;
 
-    async fn setup_test_db() -> Arc<PgPool> {
-        let database_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
-            
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
+    async fn setup_test_db() -> Arc<MongoDbPool> {
+        let client_options = ClientOptions::parse("mongodb://localhost:27017")
             .await
-            .expect("Failed to create database pool");
+            .expect("Failed to parse MongoDB options");
             
-        Arc::new(pool)
+        let client = MongoDbPool::with_options(client_options)
+            .expect("Failed to create MongoDB client");
+            
+        Arc::new(client)
     }
 
     fn setup_mock_birdeye() -> (Arc<dyn BirdeyeApi>, Arc<BirdeyeExtendedClient>) {
@@ -557,7 +463,6 @@ mod tests {
         );
 
         // First store some historical data
-        let mut tx = db.begin().await?;
         let analytics = TokenAnalytics {
             id: None,
             token_address: "test_address".to_string(),
@@ -572,8 +477,7 @@ mod tests {
             created_at: None,
             metadata: Some(serde_json::json!({})),
         };
-        service.store_token_analytics_tx(&mut tx, &analytics).await?;
-        tx.commit().await?;
+        service.store_token_analytics(&analytics).await?;
 
         // Now fetch current data which should generate a signal
         let result = service.fetch_and_store_token_info("TEST", "test_address").await?;
@@ -600,9 +504,6 @@ mod tests {
             Some(market_config),
         );
 
-        // Start a transaction
-        let mut tx = db.begin().await?;
-
         // Store valid analytics
         let analytics = TokenAnalytics {
             id: None,
@@ -619,14 +520,11 @@ mod tests {
             metadata: Some(serde_json::json!({})),
         };
 
-        service.store_token_analytics_tx(&mut tx, &analytics).await?;
+        service.store_token_analytics(&analytics).await?;
 
-        // Rollback the transaction
-        tx.rollback().await?;
-
-        // Verify the data wasn't stored
+        // Verify the data was stored
         let result = service.get_latest_token_analytics("test_address").await?;
-        assert!(result.is_none());
+        assert!(result.is_some());
         
         Ok(())
     }

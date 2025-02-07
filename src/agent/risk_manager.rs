@@ -2,16 +2,16 @@ use anyhow::Result;
 use crate::models::market_signal::MarketSignal;
 use crate::utils::{decimal_to_f64, f64_to_decimal};
 use std::sync::Arc;
-use sqlx::PgPool;
+use rig_mongodb::MongoDbPool;
 
 pub struct RiskManagerAgent {
-    db: Arc<PgPool>,
+    db: Arc<MongoDbPool>,
     max_position_size: f64,
     max_drawdown: f64,
 }
 
 impl RiskManagerAgent {
-    pub fn new(db: Arc<PgPool>, max_position_size: f64, max_drawdown: f64) -> Self {
+    pub fn new(db: Arc<MongoDbPool>, max_position_size: f64, max_drawdown: f64) -> Self {
         Self {
             db,
             max_position_size,

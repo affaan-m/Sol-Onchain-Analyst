@@ -3,15 +3,19 @@ use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use std::sync::Arc;
 use chrono::Utc;
+use crate::error::Error;
+use rig_mongodb::{MongoDbPool, bson::doc};
 
 pub struct AnalystAgent {
     analytics_service: Arc<TokenAnalyticsService>,
+    db: Arc<MongoDbPool>,
 }
 
 impl AnalystAgent {
-    pub fn new(analytics_service: Arc<TokenAnalyticsService>) -> Self {
+    pub fn new(analytics_service: Arc<TokenAnalyticsService>, db: Arc<MongoDbPool>) -> Self {
         Self {
             analytics_service,
+            db,
         }
     }
 
@@ -45,29 +49,36 @@ impl AnalystAgent {
 
         Ok(None)
     }
+
+    async fn store_analysis(&self, analysis: &Analysis) -> Result<(), Error> {
+        let collection = self.db.database("cainam").collection("market_analysis");
+        
+        collection.insert_one(analysis, None)
+            .await
+            .map_err(|e| Error::Mongo(e))?;
+            
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PgPool;
     use crate::config::MarketConfig;
     use crate::birdeye::{BirdeyeApi, MockBirdeyeApi, TokenInfo};
     use cainam_birdeye::BirdeyeClient;
-    use sqlx::postgres::PgPoolOptions;
+    use mongodb::{Client, options::ClientOptions};
     use futures::future::FutureExt;
 
-    async fn setup_test_db() -> Arc<PgPool> {
-        let database_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
-            
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
+    async fn setup_test_db() -> Arc<Client> {
+        let client_options = ClientOptions::parse("mongodb://localhost:27017")
             .await
-            .expect("Failed to create database pool");
+            .expect("Failed to parse MongoDB options");
             
-        Arc::new(pool)
+        let client = Client::with_options(client_options)
+            .expect("Failed to create MongoDB client");
+            
+        Arc::new(client)
     }
 
     fn setup_mock_birdeye() -> (Arc<dyn BirdeyeApi>, Arc<BirdeyeClient>) {

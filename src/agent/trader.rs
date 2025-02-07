@@ -17,8 +17,10 @@ use rig::{
 use tokio::time::{sleep, Duration};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn, error};
-use sqlx::PgPool;
+use rig_mongodb::{MongoDbPool, bson::doc};
 use bigdecimal::BigDecimal;
+use crate::error::Error;
+use crate::models::trade::Trade;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: u64 = 1000; // 1 second
@@ -30,10 +32,11 @@ pub struct TradingAgent {
     analytics_service: Arc<TokenAnalyticsService>,
     config: AgentConfig,
     running: Arc<AtomicBool>,
+    db: Arc<MongoDbPool>,
 }
 
 impl TradingAgent {
-    pub async fn new(config: AgentConfig, db: Arc<PgPool>, solana_agent: SolanaAgentKit) -> AgentResult<Self> {
+    pub async fn new(config: AgentConfig, db: Arc<MongoDbPool>, solana_agent: SolanaAgentKit) -> AgentResult<Self> {
         info!("Initializing TradingAgent...");
         
         // Initialize OpenAI client
@@ -88,7 +91,7 @@ impl TradingAgent {
 
         // Initialize analytics service
         let analytics_service = Arc::new(TokenAnalyticsService::new(
-            db,
+            db.clone(),
             birdeye,
             birdeye_extended,
             Some(market_config),
@@ -101,7 +104,16 @@ impl TradingAgent {
             analytics_service,
             config,
             running: Arc::new(AtomicBool::new(false)),
+            db,
         })
+    }
+
+    async fn store_trade(&self, trade: &Trade) -> Result<(), Error> {
+        let collection = self.db.database("cainam").collection("trades");
+        collection.insert_one(trade, None)
+            .await
+            .map_err(|e| Error::Mongo(e))?;
+        Ok(())
     }
 
     pub async fn analyze_market(&self, symbol: &str, address: &str) -> AgentResult<Option<MarketSignal>> {
@@ -242,19 +254,12 @@ mod tests {
     use super::*;
     use crate::twitter::MockTwitterApi;
     use crate::birdeye::MockBirdeyeApi;
-    use sqlx::postgres::PgPoolOptions;
 
-    async fn setup_test_db() -> Arc<PgPool> {
-        let database_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
-            
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
+    async fn setup_test_db() -> Arc<MongoDbPool> {
+        MongoDbPool::new_from_uri("mongodb://localhost:27017", "cainam_test")
             .await
-            .expect("Failed to create database pool");
-            
-        Arc::new(pool)
+            .expect("Failed to create test database pool")
+            .into()
     }
 
     async fn setup_mocks() -> (Box<MockTwitterApi>, Box<MockBirdeyeApi>) {

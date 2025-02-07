@@ -4,15 +4,17 @@ use crate::{
     models::market_signal::{SignalType, MarketSignal},
     trading::SolanaAgentKit,
     utils::f64_to_decimal,
+    database::init_mongodb,
 };
 use std::io::{self, Write};
 use tokio;
-use sqlx::PgPool;
 use std::sync::Arc;
 use chrono::Utc;
 use anyhow::Result;
 use tracing::{info, error};
 use std::sync::atomic::{AtomicBool, Ordering};
+use mongodb::{Client, options::ClientOptions};
+use rig_mongodb::MongoDbPool;
 
 mod agent;
 mod config;
@@ -177,16 +179,9 @@ async fn main() -> Result<()> {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize database connection
-    let database_url = std::env::var("DATABASE_URL")
-        .map_err(|_| error::AgentError::MissingEnvVar("DATABASE_URL".to_string()))?;
+    // Initialize MongoDB connection pool using rig-mongodb
+    let db_pool = init_mongodb().await?;
     
-    let db = Arc::new(
-        PgPool::connect(&database_url)
-            .await
-            .map_err(|e| error::AgentError::Database(e))?
-    );
-
     // Initialize Solana agent
     let solana_agent = SolanaAgentKit::new_from_env()?;
 
@@ -194,8 +189,21 @@ async fn main() -> Result<()> {
     let config = AgentConfig::new_from_env()?;
 
     // Initialize trading agent
-    let trader = Arc::new(TradingAgent::new(config.clone(), db.clone(), solana_agent).await?);
+    let trader = Arc::new(TradingAgent::new(config.clone(), db_pool.clone(), solana_agent).await?);
     let running = Arc::new(AtomicBool::new(true));
+
+    // Initialize services with MongoDB pool
+    let token_analytics_service = TokenAnalyticsService::new(
+        db_pool.clone(),
+        birdeye.clone(),
+        birdeye_extended.clone(),
+        Some(market_config.clone()),
+    ).await?;
+    
+    let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
+    
+    // Initialize vector store
+    let vector_store = VectorStore::new().await?;
 
     // Spawn the autonomous trading agent
     let trader_clone = trader.clone();

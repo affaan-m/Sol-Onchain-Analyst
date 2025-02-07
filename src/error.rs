@@ -1,5 +1,5 @@
 use thiserror::Error;
-use sqlx::error::Error as SqlxError;
+use rig_mongodb::error::{Error as RigMongoError, MongoError};
 use std::num::ParseFloatError;
 
 #[derive(Error, Debug)]
@@ -20,7 +20,7 @@ pub enum AgentError {
     Trading(String),
 
     #[error("Database error: {0}")]
-    Database(#[from] SqlxError),
+    Database(String),
 
     #[error("Market analysis error: {0}")]
     MarketAnalysis(String),
@@ -52,8 +52,20 @@ pub enum AgentError {
     #[error("Timeout error: {0}")]
     Timeout(String),
 
+    #[error("Conversion error: {0}")]
+    Conversion(String),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[error("MongoDB error: {0}")]
+    Mongo(#[from] MongoError),
+}
+
+impl From<RigMongoError> for AgentError {
+    fn from(err: RigMongoError) -> Self {
+        AgentError::Database(err.to_string())
+    }
 }
 
 impl From<ParseFloatError> for AgentError {
@@ -70,9 +82,9 @@ impl From<tracing_subscriber::filter::ParseError> for AgentError {
 
 impl From<reqwest::Error> for AgentError {
     fn from(err: reqwest::Error) -> Self {
-        if err.is_timeout() {
+        if (err.is_timeout()) {
             AgentError::Timeout(err.to_string())
-        } else if err.is_connect() {
+        } else if (err.is_connect()) {
             AgentError::Network(err.to_string())
         } else {
             AgentError::Other(err.into())

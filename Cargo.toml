@@ -10,162 +10,44 @@ description = "Core functionality for the Cainam project"
 
 [[bin]]
 name = "autonomous-trader"
-path = "cainam-birdeye/examples/basic_usage.rs"
+path = "cainam-trader/examples/autonomous_trader.rs"
 
 [workspace]
 resolver = "2"
 members = [
-    "cainam-birdeye",
-    "cainam-discord",
-    "cainam-twitter",
-    "cainam-trader",
-    "rig-core",
-    "rig-neo4j",
-    "rig-postgres"
+    # plugins
+    "plugins/birdeye",
+    "plugins/discord",
+    "plugins/twitter",
+]
+exclude = [
+    "examples",
+    "memory-bank",
+    "migrations",
+    "phases_output",
 ]
 
-# Core dependencies
-[workspace.dependencies]
-anyhow = "1.0.95"
-async-trait = "0.1.85"
-futures = "0.3"
-thiserror = "1.0"
-tokio = { version = "1.43.0", features = ["full"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json", "time"] }
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
 
-# AI/ML
-openai = { version = "1.0.0-alpha.18" }
+[profile.dev]
+opt-level = "z"
 
-# Solana ecosystem
-solana-client = "=2.1.4"
-solana-sdk = "=2.1.4"
-solana-program = "=2.1.4"
-solana-account-decoder = "=2.1.4"
-anchor-client = "=0.27.0"
-anchor-lang = "=0.27.0"
-anchor-spl = "=0.27.0"
-helius = { version = "0.2.4", default-features = false, features = ["rustls"] }
-curve25519-dalek = "=3.0.0"
-ed25519-dalek = "=1.0.1"
-zeroize = "=1.7.0"
-
-# Database
-sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio", "tls-native-tls", "chrono", "bigdecimal", "uuid", "json", "macros", "time", "migrate", "any", "derive"] }
-tokio-postgres = { version = "0.7", features = ["with-uuid-1", "with-chrono-0_4"] }
-pgvector = { version = "0.4", features = ["sqlx"] }
-
-# Serialization
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.138"
-schemars = "0.8.21"
-
-# HTTP client
-reqwest = { version = "0.12.12", features = ["json"] }
-
-# Time and dates
-chrono = { version = "0.4", features = ["serde"] }
-time = { version = "0.3", features = ["serde"] }
-
-# Utilities
-uuid = { version = "1.0", features = ["serde", "v4"] }
-
-# Important shared dependencies
-rustls = "=0.23.15"
-tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
-base64 = "0.21"
-bs58 = "0.5"
-url = "2.4"
-hex = "0.4"
-futures-util = "0.3"
-bincode = "1.3"
-rand = "0.8"
-serde_qs = "0.12"
-twitter-v2 = "0.1"
-oauth2 = "4.4"
-oauth1 = "1.0"
-tch = "0.15"
-cookie = "0.16"
-lazy_static = "1.4"
-totp-rs = "5.4"
-urlencoding = "2.1.3"
-regex = "1.5"
-ordered-float = "4.2.0"
-glob = "0.3.1"
-lopdf = "0.34.0"
-rayon = "1.10.0"
-worker = "0.5"
-bytes = "1.9.0"
-async-stream = "0.3.6"
-testcontainers = "0.23.1"
-httpmock = "0.7.0"
-log = "0.4.22"
-neo4rs = "0.8.0"
-textwrap = "0.16.1"
-term_size = "0.3.2"
-dotenvy = "0.15.7"
-serenity = { version = "0.11", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model", "http"] }
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
+opt-level = "z"
 
 [dependencies]
-# Core dependencies
-tokio.workspace = true
-anyhow.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-futures.workspace = true
-async-trait.workspace = true
-
-# AI/ML
-openai.workspace = true
-
-# Solana
-solana-client.workspace = true
-solana-sdk.workspace = true
-solana-program.workspace = true
-solana-account-decoder.workspace = true
-helius = { workspace = true }
-zeroize.workspace = true
-
-# Database
-sqlx.workspace = true
-tokio-postgres.workspace = true
-pgvector.workspace = true
-qdrant-client = "1.7"
-
-# Serialization
-serde.workspace = true
-serde_json.workspace = true
-schemars.workspace = true
-bigdecimal = { version = "0.4.7", features = ["serde"] }
-
-# HTTP client
-reqwest.workspace = true
-
-# Time and dates
-chrono.workspace = true
-time.workspace = true
-
-# Utilities
-uuid.workspace = true
-
-# Discord
-serenity.workspace = true
-
-# Framework
-rig-core = { path = "rig-core", features = ["all", "derive"] }
-rig-postgres = { version = "0.1.1", path = "rig-postgres" }
-
-# Local crates
-cainam-birdeye = { path = "cainam-birdeye" }
-cainam-discord = { path = "cainam-discord" }
-cainam-twitter = { path = "cainam-twitter" }
-
-
-[dev-dependencies]
-tokio-test = "0.4"
-pretty_assertions = "1.0"
-test-log = { version = "0.2", features = ["trace"] }
-env_logger = "0.10"
-tokio = { version = "1.43.0", features = ["full", "test-util"] }
-mockall = "0.12.1"
+rig-core = "0.7.0"
+rig-mongodb = "0.2.3"
+anyhow = "1.0"
+chrono = "0.4"
+bigdecimal = { version = "0.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+bson = "2.0"
+mockall = "0.11.0"
+reqwest = { version = "0.11", features = ["json"] }

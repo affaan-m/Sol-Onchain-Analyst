@@ -1,50 +1,44 @@
 use anyhow::{Context, Result};
 use rig_core::{embeddings::Embeddings, vector_store::VectorStoreIndex};
-use rig_postgres::PostgresVectorStore;
-use sqlx::postgres::PgPoolOptions;
+use rig_mongodb::{MongoVectorStore, MongoDbPool, SearchParams};
 use std::sync::Arc;
 use tracing::{info, warn};
+use crate::config::mongodb::MongoConfig;
 
 pub struct VectorStore {
-    store: Arc<PostgresVectorStore>,
+    store: Arc<MongoVectorStore>,
+    embeddings: Arc<Embeddings>,
 }
 
 impl VectorStore {
     pub async fn new() -> Result<Self> {
-        // Get database URL from environment
-        let database_url = std::env::var("DATABASE_URL")
-            .context("DATABASE_URL environment variable not set")?;
+        // Use centralized MongoDB configuration
+        let config = MongoConfig::from_env();
+        info!("Initializing vector store connection");
         
-        info!("Initializing vector store connection pool");
-        
-        // Create connection pool with optimized settings
-        let pool = PgPoolOptions::new()
-            .max_connections(50)
-            .min_connections(5)
-            .max_lifetime(std::time::Duration::from_secs(30 * 60)) // 30 minutes
-            .idle_timeout(std::time::Duration::from_secs(10 * 60)) // 10 minutes
-            .connect(&database_url)
+        let pool = config.create_pool()
             .await
-            .context("Failed to create database connection pool")?;
-
-        // Verify pgvector extension
-        sqlx::query("SELECT installed_version FROM pg_available_extensions WHERE name = 'vector'")
-            .fetch_optional(&pool)
-            .await
-            .context("Failed to check pgvector extension")?
-            .context("pgvector extension not found in database")?;
+            .context("Failed to create MongoDB pool")?;
+            
+        // Configure vector store with optimized search parameters
+        let search_params = SearchParams::new()
+            .with_num_candidates(100)
+            .with_num_probes(10);
+            
+        let store = MongoVectorStore::new_with_params(
+            pool, 
+            &config.database, 
+            "vectors",
+            search_params
+        ).await
+            .context("Failed to create vector store")?;
 
         info!("Initializing OpenAI embeddings model");
         
-        // Initialize store with OpenAI embeddings model
-        let openai_client = rig_core::providers::openai::Client::from_env();
-        let model = openai_client.embedding_model(rig_core::providers::openai::TEXT_EMBEDDING_3_SMALL);
-        
-        // Create vector store instance
-        let store = PostgresVectorStore::with_defaults(model, pool);
-        
+        let embeddings = Arc::new(Embeddings::new());
         Ok(Self {
             store: Arc::new(store),
+            embeddings,
         })
     }
 
@@ -79,11 +73,7 @@ impl VectorStore {
 
     #[cfg(test)]
     pub async fn cleanup_test_data(&self) -> Result<()> {
-        use sqlx::Executor;
-        if let Ok(pool) = self.store.get_pool().get_ref() {
-            pool.execute("TRUNCATE documents").await
-                .context("Failed to cleanup test data")?;
-        }
+        // Implement cleanup logic for MongoDB if necessary
         Ok(())
     }
 }

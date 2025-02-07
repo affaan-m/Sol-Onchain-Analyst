@@ -1,10 +1,12 @@
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
-use sqlx::types::JsonValue;
+use rig_mongodb::{Document, DateTime, ObjectId};
+use serde::{Serialize, Deserialize};
 use crate::utils::f64_to_decimal;
 use std::fmt;
+use chrono::{DateTime, Utc};
+use rig_mongodb::bson::{self, Document};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SignalType {
     Buy,
     Sell,
@@ -27,21 +29,22 @@ impl fmt::Display for SignalType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketSignal {
-    pub id: Option<i32>,
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<bson::oid::ObjectId>,
     pub asset_address: String,
     pub signal_type: SignalType,
+    pub price: BigDecimal,
     pub confidence: BigDecimal,
     pub risk_score: BigDecimal,
-    pub sentiment_score: Option<BigDecimal>,
-    pub volume_change_24h: Option<BigDecimal>,
     pub price_change_24h: Option<BigDecimal>,
-    pub price: BigDecimal,
+    pub volume_change_24h: Option<BigDecimal>,
     pub volume_change: BigDecimal,
-    pub timestamp: DateTime<Utc>,
-    pub metadata: Option<JsonValue>,
     pub created_at: Option<DateTime<Utc>>,
+    pub timestamp: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Document>,
 }
 
 pub struct MarketSignalBuilder {
@@ -127,8 +130,8 @@ impl MarketSignalBuilder {
             price_change_24h: self.price_change_24h,
             price: self.price,
             volume_change: self.volume_change.unwrap_or_else(|| BigDecimal::from(0)),
-            timestamp: self.timestamp.unwrap_or_else(Utc::now),
-            metadata: self.metadata,
+            timestamp: DateTime::from(self.timestamp.unwrap_or_else(chrono::Utc::now)),
+            metadata: self.metadata.map(|v| bson::to_document(&v).unwrap()),
             created_at: None,
         }
     }
