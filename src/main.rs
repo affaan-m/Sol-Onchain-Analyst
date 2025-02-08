@@ -3,7 +3,8 @@ use crate::{
     config::AgentConfig,
     models::market_signal::{SignalType, MarketSignal},
     trading::SolanaAgentKit,
-    utils::f64_to_decimal,
+    utils::f64_to_decimal, 
+    services::VectorStore,
     database::init_mongodb,
 };
 use std::io::{self, Write};
@@ -13,7 +14,6 @@ use chrono::Utc;
 use anyhow::Result;
 use tracing::{info, error};
 use std::sync::atomic::{AtomicBool, Ordering};
-use mongodb::{Client, options::ClientOptions};
 use rig_mongodb::MongoDbPool;
 
 mod agent;

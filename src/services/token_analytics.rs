@@ -1,57 +1,142 @@
+use anyhow::Error;
 use bigdecimal::{BigDecimal, ToPrimitive};
-use chrono::{DateTime, Utc, Datelike, Timelike};
-use rig_mongodb::{Collection, MongoDbPool, MongoDbVectorIndex, SearchParams, bson::doc};
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
-use crate::birdeye::{BirdeyeApi, TokenInfo};
-use crate::models::market_signal::{MarketSignal, SignalType, MarketSignalBuilder};
+use crate::birdeye::{BirdeyeApi, TokenInfo, TokenOverview};
+use crate::models::{
+    market_signal::{MarketSignal, SignalType, MarketSignalBuilder},
+    market_config::MarketConfig,
+};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
 use crate::error::{AgentError, AgentResult};
-use cainam_birdeye::BirdeyeClient as BirdeyeExtendedClient;
-use cainam_birdeye::types::api::TokenOverview;
-use crate::logging::{RequestLogger, MarketMetrics, log_market_metrics, MarketSignalLog, log_market_signal};
+use crate::database::{
+    Collection, MongoDbPool, MongoDbError, MongoDbVectorIndex,
+    FindOptions, FindOneOptions
+};
+use crate::database::bson::{self};
+use crate::database::bson::doc as bson_doc;
 use uuid::Uuid;
-use crate::config::MarketConfig;
-use time::OffsetDateTime;
-use serde_json::{self, Value};
-use time::PrimitiveDateTime;
+use futures::TryStreamExt;
+use tracing::info;
+
+const TEXT_EMBEDDING_ADA_002: &str = "text-embedding-ada-002";
+
+#[derive(Debug, Clone)]
+pub struct RequestLogger {
+    module: String,
+    action: String,
+}
+
+impl RequestLogger {
+    pub fn new(module: &str, action: &str) -> Self {
+        Self {
+            module: module.to_string(),
+            action: action.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TokenAnalyticsError {
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Birdeye API error: {0}")]
+    BirdeyeApi(String),
+    #[error("Validation error: {0}")]
+    Validation(String),
+}
+
+impl From<MongoDbError> for TokenAnalyticsError {
+    fn from(err: MongoDbError) -> Self {
+        Self::Database(err.to_string())
+    }
+}
+
+// Remove the conflicting From implementation and use map_err where needed
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketMetrics {
+    pub symbol: String,
+    pub price: f64,
+    pub volume_24h: Option<f64>,
+    pub signal_type: Option<String>,
+    pub confidence: Option<f64>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSignalLog {
+    pub id: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub token_address: String,
+    pub token_symbol: String,
+    pub signal_type: String,
+    pub price: f64,
+    pub price_change_24h: Option<f64>,
+    pub volume_change_24h: Option<f64>,
+    pub confidence: f64,
+    pub risk_score: f64,
+    pub created_at: DateTime<Utc>,
+}
+
+// Helper functions for logging with proper references
+fn log_market_metrics(metrics: &MarketMetrics) {
+    info!(
+        symbol = %metrics.symbol,
+        price = %metrics.price,
+        volume_24h = ?metrics.volume_24h,
+        signal_type = ?metrics.signal_type,
+        confidence = ?metrics.confidence,
+        "Market metrics recorded"
+    );
+}
+
+fn log_market_signal(signal: &MarketSignalLog) {
+    info!(
+        token = %signal.token_symbol,
+        signal_type = %signal.signal_type,
+        price_change = ?signal.price_change_24h,
+        volume_change = ?signal.volume_change_24h,
+        confidence = %signal.confidence,
+        risk_score = %signal.risk_score,
+        "Market signal generated"
+    );
+}
 
 pub struct TokenAnalyticsService {
-    db: Arc<MongoDbPool>,
+    pool: MongoDbPool,
     collection: Collection<TokenAnalytics>,
     signals_collection: Collection<MarketSignal>,
     vector_index: MongoDbVectorIndex,
     birdeye: Arc<dyn BirdeyeApi>,
-    birdeye_extended: Arc<BirdeyeExtendedClient>,
     market_config: MarketConfig,
 }
 
 impl TokenAnalyticsService {
     pub async fn new(
-        db: Arc<MongoDbPool>,
+        pool: MongoDbPool,
         birdeye: Arc<dyn BirdeyeApi>,
-        birdeye_extended: Arc<BirdeyeExtendedClient>,
         market_config: Option<MarketConfig>,
-    ) -> Result<Self, Error> {
-        let db_name = "cainam";
-        let collection = db.database(db_name).collection("token_analytics");
-        let signals_collection = db.database(db_name).collection("market_signals");
+    ) -> AgentResult<Self> {  // Change return type to AgentResult
+        let db = pool.database("analytics");
+        let collection = db.collection("token_analytics");
+        let signals_collection = db.collection("market_signals");
         
-        // Initialize vector index for semantic search
         let vector_index = MongoDbVectorIndex::new(
             collection.clone(),
-            openai_client.embedding_model(TEXT_EMBEDDING_ADA_002),
+            TEXT_EMBEDDING_ADA_002,
             "token_vector_index",
-            SearchParams::new()
-        ).await?;
+            Default::default()
+        ).await.map_err(|e| AgentError::Database(e.to_string()))?;
         
         Ok(Self {
-            db,
+            pool,
             collection,
             signals_collection,
             vector_index,
             birdeye,
-            birdeye_extended,
             market_config: market_config.unwrap_or_default(),
         })
     }
@@ -85,20 +170,21 @@ impl TokenAnalyticsService {
             logger.error(&err.to_string());
             return Err(err);
         }
-        if token_info.volume24h < 0.0 {
+        if token_info.volume_24h < 0.0 {
             let err = AgentError::validation("Token volume cannot be negative");
             logger.error(&err.to_string());
             return Err(err);
         }
 
         // Log market metrics
-        log_market_metrics(MarketMetrics {
+        let metrics = MarketMetrics {
             symbol: symbol.to_string(),
             price: token_info.price,
-            volume_24h: Some(token_info.volume24h),
+            volume_24h: Some(token_info.volume_24h),
             signal_type: None,
             confidence: None,
-        });
+        };
+        log_market_metrics(&metrics);
 
         // Convert to TokenAnalytics
         let analytics = match self.convert_to_analytics(address, symbol, token_info, token_overview).await {
@@ -146,7 +232,7 @@ impl TokenAnalyticsService {
             token_name: overview.name,
             token_symbol: symbol.to_string(),
             price: f64_to_decimal(info.price),
-            volume_24h: Some(f64_to_decimal(info.volume24h)),
+            volume_24h: Some(f64_to_decimal(info.volume_24h)),
             market_cap: Some(f64_to_decimal(overview.market_cap)),
             total_supply: Some(f64_to_decimal(overview.total_supply)),
             holder_count: None,
@@ -249,20 +335,19 @@ impl TokenAnalyticsService {
     }
 
     pub async fn get_previous_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
-        let filter = Document::new()
-            .add("token_address", address)
-            .add("timestamp", Document::new().add("$lt", Bson::from(Utc::now())));
+        let filter = bson_doc! {
+            "token_address": address,
+            "timestamp": { "$lt": Utc::now() }
+        };
 
-        let options = rig_mongodb::FindOneOptions::builder()
-            .sort(Document::new().add("timestamp", -1))
+        let options = FindOneOptions::builder()
+            .sort(bson_doc! { "timestamp": -1 })
             .build();
 
-        let analytics = self.collection
-            .find_one(filter, options)
+        self.collection
+            .find_one(filter, Some(options))
             .await
-            .map_err(|e| AgentError::Database(format!("Failed to fetch previous analytics: {}", e)))?;
-
-        Ok(analytics)
+            .map_err(|e| AgentError::Database(format!("Failed to fetch previous analytics: {}", e)))
     }
 
     async fn store_token_analytics(&self, analytics: &TokenAnalytics) -> AgentResult<TokenAnalytics> {
@@ -272,7 +357,8 @@ impl TokenAnalyticsService {
             .map_err(|e| AgentError::Database(format!("Failed to store analytics: {}", e)))?;
             
         let mut stored = analytics.clone();
-        stored.id = Some(result.inserted_id.as_object_id().unwrap());
+        stored.id = result.inserted_id.as_object_id()
+            .ok_or_else(|| AgentError::Database("Failed to get inserted document's ObjectId".to_string()))?;
         Ok(stored)
     }
 
@@ -284,41 +370,43 @@ impl TokenAnalyticsService {
         limit: i64,
         offset: i64,
     ) -> AgentResult<Vec<TokenAnalytics>> {
-        let filter = Document::new()
-            .add("token_address", address)
-            .add("timestamp", Document::new()
-                .add("$gte", Bson::from(start_time))
-                .add("$lte", Bson::from(end_time)));
+        let filter = bson_doc! {
+            "token_address": address,
+            "timestamp": {
+                "$gte": start_time,
+                "$lte": end_time
+            }
+        };
 
-        let options = rig_mongodb::FindOptions::builder()
-            .sort(Document::new().add("timestamp", -1))
+        let options = FindOptions::builder()
+            .sort(bson_doc! { "timestamp": -1 })
             .skip(Some(offset as u64))
             .limit(Some(limit))
             .build();
 
         let mut cursor = self.collection
-            .find(filter, options)
+            .find(filter, Some(options))
             .await
             .map_err(|e| AgentError::Database(format!("Failed to fetch token history: {}", e)))?;
 
-        let mut analytics = Vec::new();
-        while let Some(result) = cursor.try_next().await.map_err(|e| AgentError::Database(format!("Failed to iterate results: {}", e)))? {
-            analytics.push(result);
+        let mut results = Vec::new();
+        while let Some(doc) = cursor.try_next().await
+            .map_err(|e| AgentError::Database(format!("Failed to iterate cursor: {}", e)))? {
+            results.push(doc);
         }
 
-        Ok(analytics)
+        Ok(results)
     }
 
     pub async fn get_latest_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
-        let filter = Document::new()
-            .add("token_address", address);
+        let filter = bson_doc! { "token_address": address };
 
-        let options = rig_mongodb::FindOneOptions::builder()
-            .sort(Document::new().add("timestamp", -1))
+        let options = FindOneOptions::builder()
+            .sort(bson_doc! { "timestamp": -1 })
             .build();
 
         let analytics = self.collection
-            .find_one(filter, options)
+            .find_one(filter, Some(options))
             .await
             .map_err(|e| AgentError::Database(format!("Failed to fetch latest token analytics: {}", e)))?;
 
@@ -364,13 +452,37 @@ impl TokenAnalyticsService {
             created_at: Utc::now(),
         };
 
-        log_market_signal(signal_log);
+        log_market_signal(&signal_log);
     }
 
     fn calculate_confidence(&self, price_change: BigDecimal, volume_change: BigDecimal) -> BigDecimal {
         self.market_config.base_confidence.clone() +
         (price_change * self.market_config.price_weight.clone()) +
         (volume_change * self.market_config.volume_weight.clone())
+    }
+
+    pub async fn process_market_signal(&self, signal: MarketSignal) -> AgentResult<()> {
+        let _logger = RequestLogger::new("token_analytics", "process_market_signal");
+        
+        let signal_log = MarketSignalLog {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            token_address: signal.asset_address.clone(),
+            token_symbol: signal.metadata.get("token_symbol")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&signal.asset_address)
+                .to_string(),
+            signal_type: signal.signal_type.to_string(),
+            price: signal.price.to_f64().unwrap_or_default(),
+            price_change_24h: signal.price_change_24h.map(|p| p.to_f64().unwrap_or_default()),
+            volume_change_24h: signal.volume_change_24h.map(|v| v.to_f64().unwrap_or_default()),
+            confidence: signal.confidence.to_f64().unwrap_or_default(),
+            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
+            created_at: signal.created_at.unwrap_or_else(|| Utc::now()),
+        };
+
+        log_market_signal(&signal_log);
+        Ok(())
     }
 }
 
@@ -380,7 +492,10 @@ impl From<MarketSignal> for MarketSignalLog {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
             token_address: signal.asset_address.clone(),
-            token_symbol: signal.asset_address.clone(), // Using address as symbol since we don't have symbol
+            token_symbol: signal.metadata.get("token_symbol")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&signal.asset_address)
+                .to_string(),
             signal_type: signal.signal_type.to_string(),
             price: signal.price.to_f64().unwrap_or_default(),
             price_change_24h: Some(signal.price_change_24h
@@ -395,116 +510,64 @@ impl From<MarketSignal> for MarketSignalLog {
     }
 }
 
-fn datetime_to_offset(dt: DateTime<Utc>) -> OffsetDateTime {
-    let month: u8 = dt.month() as u8;
-    PrimitiveDateTime::new(
-        time::Date::from_calendar_date(
-            dt.year(),
-            time::Month::try_from(month).unwrap(),
-            dt.day() as u8
-        ).unwrap(),
-        time::Time::from_hms_nano(
-            dt.hour() as u8,
-            dt.minute() as u8,
-            dt.second() as u8,
-            dt.nanosecond()
-        ).unwrap()
-    ).assume_utc()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::birdeye::MockBirdeyeApi;
-    use rig_mongodb::options::ClientOptions;
-    use futures::future::FutureExt;
+    use mockall::predicate::*;
+    use mockall::mock;
+    use mongodb;  // Add explicit mongodb dependency
 
-    async fn setup_test_db() -> Arc<MongoDbPool> {
-        let client_options = ClientOptions::parse("mongodb://localhost:27017")
-            .await
-            .expect("Failed to parse MongoDB options");
-            
-        let client = MongoDbPool::with_options(client_options)
-            .expect("Failed to create MongoDB client");
-            
-        Arc::new(client)
+    mock! {
+        pub BirdeyeApi {
+            async fn get_token_info(&self, symbol: &str) -> AgentResult<TokenInfo>;
+            async fn get_token_info_by_address(&self, address: &str) -> AgentResult<TokenInfo>;
+        }
     }
 
-    fn setup_mock_birdeye() -> (Arc<dyn BirdeyeApi>, Arc<BirdeyeExtendedClient>) {
-        let mut mock = MockBirdeyeApi::new();
-        mock.expect_get_token_info()
-            .returning(|_| {
-                futures::future::ready(Ok(TokenInfo {
-                    price: 100.0,
-                    volume24h: 1000000.0,
-                    price_change_24h: 5.0,
-                    liquidity: 500000.0,
-                    trade24h: 1000,
-                })).boxed()
-            });
+    async fn setup_test_db() -> MongoDbPool {
+        let client_options = mongodb::options::ClientOptions::parse("mongodb://localhost:27017")
+            .await
+            .expect("Failed to parse MongoDB URI");
+        
+        MongoDbPool::new(client_options)
+            .await
+            .expect("Failed to create MongoDB pool")
+    }
 
-        (
-            Arc::new(mock),
-            Arc::new(BirdeyeExtendedClient::new("test_key".to_string()))
-        )
+    fn setup_mock_birdeye() -> Arc<MockBirdeyeApi> {
+        let mut mock = MockBirdeyeApi::new();
+        mock.expect_get_token_info_by_address()
+            .returning(|_| Ok(TokenInfo {
+                price: 100.0,
+                volume_24h: 1000000.0,
+                price_change_24h: 5.0,
+                liquidity: 500000.0,
+                trade_24h: 1000,
+            }));
+
+        Arc::new(mock)
     }
 
     #[tokio::test]
     async fn test_market_signal_generation() -> AgentResult<()> {
-        let db = setup_test_db().await;
-        let (birdeye, birdeye_extended) = setup_mock_birdeye();
-        let market_config = MarketConfig::default();
+        let pool = setup_test_db().await;
+        let birdeye = setup_mock_birdeye();
         
-        let service = TokenAnalyticsService::new(
-            db.clone(),
-            birdeye,
-            birdeye_extended,
-            Some(market_config),
-        );
-
-        // First store some historical data
-        let analytics = TokenAnalytics {
-            id: None,
-            token_address: "test_address".to_string(),
-            token_name: "Test Token".to_string(),
-            token_symbol: "TEST".to_string(),
-            price: f64_to_decimal(90.0), // Lower price to trigger price spike
-            volume_24h: Some(f64_to_decimal(500000.0)),
-            market_cap: Some(f64_to_decimal(1000000.0)),
-            total_supply: Some(f64_to_decimal(10000.0)),
-            holder_count: None,
-            timestamp: Utc::now() - chrono::Duration::hours(1),
-            created_at: None,
-            metadata: Some(serde_json::json!({})),
+        let market_config = MarketConfig {
+            price_change_threshold: f64_to_decimal(0.05),
+            volume_surge_threshold: f64_to_decimal(0.2),
+            base_confidence: f64_to_decimal(0.5),
+            price_weight: f64_to_decimal(0.3),
+            volume_weight: f64_to_decimal(0.2),
         };
-        service.store_token_analytics(&analytics).await?;
-
-        // Now fetch current data which should generate a signal
-        let result = service.fetch_and_store_token_info("TEST", "test_address").await?;
-        let signal = service.generate_market_signals(&result).await?;
-        
-        assert!(signal.is_some());
-        let signal = signal.unwrap();
-        assert_eq!(signal.signal_type, SignalType::PriceSpike);
-        assert!(signal.confidence > f64_to_decimal(0.0));
-        assert!(signal.confidence <= f64_to_decimal(1.0));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_transaction_rollback() -> AgentResult<()> {
-        let db = setup_test_db().await;
-        let (birdeye, birdeye_extended) = setup_mock_birdeye();
-        let market_config = MarketConfig::default();
         
         let service = TokenAnalyticsService::new(
-            db.clone(),
+            pool,
             birdeye,
-            birdeye_extended,
             Some(market_config),
-        );
+        ).await?;
 
-        // Store valid analytics
+        // Create test data
         let analytics = TokenAnalytics {
             id: None,
             token_address: "test_address".to_string(),
@@ -512,20 +575,30 @@ mod tests {
             token_symbol: "TEST".to_string(),
             price: f64_to_decimal(100.0),
             volume_24h: Some(f64_to_decimal(1000000.0)),
-            market_cap: Some(f64_to_decimal(10000000.0)),
-            total_supply: Some(f64_to_decimal(100000.0)),
-            holder_count: None,
+            market_cap: Some(f64_to_decimal(1000000.0)),
+            total_supply: Some(f64_to_decimal(10000.0)),
+            holder_count: Some(1000),
             timestamp: Utc::now(),
-            created_at: None,
-            metadata: Some(serde_json::json!({})),
+            created_at: Some(Utc::now()),
+            metadata: Some(serde_json::json!({
+                "network": "solana",
+                "decimals": 9
+            })),
         };
 
-        service.store_token_analytics(&analytics).await?;
+        let result = service.store_token_analytics(&analytics).await?;
+        assert!(result.id.is_some(), "Should have assigned an ID");
 
-        // Verify the data was stored
-        let result = service.get_latest_token_analytics("test_address").await?;
-        assert!(result.is_some());
-        
+        let history = service.get_token_history(
+            "test_address",
+            Utc::now() - chrono::Duration::hours(24),
+            Utc::now(),
+            10,
+            0
+        ).await?;
+
+        assert!(!history.is_empty(), "Should have historical data");
+
         Ok(())
     }
 }

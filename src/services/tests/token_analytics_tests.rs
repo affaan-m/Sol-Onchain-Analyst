@@ -6,8 +6,7 @@ use crate::{
     error::AgentError,
     models::market_signal::SignalType,
 };
-use mockall::predicate::*;
-use rig_mongodb::MongoDbPool;
+use rig_mongodb::MongoDbPool::MongoDbPool;
 
 #[cfg(test)]
 mod tests {
@@ -17,7 +16,7 @@ mod tests {
     use std::sync::Arc;
 
     async fn setup_test_environment() -> (Arc<MongoDbPool>, Arc<MockBirdeyeApi>, Arc<BirdeyeExtendedClient>) {
-        let db = setup_test_db("cainam_test")
+        let db = setup_test_db()
             .await
             .expect("Failed to setup test database");
         
@@ -46,10 +45,10 @@ mod tests {
             .returning(|_| {
                 Ok(TokenInfo {
                     price: 100.0,
-                    volume24h: 1000000.0,
+                    volume_24h: 1000000.0,
                     price_change_24h: 5.0,
                     liquidity: 500000.0,
-                    trade24h: 1000,
+                    trade_24h: 1000,
                 })
             });
 
@@ -83,10 +82,10 @@ mod tests {
             .returning(|_| {
                 Ok(TokenInfo {
                     price: -1.0, // Invalid price
-                    volume24h: 1000000.0,
+                    volume_24h: 1000000.0,
                     price_change_24h: 5.0,
                     liquidity: 500000.0,
-                    trade24h: 1000,
+                    trade_24h: 1000,
                 })
             });
 

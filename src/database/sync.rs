@@ -1,11 +1,11 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use mongodb::Database;
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
 use tracing::{info, warn};
 use rig::completion::CompletionModel;
 use rig::agent::Agent;
+use rig_mongodb::{MongoDbPool, Database};
 use crate::market_data::{DataProvider, MarketTrend};
 use crate::personality::StoicPersonality;
 use crate::strategy::{TradingStrategy, TradeAction, TradeRecommendation};
@@ -13,7 +13,6 @@ use crate::twitter::TwitterClient;
 use crate::dex::jupiter::JupiterDex;
 use crate::database::DatabaseExt;
 use solana_sdk::signature::Keypair;
-use rig_mongodb::{MongoDbPool, Database};
 use crate::error::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,6 +172,50 @@ impl<M: CompletionModel> DataSyncService<M> {
 
         info!("Market data sync cycle complete");
         Ok(())
+    }
+
+    pub async fn get_token_state(&self, token_address: &str) -> Result<Option<TokenState>> {
+        let collection = self.db
+            .database()
+            .collection("token_states");
+            
+        let filter = doc! {
+            "address": token_address
+        };
+        
+        let options = rig_mongodb::options::FindOneOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .build();
+            
+        collection.find_one(filter, options)
+            .await
+            .map_err(anyhow::Error::from)
+    }
+
+    pub async fn get_token_history(
+        &self,
+        token_address: &str,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+    ) -> Result<Vec<TokenState>> {
+        let collection = self.db
+            .database()
+            .collection("token_states");
+            
+        let filter = doc! {
+            "address": token_address,
+            "timestamp": {
+                "$gte": start_time,
+                "$lte": end_time
+            }
+        };
+        
+        let options = rig_mongodb::options::FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .build();
+            
+        let cursor = collection.find(filter, options).await?;
+        cursor.try_collect().await.map_err(anyhow::Error::from)
     }
 }
 

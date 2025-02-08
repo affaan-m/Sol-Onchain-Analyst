@@ -110,6 +110,43 @@ async fn main() -> Result<()> {
         }
     })).await?;
 
+    // Create test collections with timeseries optimization
+    db.create_collection("test_market_signals", Some(doc! {
+        "timeseries": {
+            "timeField": "timestamp",
+            "metaField": "asset_address",
+            "granularity": "minutes"
+        },
+        "validator": {
+            "$jsonSchema": {
+                "bsonType": "object",
+                "required": ["asset_address", "signal_type", "confidence", "timestamp"],
+                "properties": {
+                    "asset_address": { "bsonType": "string" },
+                    "signal_type": { 
+                        "enum": ["BUY", "SELL", "HOLD", "STRONG_BUY", "STRONG_SELL", 
+                                "PRICE_SPIKE", "PRICE_DROP", "VOLUME_SURGE"] 
+                    },
+                    "confidence": { "bsonType": "decimal128" },
+                    "price_change_24h": { "bsonType": "decimal128" },
+                    "volume_change_24h": { "bsonType": "decimal128" },
+                    "risk_score": { "bsonType": "decimal128" },
+                    "metadata": { "bsonType": "object" },
+                    "timestamp": { "bsonType": "date" }
+                }
+            }
+        }
+    })).await?;
+
+    // Create trade executions collection
+    db.create_collection("test_trade_executions", Some(doc! {
+        "timeseries": {
+            "timeField": "execution_time",
+            "metaField": "asset_address",
+            "granularity": "minutes"
+        }
+    })).await?;
+
     // Create time-based indexes for efficient querying
     db.collection("market_signals").create_index(
         doc! {

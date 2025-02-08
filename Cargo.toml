@@ -43,6 +43,7 @@ opt-level = "z"
 [dependencies]
 rig-core = "0.7.0"
 rig-mongodb = "0.2.3"
+mongodb = "2.6"  # Add explicit mongodb dependency
 anyhow = "1.0"
 chrono = "0.4"
 bigdecimal = { version = "0.2", features = ["serde"] }
@@ -51,3 +52,22 @@ serde_derive = "1.0"
 bson = "2.0"
 mockall = "0.11.0"
 reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full", "macros"] }
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+time = "0.3"
+thiserror = "1.0"
+async-trait = "0.1"
+
+# Blockchain dependencies
+solana-client = "1.17"
+solana-sdk = "1.17"
+solana-account-decoder = "1.17"
+spl-token = "4.0"
+spl-associated-token-account = "2.2"
+
+# Additional utilities
+serde_json = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+dotenvy = "0.15"

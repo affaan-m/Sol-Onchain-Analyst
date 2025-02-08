@@ -28,21 +28,16 @@
 //! - GET /token/trending: Trending tokens
 //! - GET /token/price: Real-time prices
 
+use crate::market_data::{
+    DataProvider, MarketTrend, OnChainMetrics, PricePoint, SocialMetrics, TokenMetadata,
+};
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::DateTime;
 use reqwest::Client;
-use serde::{Deserialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument};
-use chrono::DateTime;
-use crate::market_data::{
-    DataProvider,
-    MarketTrend,
-    TokenMetadata,
-    PricePoint,
-    OnChainMetrics,
-    SocialMetrics,
-};
 
 #[derive(Debug, Deserialize)]
 struct BirdEyeTokenResponse {
@@ -92,7 +87,7 @@ struct BirdEyeTrendingToken {
     logo_uri: Option<String>,
     name: String,
     symbol: String,
-    #[serde(rename = "volume24hUSD")]
+    #[serde(rename = "volume_24hUSD")]
     volume_24h_usd: Option<f64>,
     rank: Option<i64>,
     price: f64,
@@ -323,7 +318,7 @@ impl BirdEyeProvider {
     #[instrument(skip(self), fields(api = "birdeye"))]
     async fn get_trending_by_volume(&self) -> Result<Vec<MarketTrend>> {
         debug!("Fetching trending tokens by volume");
-        let url = "https://public-api.birdeye.so/defi/token_trending?sort_by=volume24hUSD&sort_type=asc&offset=0&limit=20";
+        let url = "https://public-api.birdeye.so/defi/token_trending?sort_by=volume_24hUSD&sort_type=asc&offset=0&limit=20";
         self.get_trending_tokens_internal(url).await
     }
 
@@ -339,8 +334,9 @@ impl BirdEyeProvider {
             "https://public-api.birdeye.so/defi/v2/tokens/new_listing?time_to=10000000000&limit={}&meme_platform_enabled=true",
             limit
         );
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -348,45 +344,63 @@ impl BirdEyeProvider {
             .json::<BirdEyeNewListingResponse>()
             .await?;
 
-        Ok(response.data.items.into_iter().map(|token| MarketTrend {
-            token_address: token.address.clone(),
-            metadata: TokenMetadata {
-                address: token.address,
-                symbol: token.symbol,
-                name: token.name,
-                decimals: token.decimals,
-                price_usd: 0.0, // Not available in new listings
-                price_sol: 0.0,
-                volume_24h: 0.0,
-                market_cap: 0.0,
-                fully_diluted_market_cap: 0.0,
-                circulating_supply: 0.0,
-                total_supply: 0.0,
-            },
-            price_change_24h: 0.0,
-            volume_change_24h: 0.0,
-            social_volume_24h: 0,
-            dev_activity_24h: 0,
-        }).collect())
+        Ok(response
+            .data
+            .items
+            .into_iter()
+            .map(|token| MarketTrend {
+                token_address: token.address.clone(),
+                metadata: TokenMetadata {
+                    address: token.address,
+                    symbol: token.symbol,
+                    name: token.name,
+                    decimals: token.decimals,
+                    price_usd: 0.0, // Not available in new listings
+                    price_sol: 0.0,
+                    volume_24h: 0.0,
+                    market_cap: 0.0,
+                    fully_diluted_market_cap: 0.0,
+                    circulating_supply: 0.0,
+                    total_supply: 0.0,
+                },
+                price_change_24h: 0.0,
+                volume_change_24h: 0.0,
+                social_volume_24h: 0,
+                dev_activity_24h: 0,
+            })
+            .collect())
     }
 
-    async fn get_token_list_by_volume(&self, _limit: usize, _min_liquidity: f64) -> Result<Vec<MarketTrend>> {
+    async fn get_token_list_by_volume(
+        &self,
+        _limit: usize,
+        _min_liquidity: f64,
+    ) -> Result<Vec<MarketTrend>> {
         let url = "https://public-api.birdeye.so/defi/tokenlist?sort_by=v24hUSD&sort_type=desc&offset=0&limit=50&min_liquidity=100";
         self.get_token_list_internal(url).await
     }
 
-    async fn get_token_list_by_market_cap(&self, _limit: usize, _min_liquidity: f64) -> Result<Vec<MarketTrend>> {
+    async fn get_token_list_by_market_cap(
+        &self,
+        _limit: usize,
+        _min_liquidity: f64,
+    ) -> Result<Vec<MarketTrend>> {
         let url = "https://public-api.birdeye.so/defi/tokenlist?sort_by=mc&sort_type=desc&offset=0&limit=50&min_liquidity=100";
         self.get_token_list_internal(url).await
     }
 
-    async fn get_token_list_by_price_change(&self, _limit: usize, _min_liquidity: f64) -> Result<Vec<MarketTrend>> {
+    async fn get_token_list_by_price_change(
+        &self,
+        _limit: usize,
+        _min_liquidity: f64,
+    ) -> Result<Vec<MarketTrend>> {
         let url = "https://public-api.birdeye.so/defi/tokenlist?sort_by=v24hChangePercent&sort_type=desc&offset=0&limit=50&min_liquidity=100";
         self.get_token_list_internal(url).await
     }
 
     async fn get_token_list_internal(&self, url: &str) -> Result<Vec<MarketTrend>> {
-        let response = self.client
+        let response = self
+            .client
             .get(url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -394,26 +408,31 @@ impl BirdEyeProvider {
             .json::<BirdEyeTokenListResponse>()
             .await?;
 
-        Ok(response.data.tokens.into_iter().map(|token| MarketTrend {
-            token_address: token.address.clone(),
-            metadata: TokenMetadata {
-                address: token.address,
-                symbol: token.symbol,
-                name: token.name,
-                decimals: token.decimals,
-                price_usd: 0.0, // Need to fetch separately
-                price_sol: 0.0,
-                volume_24h: token.v24h_usd,
-                market_cap: token.mc,
-                fully_diluted_market_cap: 0.0,
-                circulating_supply: 0.0,
-                total_supply: 0.0,
-            },
-            price_change_24h: token.v24h_change_percent,
-            volume_change_24h: 0.0,
-            social_volume_24h: 0,
-            dev_activity_24h: 0,
-        }).collect())
+        Ok(response
+            .data
+            .tokens
+            .into_iter()
+            .map(|token| MarketTrend {
+                token_address: token.address.clone(),
+                metadata: TokenMetadata {
+                    address: token.address,
+                    symbol: token.symbol,
+                    name: token.name,
+                    decimals: token.decimals,
+                    price_usd: 0.0, // Need to fetch separately
+                    price_sol: 0.0,
+                    volume_24h: token.v24h_usd,
+                    market_cap: token.mc,
+                    fully_diluted_market_cap: 0.0,
+                    circulating_supply: 0.0,
+                    total_supply: 0.0,
+                },
+                price_change_24h: token.v24h_change_percent,
+                volume_change_24h: 0.0,
+                social_volume_24h: 0,
+                dev_activity_24h: 0,
+            })
+            .collect())
     }
 
     async fn get_wallet_tokens(&self, wallet_address: &str) -> Result<BirdEyeWalletData> {
@@ -422,7 +441,8 @@ impl BirdEyeProvider {
             wallet_address
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -433,13 +453,18 @@ impl BirdEyeProvider {
         Ok(response.data)
     }
 
-    async fn get_wallet_transactions(&self, wallet_address: &str, limit: usize) -> Result<Vec<BirdEyeTransaction>> {
+    async fn get_wallet_transactions(
+        &self,
+        wallet_address: &str,
+        limit: usize,
+    ) -> Result<Vec<BirdEyeTransaction>> {
         let url = format!(
             "https://public-api.birdeye.so/v1/wallet/tx_list?wallet={}&limit={}",
             wallet_address, limit
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -447,16 +472,15 @@ impl BirdEyeProvider {
             .json::<BirdEyeTransactionResponse>()
             .await?;
 
-        Ok(response.data.get("solana")
-            .cloned()
-            .unwrap_or_default())
+        Ok(response.data.get("solana").cloned().unwrap_or_default())
     }
 
     #[instrument(skip(self), fields(api = "birdeye"))]
     async fn get_trending_tokens_internal(&self, url: &str) -> Result<Vec<MarketTrend>> {
         debug!(url = %url, "Making API request");
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -469,26 +493,31 @@ impl BirdEyeProvider {
             "Successfully parsed trending tokens"
         );
 
-        Ok(response.data.tokens.into_iter().map(|token| MarketTrend {
-            token_address: token.address.clone(),
-            metadata: TokenMetadata {
-                address: token.address,
-                symbol: token.symbol,
-                name: token.name,
-                decimals: token.decimals,
-                price_usd: token.price,
-                price_sol: token.price, // Price is in USD
-                volume_24h: token.volume_24h_usd.unwrap_or(0.0),
-                market_cap: 0.0, // Not available in trending response
-                fully_diluted_market_cap: 0.0,
-                circulating_supply: 0.0,
-                total_supply: 0.0,
-            },
-            price_change_24h: token.price_change_24h.unwrap_or(0.0),
-            volume_change_24h: 0.0, // Not available in trending response
-            social_volume_24h: 0,
-            dev_activity_24h: 0,
-        }).collect())
+        Ok(response
+            .data
+            .tokens
+            .into_iter()
+            .map(|token| MarketTrend {
+                token_address: token.address.clone(),
+                metadata: TokenMetadata {
+                    address: token.address,
+                    symbol: token.symbol,
+                    name: token.name,
+                    decimals: token.decimals,
+                    price_usd: token.price,
+                    price_sol: token.price, // Price is in USD
+                    volume_24h: token.volume_24h_usd.unwrap_or(0.0),
+                    market_cap: 0.0, // Not available in trending response
+                    fully_diluted_market_cap: 0.0,
+                    circulating_supply: 0.0,
+                    total_supply: 0.0,
+                },
+                price_change_24h: token.price_change_24h.unwrap_or(0.0),
+                volume_change_24h: 0.0, // Not available in trending response
+                social_volume_24h: 0,
+                dev_activity_24h: 0,
+            })
+            .collect())
     }
 }
 
@@ -500,7 +529,8 @@ impl DataProvider for BirdEyeProvider {
             token_address
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -508,7 +538,9 @@ impl DataProvider for BirdEyeProvider {
             .json::<BirdEyeTokenMetadataResponse>()
             .await?;
 
-        let metadata = response.data.get(token_address)
+        let metadata = response
+            .data
+            .get(token_address)
             .ok_or_else(|| anyhow::anyhow!("Token metadata not found"))?;
 
         // Get market data
@@ -517,14 +549,15 @@ impl DataProvider for BirdEyeProvider {
             token_address
         );
 
-        let market_data = self.client
+        let market_data = self
+            .client
             .get(&market_url)
             .header("X-API-KEY", &self.api_key)
             .send()
             .await?
             .json::<BirdEyeMarketDataResponse>()
             .await?;
-        
+
         Ok(TokenMetadata {
             address: metadata.address.clone(),
             symbol: metadata.symbol.clone(),
@@ -532,7 +565,7 @@ impl DataProvider for BirdEyeProvider {
             decimals: metadata.decimals,
             price_usd: market_data.data.price,
             price_sol: market_data.data.price, // Price is in USD
-            volume_24h: 0.0, // Not available in this endpoint
+            volume_24h: 0.0,                   // Not available in this endpoint
             market_cap: market_data.data.marketcap,
             fully_diluted_market_cap: market_data.data.marketcap,
             circulating_supply: market_data.data.circulating_supply,
@@ -562,7 +595,8 @@ impl DataProvider for BirdEyeProvider {
         // Deduplicate by token address
         let mut unique_trends = HashMap::new();
         for trend in all_trends {
-            unique_trends.entry(trend.token_address.clone())
+            unique_trends
+                .entry(trend.token_address.clone())
                 .or_insert(trend);
         }
 
@@ -581,7 +615,8 @@ impl DataProvider for BirdEyeProvider {
             address
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -589,10 +624,12 @@ impl DataProvider for BirdEyeProvider {
             .json::<serde_json::Value>()
             .await?;
 
-        let data = response["data"].as_array()
+        let data = response["data"]
+            .as_array()
             .ok_or_else(|| anyhow::anyhow!("Invalid response format"))?;
 
-        let prices: Vec<PricePoint> = data.iter()
+        let prices: Vec<PricePoint> = data
+            .iter()
             .filter_map(|point| {
                 let timestamp = point["timestamp"].as_i64()?;
                 let price = point["value"].as_f64()?;
@@ -615,7 +652,8 @@ impl DataProvider for BirdEyeProvider {
             address
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -623,7 +661,8 @@ impl DataProvider for BirdEyeProvider {
             .json::<serde_json::Value>()
             .await?;
 
-        let data = response["data"].as_object()
+        let data = response["data"]
+            .as_object()
             .ok_or_else(|| anyhow::anyhow!("Invalid response format"))?;
 
         Ok(OnChainMetrics {
@@ -639,4 +678,4 @@ impl DataProvider for BirdEyeProvider {
         // BirdEye doesn't provide social metrics
         Err(anyhow::anyhow!("Social metrics not available from BirdEye"))
     }
-} 
+}

@@ -53,7 +53,6 @@ pub mod test_utils {
     async fn setup_test_collections(pool: &MongoDbPool, db_name: &str) -> Result<()> {
         let db = pool.database(db_name);
         
-        // Create minimal test collections with indexes
         db.create_collection("test_market_signals", Some(doc! {
             "timeseries": {
                 "timeField": "timestamp",

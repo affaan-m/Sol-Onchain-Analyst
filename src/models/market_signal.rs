@@ -1,10 +1,11 @@
 use bigdecimal::BigDecimal;
-use rig_mongodb::{Document, DateTime, ObjectId};
+use bson::{Document, oid::ObjectId};
+use chrono::DateTime;
 use serde::{Serialize, Deserialize};
 use crate::utils::f64_to_decimal;
 use std::fmt;
 use chrono::{DateTime, Utc};
-use rig_mongodb::bson::{self, Document};
+use bson::{self, Document};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SignalType {

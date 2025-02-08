@@ -1,9 +1,9 @@
-use rig_mongodb::bson::{self, oid::ObjectId, DateTime};
+use bson::{self, oid::ObjectId, DateTime};
 use serde::{Serialize, Deserialize};
-use bigdecimal::BigDecimal;
 
 pub mod market_signal;
 pub mod token_analytics;
+pub mod market_config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeStatus;
@@ -38,3 +38,4 @@ impl VectorDocument {
         "vectors"
     }
 }
+

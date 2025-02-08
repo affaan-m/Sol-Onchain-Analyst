@@ -1,21 +1,9 @@
 use anyhow::{Result, anyhow};
-use reqwest::Client;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::{Client, header::{HeaderMap, HeaderValue, CONTENT_TYPE}};
 use serde_json::json;
-use std::env;
-use async_trait::async_trait;
+use tracing::{info, error};
 
-#[cfg(test)]
-use mockall::automock;
-
-#[async_trait]
-#[cfg_attr(test, automock)]
-pub trait TwitterApi: Send + Sync {
-    async fn login(&mut self) -> Result<()>;
-    async fn post_tweet(&self, text: &str) -> Result<()>;
-    async fn delete_tweet(&self, tweet_id: &str) -> Result<()>;
-}
-
+// Remove trait definition since we're not using trait objects
 pub struct TwitterClient {
     client: Client,
     email: String,
@@ -34,130 +22,149 @@ impl TwitterClient {
             auth_token: None,
         }
     }
-}
 
-#[async_trait]
-impl TwitterApi for TwitterClient {
-    async fn login(&mut self) -> Result<()> {
-        // First try to get auth token from environment
-        if let Ok(token) = env::var("TWITTER_AUTH_TOKEN") {
-            self.auth_token = Some(token);
-            return Ok(());
-        }
-
-        // If no auth token in env, try to authenticate using username/password
+    pub async fn login(&mut self) -> Result<()> {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
+        // Direct auth endpoint
         let payload = json!({
+            "email": self.email,
             "username": self.username,
             "password": self.password
         });
 
         let response = self.client
-            .post("https://api.twitter.com/2/oauth2/token")
+            .post("https://x.com/i/flow/login")
             .headers(headers)
             .json(&payload)
             .send()
             .await?;
 
         if response.status().is_success() {
-            let data: serde_json::Value = response.json().await?;
-            if let Some(token) = data.get("access_token").and_then(|t| t.as_str()) {
-                self.auth_token = Some(token.to_string());
-                Ok(())
-            } else {
-                Err(anyhow!("No access token in response"))
+            // Extract auth token from cookies
+            if let Some(cookies) = response.headers().get("set-cookie") {
+                if let Ok(cookie_str) = cookies.to_str() {
+                    if let Some(auth_token) = extract_auth_token(cookie_str) {
+                        info!("Successfully logged in to Twitter");
+                        self.auth_token = Some(auth_token);
+                        return Ok(());
+                    }
+                }
             }
+            Err(anyhow!("No auth token found in response"))
         } else {
             let error_message = response.text().await.unwrap_or_default();
-            tracing::error!("Failed to login to Twitter: {}", error_message);
+            error!("Failed to login to Twitter: {}", error_message);
             Err(anyhow!("Failed to login to Twitter: {}", error_message))
         }
     }
 
-    async fn post_tweet(&self, text: &str) -> Result<()> {
+    pub async fn post_tweet(&self, text: &str) -> Result<()> {
         if self.auth_token.is_none() {
             return Err(anyhow!("Not authenticated"));
         }
 
         let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", self.auth_token.as_ref().unwrap()))?);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        
+        // Add auth token cookie
+        headers.insert(
+            "cookie", 
+            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?
+        );
 
         let payload = json!({
-            "text": text
+            "text": text,
+            "queryId": "PvJGyyJKzm2-aIsTo6tLSg"  // Twitter's internal query ID for posting tweets
         });
 
         let response = self.client
-            .post("https://api.twitter.com/2/tweets")
+            .post("https://x.com/i/api/graphql/PvJGyyJKzm2-aIsTo6tLSg/CreateTweet")
             .headers(headers)
             .json(&payload)
             .send()
             .await?;
 
         if response.status().is_success() {
+            info!("Successfully posted tweet");
             Ok(())
         } else {
             let error_message = response.text().await.unwrap_or_default();
-            tracing::error!("Failed to post tweet: {}", error_message);
+            error!("Failed to post tweet: {}", error_message);
             Err(anyhow!("Failed to post tweet: {}", error_message))
         }
     }
 
-    async fn delete_tweet(&self, tweet_id: &str) -> Result<()> {
+    pub async fn delete_tweet(&self, tweet_id: &str) -> Result<()> {
         if self.auth_token.is_none() {
             return Err(anyhow!("Not authenticated"));
         }
 
         let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", self.auth_token.as_ref().unwrap()))?);
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        
+        // Add auth token cookie
+        headers.insert(
+            "cookie", 
+            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?
+        );
+
+        let payload = json!({
+            "tweet_id": tweet_id,
+            "queryId": "VaenaVgh5q5ih7kvyVjgtg"  // Twitter's internal query ID for deleting tweets
+        });
 
         let response = self.client
-            .delete(&format!("https://api.twitter.com/2/tweets/{}", tweet_id))
+            .post("https://x.com/i/api/graphql/VaenaVgh5q5ih7kvyVjgtg/DeleteTweet")
             .headers(headers)
+            .json(&payload)
             .send()
             .await?;
 
         if response.status().is_success() {
+            info!("Successfully deleted tweet {}", tweet_id);
             Ok(())
         } else {
             let error_message = response.text().await.unwrap_or_default();
-            tracing::error!("Failed to delete tweet: {}", error_message);
+            error!("Failed to delete tweet {}: {}", tweet_id, error_message);
             Err(anyhow!("Failed to delete tweet: {}", error_message))
         }
     }
 }
 
+// Helper function to extract auth token from cookies
+fn extract_auth_token(cookie_str: &str) -> Option<String> {
+    cookie_str
+        .split(';')
+        .find(|s| s.trim().starts_with("auth_token="))
+        .and_then(|s| s.trim().strip_prefix("auth_token="))
+        .map(|s| s.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mockall::predicate::*;
+    
+    #[tokio::test]
+    async fn test_extract_auth_token() {
+        let cookie_str = "auth_token=abc123; Path=/; Domain=.x.com; Secure; HttpOnly";
+        assert_eq!(extract_auth_token(cookie_str), Some("abc123".to_string()));
+    }
 
     #[tokio::test]
-    async fn test_twitter_client() -> Result<()> {
-        let mut mock = MockTwitterApi::new();
+    async fn test_auth_token_none() {
+        let client = TwitterClient::new(
+            "test@example.com".to_string(),
+            "testuser".to_string(),
+            "password".to_string(),
+        );
+
+        // Test that unauthorized operations fail
+        let tweet_result = client.post_tweet("Test tweet").await;
+        assert!(tweet_result.is_err());
         
-        // Setup expectations
-        mock.expect_login()
-            .times(1)
-            .returning(|| Box::pin(async { Ok(()) }));
-            
-        mock.expect_post_tweet()
-            .with(eq("Test tweet"))
-            .times(1)
-            .returning(|_| Box::pin(async { Ok(()) }));
-            
-        mock.expect_delete_tweet()
-            .with(eq("123456789"))
-            .times(1)
-            .returning(|_| Box::pin(async { Ok(()) }));
-
-        // Execute test
-        mock.login().await?;
-        mock.post_tweet("Test tweet").await?;
-        mock.delete_tweet("123456789").await?;
-
-        Ok(())
+        let delete_result = client.delete_tweet("123").await;
+        assert!(delete_result.is_err());
     }
 }

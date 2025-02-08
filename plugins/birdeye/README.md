@@ -40,7 +40,7 @@ use rig_birdeye::{TokenSearchAction, TokenSortBy, SortType};
 
 let action = TokenSearchAction {
     keyword: "SOL".to_string(),
-    sort_by: Some(TokenSortBy::Volume24h),
+    sort_by: Some(TokenSortBy::volume_24h),
     sort_type: Some(SortType::Desc),
     limit: Some(10),
 };

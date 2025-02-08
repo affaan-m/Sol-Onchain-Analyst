@@ -1,70 +1,80 @@
 use thiserror::Error;
-use rig_mongodb::error::{Error as RigMongoError, MongoError};
+use mongodb::error::Error as MongoError;
 use std::num::ParseFloatError;
-
+use std::fmt;
+use std::error::Error as StdError;
 #[derive(Error, Debug)]
-pub enum AgentError {
-    #[error("Configuration error: {0}")]
-    Config(String),
-
-    #[error("Environment variable '{0}' not found")]
-    MissingEnvVar(String),
-
-    #[error("Invalid value for {0}: {1}")]
-    InvalidConfig(String, String),
-
-    #[error("Twitter API error: {0}")]
-    TwitterApi(String),
-
-    #[error("Trading error: {0}")]
-    Trading(String),
-
-    #[error("Database error: {0}")]
-    Database(String),
-
-    #[error("Market analysis error: {0}")]
-    MarketAnalysis(String),
-
-    #[error("Vector store error: {0}")]
-    VectorStore(String),
-
-    #[error("Birdeye API error: {0}")]
-    BirdeyeApi(String),
-
-    #[error("Transaction error: {0}")]
-    Transaction(String),
-
-    #[error("Validation error: {0}")]
-    Validation(String),
-
-    #[error("Parse error: {0}")]
-    Parse(String),
-
-    #[error("Rate limit exceeded for {0}")]
-    RateLimit(String),
-
-    #[error("Authentication error: {0}")]
-    Authentication(String),
-
-    #[error("Network error: {0}")]
-    Network(String),
-
-    #[error("Timeout error: {0}")]
-    Timeout(String),
-
-    #[error("Conversion error: {0}")]
-    Conversion(String),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-
+pub enum Error {
     #[error("MongoDB error: {0}")]
     Mongo(#[from] MongoError),
+    #[error("ParseFloat error: {0}")]
+    ParseFloat(#[from] ParseFloatError),
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
-impl From<RigMongoError> for AgentError {
-    fn from(err: RigMongoError) -> Self {
-        AgentError::Database(err.to_string())
+#[derive(Debug)]
+pub enum AgentError {
+    Config(String),
+    MissingEnvVar(String),
+    InvalidConfig(String, String),
+    TwitterApi(String),
+    Trading(String),
+    Database(MongoError),
+    MarketAnalysis(String),
+    VectorStore(String),
+    BirdeyeApi(String),
+    Transaction(String),
+    Validation(String),
+    Parse(String),
+    RateLimit(String),
+    Authentication(String),
+    Network(String),
+    Timeout(String),
+    Conversion(String),
+    Other(anyhow::Error),
+    Mongo(mongodb::error::Error),
+}
+
+impl fmt::Display for AgentError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AgentError::Config(msg) => write!(f, "Configuration error: {}", msg),
+            AgentError::MissingEnvVar(var) => write!(f, "Environment variable '{}' not found", var),
+            AgentError::InvalidConfig(field, msg) => write!(f, "Invalid value for {}: {}", field, msg),
+            AgentError::TwitterApi(msg) => write!(f, "Twitter API error: {}", msg),
+            AgentError::Trading(msg) => write!(f, "Trading error: {}", msg),
+            AgentError::Database(err) => write!(f, "Database error: {}", err),
+            AgentError::MarketAnalysis(msg) => write!(f, "Market analysis error: {}", msg),
+            AgentError::VectorStore(msg) => write!(f, "Vector store error: {}", msg),
+            AgentError::BirdeyeApi(msg) => write!(f, "Birdeye API error: {}", msg),
+            AgentError::Transaction(msg) => write!(f, "Transaction error: {}", msg),
+            AgentError::Validation(msg) => write!(f, "Validation error: {}", msg),
+            AgentError::Parse(msg) => write!(f, "Parse error: {}", msg),
+            AgentError::RateLimit(service) => write!(f, "Rate limit exceeded for {}", service),
+            AgentError::Authentication(msg) => write!(f, "Authentication error: {}", msg),
+            AgentError::Network(msg) => write!(f, "Network error: {}", msg),
+            AgentError::Timeout(msg) => write!(f, "Timeout error: {}", msg),
+            AgentError::Conversion(msg) => write!(f, "Conversion error: {}", msg),
+            AgentError::Other(err) => write!(f, "Other error: {}", err),
+            AgentError::Mongo(err) => write!(f, "MongoDB error: {}", err),
+        }
+    }
+}
+
+impl StdError for AgentError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            AgentError::Database(err) => Some(err),
+            AgentError::Mongo(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<MongoError> for AgentError {
+    fn from(err: MongoError) -> Self {
+        AgentError::Mongo(err)
     }
 }
 
@@ -82,9 +92,9 @@ impl From<tracing_subscriber::filter::ParseError> for AgentError {
 
 impl From<reqwest::Error> for AgentError {
     fn from(err: reqwest::Error) -> Self {
-        if (err.is_timeout()) {
+        if err.is_timeout() {
             AgentError::Timeout(err.to_string())
-        } else if (err.is_connect()) {
+        } else if err.is_connect() {
             AgentError::Network(err.to_string())
         } else {
             AgentError::Other(err.into())
