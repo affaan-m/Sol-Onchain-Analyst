@@ -1,11 +1,12 @@
 use bigdecimal::BigDecimal;
-use bson::{Document, oid::ObjectId};
-use chrono::DateTime;
+// use bson::{Document, oid::ObjectId};
+// use chrono::DateTime;
 use serde::{Serialize, Deserialize};
 use crate::utils::f64_to_decimal;
 use std::fmt;
-use chrono::{DateTime, Utc};
-use bson::{self, Document};
+use chrono::Utc;
+use bson::{self,DateTime, Document};
+use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SignalType {
@@ -39,11 +40,12 @@ pub struct MarketSignal {
     pub price: BigDecimal,
     pub confidence: BigDecimal,
     pub risk_score: BigDecimal,
+    pub sentiment_score: Option<BigDecimal>,
     pub price_change_24h: Option<BigDecimal>,
     pub volume_change_24h: Option<BigDecimal>,
     pub volume_change: BigDecimal,
-    pub created_at: Option<DateTime<Utc>>,
-    pub timestamp: DateTime<Utc>,
+    pub created_at: Option<DateTime>,
+    pub timestamp: DateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Document>,
 }
@@ -58,7 +60,7 @@ pub struct MarketSignalBuilder {
     price_change_24h: Option<BigDecimal>,
     price: BigDecimal,
     volume_change: Option<BigDecimal>,
-    timestamp: Option<DateTime<Utc>>,
+    timestamp: Option<DateTime>,
     metadata: Option<JsonValue>,
 }
 
@@ -109,7 +111,7 @@ impl MarketSignalBuilder {
         self
     }
 
-    pub fn timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+    pub fn timestamp(mut self, timestamp: DateTime) -> Self {
         self.timestamp = Some(timestamp);
         self
     }
@@ -131,7 +133,7 @@ impl MarketSignalBuilder {
             price_change_24h: self.price_change_24h,
             price: self.price,
             volume_change: self.volume_change.unwrap_or_else(|| BigDecimal::from(0)),
-            timestamp: DateTime::from(self.timestamp.unwrap_or_else(chrono::Utc::now)),
+            timestamp: DateTime::from(self.timestamp.unwrap_or_else(DateTime::now)),
             metadata: self.metadata.map(|v| bson::to_document(&v).unwrap()),
             created_at: None,
         }

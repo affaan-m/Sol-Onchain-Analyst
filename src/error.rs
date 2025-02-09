@@ -34,6 +34,8 @@ pub enum AgentError {
     Conversion(String),
     Other(anyhow::Error),
     Mongo(mongodb::error::Error),
+    InvalidInput(String),
+    ApiError(String),
 }
 
 impl fmt::Display for AgentError {
@@ -58,6 +60,8 @@ impl fmt::Display for AgentError {
             AgentError::Conversion(msg) => write!(f, "Conversion error: {}", msg),
             AgentError::Other(err) => write!(f, "Other error: {}", err),
             AgentError::Mongo(err) => write!(f, "MongoDB error: {}", err),
+            AgentError::InvalidInput(err) => write!(f, "Input error: {}", err),
+            AgentError::ApiError(err) => write!(f, "Api error: {}", err),
         }
     }
 }

@@ -8,9 +8,9 @@ readme = "README.md"
 keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
 
-[[bin]]
-name = "autonomous-trader"
-path = "cainam-trader/examples/autonomous_trader.rs"
+# [[bin]]
+# name = "autonomous-trader"
+# path = "cainam-trader/examples/autonomous_trader.rs"
 
 [workspace]
 resolver = "2"
@@ -43,7 +43,7 @@ opt-level = "z"
 [dependencies]
 rig-core = "0.7.0"
 rig-mongodb = "0.2.3"
-mongodb = "2.6"  # Add explicit mongodb dependency
+mongodb = { version = "3.2.1" }
 anyhow = "1.0"
 chrono = "0.4"
 bigdecimal = { version = "0.2", features = ["serde"] }

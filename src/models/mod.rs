@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 
 pub mod market_signal;
 pub mod token_analytics;
-pub mod market_config;
+// pub mod market_config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeStatus;

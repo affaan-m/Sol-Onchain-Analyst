@@ -1,17 +1,11 @@
 use anyhow::Result;
+use bson::doc;
 use chrono::{DateTime, Utc};
+use mongodb::Database;
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
 use tracing::{info, warn};
 use rig::completion::CompletionModel;
-use rig::agent::Agent;
-use rig_mongodb::{MongoDbPool, Database};
-use crate::market_data::{DataProvider, MarketTrend};
-use crate::personality::StoicPersonality;
-use crate::strategy::{TradingStrategy, TradeAction, TradeRecommendation};
-use crate::twitter::TwitterClient;
-use crate::dex::jupiter::JupiterDex;
-use crate::database::DatabaseExt;
 use solana_sdk::signature::Keypair;
 use crate::error::Error;
 

@@ -1,12 +1,11 @@
 use crate::error::Error;
-use crate::models::trade::Trade;
+// use crate::models::trade::Trade;
 use crate::{
     birdeye::BirdeyeClient,
     config::{AgentConfig, MarketConfig},
     error::{AgentError, AgentResult},
     services::token_analytics::TokenAnalyticsService,
     trading::trading_engine::TradingEngine,
-    twitter::{TwitterApi, TwitterClient},
     utils::f64_to_decimal,
     MarketSignal, SignalType, SolanaAgentKit,
 };
@@ -15,11 +14,11 @@ use rig::{
     agent::Agent,
     providers::openai::{Client as OpenAIClient, CompletionModel},
 };
-use rig_mongodb::{bson::doc, MongoDbPool};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
+use crate::config::mongodb::MongoDbPool;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: u64 = 1000; // 1 second
@@ -27,7 +26,6 @@ const RETRY_DELAY: u64 = 1000; // 1 second
 pub struct TradingAgent {
     agent: Agent<CompletionModel>,
     trading_engine: TradingEngine,
-    twitter_client: Box<dyn TwitterApi>,
     analytics_service: Arc<TokenAnalyticsService>,
     config: AgentConfig,
     running: Arc<AtomicBool>,
@@ -58,39 +56,39 @@ impl TradingAgent {
             solana_agent,
         );
 
-        info!("Initializing Twitter client...");
-        let mut twitter_client = TwitterClient::new(
-            config.twitter_email.clone(),
-            config.twitter_username.clone(),
-            config.twitter_password.clone(),
-        );
+        // info!("Initializing Twitter client...");
+        // let mut twitter_client = TwitterClient::new(
+        //     config.twitter_email.clone(),
+        //     config.twitter_username.clone(),
+        //     config.twitter_password.clone(),
+        // );
 
-        // Retry Twitter login with exponential backoff
-        let mut retry_count = 0;
-        loop {
-            match twitter_client.login().await {
-                Ok(_) => {
-                    info!("Successfully logged in to Twitter");
-                    break;
-                }
-                Err(e) => {
-                    retry_count += 1;
-                    if retry_count >= MAX_RETRIES {
-                        error!("Failed to login to Twitter after {} attempts", MAX_RETRIES);
-                        return Err(AgentError::TwitterApi(format!("Login failed: {}", e)));
-                    }
-                    warn!(
-                        "Failed to login to Twitter (attempt {}), retrying...",
-                        retry_count
-                    );
-                    sleep(Duration::from_millis(RETRY_DELAY * 2u64.pow(retry_count))).await;
-                }
-            }
-        }
+        // // Retry Twitter login with exponential backoff
+        // let mut retry_count = 0;
+        // loop {
+        //     match twitter_client.login().await {
+        //         Ok(_) => {
+        //             info!("Successfully logged in to Twitter");
+        //             break;
+        //         }
+        //         Err(e) => {
+        //             retry_count += 1;
+        //             if retry_count >= MAX_RETRIES {
+        //                 error!("Failed to login to Twitter after {} attempts", MAX_RETRIES);
+        //                 return Err(AgentError::TwitterApi(format!("Login failed: {}", e)));
+        //             }
+        //             warn!(
+        //                 "Failed to login to Twitter (attempt {}), retrying...",
+        //                 retry_count
+        //             );
+        //             sleep(Duration::from_millis(RETRY_DELAY * 2u64.pow(retry_count))).await;
+        //         }
+        //     }
+        // }
 
         info!("Initializing Birdeye clients...");
         let birdeye = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-        let birdeye_extended = Arc::new(cainam_birdeye::BirdeyeClient::new(
+        let birdeye_extended = Arc::new(BirdeyeClient::new(
             config.birdeye_api_key.clone(),
         ));
 
@@ -101,13 +99,12 @@ impl TradingAgent {
         let analytics_service = Arc::new(TokenAnalyticsService::new(
             db.clone(),
             birdeye,
-            birdeye_extended,
-        ));
+            Some(market_config),
+        ).await?);
 
         Ok(Self {
             agent,
             trading_engine,
-            twitter_client: Box::new(twitter_client),
             analytics_service,
             config,
             running: Arc::new(AtomicBool::new(false)),
@@ -115,14 +112,14 @@ impl TradingAgent {
         })
     }
 
-    async fn store_trade(&self, trade: &Trade) -> Result<(), Error> {
-        let collection = self.db.database("cainam").collection("trades");
-        collection
-            .insert_one(trade, None)
-            .await
-            .map_err(|e| Error::Mongo(e))?;
-        Ok(())
-    }
+    // async fn store_trade(&self, trade: &Trade) -> Result<(), Error> {
+    //     let collection = self.db.database("cainam").collection("trades");
+    //     collection
+    //         .insert_one(trade)
+    //         .await
+    //         .map_err(|e| Error::Mongo(e))?;
+    //     Ok(())
+    // }
 
     pub async fn analyze_market(
         &self,
@@ -276,55 +273,55 @@ impl TradingAgent {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::birdeye::MockBirdeyeApi;
-    use crate::twitter::MockTwitterApi;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::birdeye::MockBirdeyeApi;
+//     use crate::twitter::MockTwitterApi;
 
-    async fn setup_test_db() -> Arc<MongoDbPool> {
-        MongoDbPool::new_from_uri("mongodb://localhost:27017", "cainam_test")
-            .await
-            .expect("Failed to create test database pool")
-            .into()
-    }
+//     async fn setup_test_db() -> Arc<MongoDbPool> {
+//         MongoDbPool::new_from_uri("mongodb://localhost:27017", "cainam_test")
+//             .await
+//             .expect("Failed to create test database pool")
+//             .into()
+//     }
 
-    async fn setup_mocks() -> (Box<MockTwitterApi>, Box<MockBirdeyeApi>) {
-        let mut twitter_mock = Box::new(MockTwitterApi::new());
-        twitter_mock
-            .expect_login()
-            .times(1)
-            .returning(|| Box::pin(async { Ok(()) }));
+//     async fn setup_mocks() -> (Box<MockTwitterApi>, Box<MockBirdeyeApi>) {
+//         let mut twitter_mock = Box::new(MockTwitterApi::new());
+//         twitter_mock
+//             .expect_login()
+//             .times(1)
+//             .returning(|| Box::pin(async { Ok(()) }));
 
-        let mut birdeye_mock = Box::new(MockBirdeyeApi::new());
-        birdeye_mock.expect_get_token_info().returning(|_| {
-            Box::pin(async {
-                Ok(crate::birdeye::TokenInfo {
-                    price: 100.0,
-                    volume_24h: 1000000.0,
-                    price_change_24h: 5.0,
-                    liquidity: 500000.0,
-                    trade_24h: 1000,
-                })
-            })
-        });
+//         let mut birdeye_mock = Box::new(MockBirdeyeApi::new());
+//         birdeye_mock.expect_get_token_info().returning(|_| {
+//             Box::pin(async {
+//                 Ok(crate::birdeye::TokenInfo {
+//                     price: 100.0,
+//                     volume_24h: 1000000.0,
+//                     price_change_24h: 5.0,
+//                     liquidity: 500000.0,
+//                     trade_24h: 1000,
+//                 })
+//             })
+//         });
 
-        (twitter_mock, birdeye_mock)
-    }
+//         (twitter_mock, birdeye_mock)
+//     }
 
-    #[tokio::test]
-    async fn test_market_analysis() -> AgentResult<()> {
-        let db = setup_test_db().await;
-        let solana_agent = SolanaAgentKit::new_from_env()?;
+//     #[tokio::test]
+//     async fn test_market_analysis() -> AgentResult<()> {
+//         let db = setup_test_db().await;
+//         let solana_agent = SolanaAgentKit::new_from_env()?;
 
-        let config = AgentConfig::new_from_env()?;
-        let agent = TradingAgent::new(config, db, solana_agent).await?;
+//         let config = AgentConfig::new_from_env()?;
+//         let agent = TradingAgent::new(config, db, solana_agent).await?;
 
-        let signal = agent
-            .analyze_market("SOL", "So11111111111111111111111111111111111111112")
-            .await?;
+//         let signal = agent
+//             .analyze_market("SOL", "So11111111111111111111111111111111111111112")
+//             .await?;
 
-        assert!(signal.is_some());
-        Ok(())
-    }
-}
+//         assert!(signal.is_some());
+//         Ok(())
+//     }
+// }

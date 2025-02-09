@@ -6,9 +6,9 @@ use std::env;
 pub struct AgentConfig {
     pub openai_api_key: String,
     pub birdeye_api_key: String,
-    pub twitter_email: String,
-    pub twitter_username: String,
-    pub twitter_password: String,
+    // pub twitter_email: String,
+    // pub twitter_username: String,
+    // pub twitter_password: String,
     pub analysis_interval: Duration,
     pub trade_min_confidence: f64,
     pub trade_max_amount: f64,
@@ -20,9 +20,9 @@ impl AgentConfig {
         let config = Self {
             openai_api_key: get_env_var("OPENAI_API_KEY")?,
             birdeye_api_key: get_env_var("BIRDEYE_API_KEY")?,
-            twitter_email: get_env_var("TWITTER_EMAIL")?,
-            twitter_username: get_env_var("TWITTER_USERNAME")?,
-            twitter_password: get_env_var("TWITTER_PASSWORD")?,
+            // twitter_email: get_env_var("TWITTER_EMAIL")?,
+            // twitter_username: get_env_var("TWITTER_USERNAME")?,
+            // twitter_password: get_env_var("TWITTER_PASSWORD")?,
             analysis_interval: parse_duration_secs("ANALYSIS_INTERVAL", 300)?,
             trade_min_confidence: parse_f64("TRADE_MIN_CONFIDENCE", 0.7)?,
             trade_max_amount: parse_f64("TRADE_MAX_AMOUNT", 1000.0)?,
@@ -42,16 +42,16 @@ impl AgentConfig {
             return Err(AgentError::Config("Birdeye API key cannot be empty".into()));
         }
 
-        // Validate Twitter credentials
-        if self.twitter_email.is_empty() || !self.twitter_email.contains('@') {
-            return Err(AgentError::Config("Invalid Twitter email".into()));
-        }
-        if self.twitter_username.is_empty() {
-            return Err(AgentError::Config("Twitter username cannot be empty".into()));
-        }
-        if self.twitter_password.is_empty() {
-            return Err(AgentError::Config("Twitter password cannot be empty".into()));
-        }
+        // // Validate Twitter credentials
+        // if self.twitter_email.is_empty() || !self.twitter_email.contains('@') {
+        //     return Err(AgentError::Config("Invalid Twitter email".into()));
+        // }
+        // if self.twitter_username.is_empty() {
+        //     return Err(AgentError::Config("Twitter username cannot be empty".into()));
+        // }
+        // if self.twitter_password.is_empty() {
+        //     return Err(AgentError::Config("Twitter password cannot be empty".into()));
+        // }
 
         // Validate trading parameters
         if !(0.0..=1.0).contains(&self.trade_min_confidence) {

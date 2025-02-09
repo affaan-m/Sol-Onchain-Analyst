@@ -4,17 +4,19 @@ use crate::{
     models::market_signal::{SignalType, MarketSignal},
     trading::SolanaAgentKit,
     utils::f64_to_decimal, 
-    services::VectorStore,
-    database::init_mongodb,
 };
 use std::io::{self, Write};
+use bson::DateTime;
+use cainam_core::database::DatabaseManager;
+use config::mongodb::{MongoConfig, MongoDbPool};
+use services::token_analytics::TokenAnalyticsService;
+use solana_sdk::signature::Keypair;
 use tokio;
 use std::sync::Arc;
 use chrono::Utc;
 use anyhow::Result;
 use tracing::{info, error};
 use std::sync::atomic::{AtomicBool, Ordering};
-use rig_mongodb::MongoDbPool;
 
 mod agent;
 mod config;
@@ -125,7 +127,7 @@ async fn handle_user_input(
                                     price_change_24h: Some(f64_to_decimal(if signal_type == SignalType::StrongBuy { 0.05 } else { -0.05 })),
                                     price: f64_to_decimal(10.0),
                                     volume_change: f64_to_decimal(0.2),
-                                    timestamp: Utc::now(),
+                                    timestamp: DateTime::now(),
                                     metadata: None,
                                     created_at: None,
                                 };
@@ -169,61 +171,71 @@ async fn handle_user_input(
     }
 }
 
+async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
+    let config = MongoConfig::default();
+    let pool = MongoDbPool::create_pool(config).await?;
+    Ok(pool)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    logging::init_logging()?;
+    // logging::init_logging()?;
     
-    info!("Starting Cainam Core...");
+    println!("Starting Cainam Core...");
 
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
+    println!("loadi env file...");
 
     // Initialize MongoDB connection pool using rig-mongodb
     let db_pool = init_mongodb().await?;
+    println!("init pool...");
     
     // Initialize Solana agent
-    let solana_agent = SolanaAgentKit::new_from_env()?;
+    let rpc_url = "https://api.devnet.solana.com";
+    let keypair = Keypair::new();
+    let solana_agent = SolanaAgentKit::new(rpc_url, keypair);
 
     // Load configuration from environment
     let config = AgentConfig::new_from_env()?;
 
     // Initialize trading agent
-    let trader = Arc::new(TradingAgent::new(config.clone(), db_pool.clone(), solana_agent).await?);
+    let trader = Arc::new(TradingAgent::new(config.clone(), db_pool, solana_agent).await?);
     let running = Arc::new(AtomicBool::new(true));
 
     // Initialize services with MongoDB pool
-    let token_analytics_service = TokenAnalyticsService::new(
-        db_pool.clone(),
-        birdeye.clone(),
-        birdeye_extended.clone(),
-        Some(market_config.clone()),
-    ).await?;
+    // let token_analytics_service = TokenAnalyticsService::new(
+    //     db_pool.clone(),
+    //     birdeye.clone(),
+    //     birdeye_extended.clone(),
+    //     Some(market_config.clone()),
+    // ).await?;
     
-    let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
+    // let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
     
-    // Initialize vector store
-    let vector_store = VectorStore::new().await?;
+    // // Initialize vector store
+    // let vector_store = VectorStore::new().await?;
 
-    // Spawn the autonomous trading agent
-    let trader_clone = trader.clone();
-    let running_clone = running.clone();
-    let trading_handle = tokio::spawn(async move {
-        info!("Starting autonomous trading...");
-        if let Err(e) = trader_clone.run().await {
-            error!("Trading agent error: {}", e);
-            running_clone.store(false, Ordering::SeqCst);
-        }
-    });
+    // // Spawn the autonomous trading agent
+    // let trader_clone = trader.clone();
+    // let running_clone = running.clone();
+    // let trading_handle = tokio::spawn(async move {
+    //     info!("Starting autonomous trading...");
+    //     if let Err(e) = trader_clone.run().await {
+    //         error!("Trading agent error: {}", e);
+    //         running_clone.store(false, Ordering::SeqCst);
+    //     }
+    // });
 
     // Handle user input in a separate task
     let input_handle = tokio::spawn(handle_user_input(trader.clone(), config, running.clone()));
 
     // Wait for either task to complete
     tokio::select! {
-        _ = trading_handle => {
-            info!("Trading task completed");
-        }
+        // _ = trading_handle => {
+        //     info!("Trading task completed");
+        // }
         _ = input_handle => {
             info!("User input task completed");
         }
