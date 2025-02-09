@@ -7,13 +7,10 @@ use crate::{
 };
 use std::io::{self, Write};
 use bson::DateTime;
-use cainam_core::database::DatabaseManager;
 use config::mongodb::{MongoConfig, MongoDbPool};
-use services::token_analytics::TokenAnalyticsService;
 use solana_sdk::signature::Keypair;
 use tokio;
 use std::sync::Arc;
-use chrono::Utc;
 use anyhow::Result;
 use tracing::{info, error};
 use std::sync::atomic::{AtomicBool, Ordering};

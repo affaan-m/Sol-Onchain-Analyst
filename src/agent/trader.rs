@@ -1,4 +1,3 @@
-use crate::error::Error;
 // use crate::models::trade::Trade;
 use crate::{
     birdeye::BirdeyeClient,
@@ -16,8 +15,8 @@ use rig::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
-use tracing::{error, info, warn};
+use tokio::time::sleep;
+use tracing::{error, info};
 use crate::config::mongodb::MongoDbPool;
 
 const MAX_RETRIES: u32 = 3;

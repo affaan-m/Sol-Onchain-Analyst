@@ -3,7 +3,7 @@ use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;
 use chrono::{Duration, TimeZone, Utc};
-use bson::{doc, DateTime};
+use bson::DateTime;
 use std::sync::Arc;
 use thiserror::Error;
 

@@ -6,7 +6,7 @@ use rig::providers::openai::{self, EmbeddingModel};
 use rig_mongodb::MongoDbVectorIndex;
 use std::sync::Arc;
 use crate::logging::RequestLogger;
-use crate::birdeye::{BirdeyeApi, TokenInfo, TokenOverview};
+use crate::birdeye::{BirdeyeApi, TokenInfo};
 use crate::config::mongodb::MongoDbPool;
 use crate::config::MarketConfig;
 use crate::models::market_signal::{MarketSignal, SignalType, MarketSignalBuilder};

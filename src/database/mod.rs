@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::TryStreamExt;
 pub use mongodb::{
     Collection,
     options::{FindOptions, FindOneOptions},
