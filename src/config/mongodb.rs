@@ -3,6 +3,7 @@ use anyhow::Result;
 use mongodb::{
     options::ClientOptions,
     Client,
+    bson::doc,
 };
 use std::time::Duration;
 
@@ -95,8 +96,17 @@ impl MongoDbPool {
         if let Some(app_name) = &config.app_name {
             client_options.app_name = Some(app_name.clone());
         }
+        
+        // Set server API version to ensure compatibility
+        client_options.server_api = Some(mongodb::options::ServerApi::builder().version(mongodb::options::ServerApiVersion::V1).build());
+        
+        // Apply pool configuration
+        config.pool_config.apply_to_options(&mut client_options);
                 
         let client = Client::with_options(client_options)?;
+
+        // Test the connection
+        client.database("admin").run_command(doc! {"ping": 1}).await?;
 
         Ok(Arc::new(MongoDbPool {
             client,

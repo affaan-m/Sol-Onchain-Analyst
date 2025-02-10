@@ -9,8 +9,16 @@ keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
 
 [[bin]]
-name = "mongodb_setup"
-path = "migrations/01_mongodb_setup.rs"
+name = "cainam-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "setup_mongodb"
+path = "scripts/setup_mongodb.rs"
+
+[[bin]]
+name = "init_vector_store"
+path = "scripts/init_vector_store.rs"
 
 [workspace]
 resolver = "2"

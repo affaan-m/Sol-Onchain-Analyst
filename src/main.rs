@@ -7,7 +7,7 @@ use crate::{
 };
 use std::io::{self, Write};
 use bson::DateTime;
-use config::mongodb::{MongoConfig, MongoDbPool};
+use config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
 use solana_sdk::signature::Keypair;
 use tokio;
 use std::sync::Arc;
@@ -169,8 +169,19 @@ async fn handle_user_input(
 }
 
 async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
-    let config = MongoConfig::default();
+    info!("Initializing MongoDB connection...");
+    let config = MongoConfig {
+        uri: std::env::var("MONGODB_URI")
+            .unwrap_or_else(|_| "mongodb://localhost:32770".to_string()),
+        database: std::env::var("MONGODB_DATABASE")
+            .unwrap_or_else(|_| "cainam".to_string()),
+        app_name: std::env::var("MONGODB_APP_NAME").ok(),
+        pool_config: MongoPoolConfig::from_env(),
+    };
+    
+    info!("Connecting to MongoDB at {}", config.uri);
     let pool = MongoDbPool::create_pool(config).await?;
+    info!("Successfully connected to MongoDB");
     Ok(pool)
 }
 
