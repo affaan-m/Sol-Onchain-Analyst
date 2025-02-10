@@ -122,7 +122,7 @@ impl TokenAnalyticsService {
         let vector_index = MongoDbVectorIndex::new(
             collection.clone(),
             model,
-            "token_vector_index",
+            "token_address",
             Default::default()
         ).await.expect("msg");
         
@@ -214,6 +214,7 @@ impl TokenAnalyticsService {
         Ok(stored)
     }
 
+    // TODO: zTgx hardcoded
     async fn convert_to_analytics(
         &self,
         address: &str,
@@ -510,7 +511,7 @@ mod tests {
     }
 
     // async fn setup_test_db() -> MongoDbPool {
-    //     let client_options = mongodb::options::ClientOptions::parse("mongodb://localhost:27017")
+    //     let client_options = mongodb::options::ClientOptions::parse("mongodb://localhost:32768")
     //         .await
     //         .expect("Failed to parse MongoDB URI");
         

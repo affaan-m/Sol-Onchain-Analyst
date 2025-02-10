@@ -32,7 +32,7 @@ mod tests {
     }
 
     async fn setup_test_db() -> Arc<MongoDbPool> {
-        let connection_string = "mongodb://localhost:27017";
+        let connection_string = "mongodb://localhost:32768";
         MongoDbPool::new_from_uri(connection_string, "cainam_test")
             .await
             .expect("Failed to create test database pool")

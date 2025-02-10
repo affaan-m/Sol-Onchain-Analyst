@@ -61,7 +61,7 @@ pub struct MongoConfig {
 impl Default for MongoConfig {
     fn default() -> Self {
         Self {
-            uri: "mongodb://localhost:27017".to_string(),
+            uri: "mongodb://localhost:32768".to_string(),
             database: "cainam".to_string(),
             app_name: Some("cainam-core".to_string()),
             pool_config: MongoPoolConfig::default(),
@@ -73,7 +73,7 @@ impl MongoConfig {
     pub fn from_env() -> Self {
         Self {
             uri: std::env::var("MONGODB_URI")
-                .unwrap_or_else(|_| "mongodb://localhost:27017".to_string()),
+                .unwrap_or_else(|_| "mongodb://localhost:32768".to_string()),
             database: std::env::var("MONGODB_DATABASE")
                 .unwrap_or_else(|_| "cainam".to_string()),
             app_name: std::env::var("MONGODB_APP_NAME").ok(),

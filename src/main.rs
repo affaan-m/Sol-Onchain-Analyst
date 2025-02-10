@@ -189,6 +189,7 @@ async fn main() -> Result<()> {
     let db_pool = init_mongodb().await?;
     println!("init pool...");
     
+    // TODO: zTgx hardcoded
     // Initialize Solana agent
     let rpc_url = "https://api.devnet.solana.com";
     let keypair = Keypair::new();

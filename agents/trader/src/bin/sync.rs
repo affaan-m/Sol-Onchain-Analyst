@@ -10,7 +10,7 @@
 //!
 //! # Configuration
 //! The service is configured through environment variables:
-//! - `MONGODB_URI`: MongoDB connection string (default: mongodb://localhost:27017)
+//! - `MONGODB_URI`: MongoDB connection string (default: mongodb://localhost:32768)
 //! - `BIRDEYE_API_KEY`: API key for BirdEye data
 //! - `DATA_SYNC_INTERVAL_SECONDS`: Interval between syncs (default: 60)
 //! - `RUST_LOG`: Logging level configuration

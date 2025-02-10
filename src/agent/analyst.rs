@@ -99,7 +99,7 @@ impl AnalystAgent {
 //     use rig_mongodb::MongoDbPool;
 
 //     async fn setup_test_db() -> Arc<MongoDbPool> {
-//         MongoDbPool::new_from_uri("mongodb://localhost:27017", "cainam_test")
+//         MongoDbPool::new_from_uri("mongodb://localhost:32768", "cainam_test")
 //             .await
 //             .expect("Failed to create test database pool")
 //             .into()
