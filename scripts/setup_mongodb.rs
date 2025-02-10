@@ -4,13 +4,16 @@ use mongodb::{
     Client, IndexModel,
 };
 use std::error::Error;
+use cainam_core::config::mongodb::MongoConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // Initialize MongoDB client
-    let client_options = ClientOptions::parse("mongodb://localhost:27017").await?;
+    // Initialize MongoDB client using configuration
+    let config = MongoConfig::from_env();
+    let mut client_options = ClientOptions::parse(&config.uri).await?;
+    client_options.server_api = Some(mongodb::options::ServerApi::builder().version(mongodb::options::ServerApiVersion::V1).build());
     let client = Client::with_options(client_options)?;
-    let db = client.database("cainam");
+    let db = client.database(&config.database);
 
     println!("Connected to MongoDB successfully");
 
@@ -46,19 +49,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
     token_analytics.create_index(compound_index).await?;
 
-    // Standard index for embeddings
-    let embedding_index_options = IndexOptions::builder()
-        .name(Some("embedding_index".to_string()))
-        .build();
-    let embedding_index = IndexModel::builder()
-        .keys(mongodb::bson::doc! {
-            "embedding": 1
-        })
-        .options(embedding_index_options)
-        .build();
-    token_analytics.create_index(embedding_index).await?;
-
-    println!("Created indexes for token_analytics collection");
+    // Create vector search index for embeddings
+    let vector_search_command = mongodb::bson::doc! {
+        "createSearchIndexes": "token_analytics",
+        "indexes": [{
+            "name": "vector_index",
+            "definition": {
+                "mappings": {
+                    "dynamic": true,
+                    "fields": {
+                        "embedding": {
+                            "type": "knnVector",
+                            "dimensions": 1536,
+                            "similarity": "cosine"
+                        }
+                    }
+                }
+            }
+        }]
+    };
+    
+    db.run_command(vector_search_command).await?;
+    println!("Created vector search index for token_analytics collection");
 
     // Create indexes for market_signals collection
     println!("Creating indexes for market_signals collection...");

@@ -117,4 +117,8 @@ impl MongoDbPool {
     pub fn database(&self, name: &str) -> mongodb::Database {
         self.client.database(name)
     }
+
+    pub fn get_config(&self) -> &MongoConfig {
+        &self.config
+    }
 }

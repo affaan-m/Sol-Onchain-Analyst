@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
 
     let uri = std::env::var("MONGODB_URI").expect("MONGODB_URI must be set");
     let client = Client::with_uri_str(&uri).await?;
-    let db = client.database("analytics");
+    let db = client.database("cainam");
 
     // Create token_analytics collection
     info!("Creating token_analytics collection...");
@@ -55,13 +55,17 @@ async fn main() -> Result<()> {
         "createSearchIndexes": "token_analytics",
         "indexes": [{
             "name": "vector_index",
-            "type": "vectorSearch",
             "definition": {
-                "fields": [{
-                    "path": "embedding",
-                    "numDimensions": 1536,
-                    "similarity": "cosine"
-                }]
+                "mappings": {
+                    "dynamic": true,
+                    "fields": {
+                        "embedding": {
+                            "dimensions": 1536,
+                            "similarity": "cosine",
+                            "type": "knnVector"
+                        }
+                    }
+                }
             }
         }]
     };

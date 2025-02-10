@@ -102,7 +102,7 @@ impl TokenAnalyticsService {
         birdeye: Arc<dyn BirdeyeApi>,
         market_config: Option<MarketConfig>,
     ) -> AgentResult<Self> {  // Change return type to AgentResult
-        let db = pool.database("analytics");
+        let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
         println!(">> token_analytics collections {:?}", collection);
 

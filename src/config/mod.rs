@@ -1,6 +1,6 @@
 mod market_config;
 mod agent_config;
-pub(crate) mod mongodb;
+pub mod mongodb;
 
 use rig::providers::openai::{O1_MINI, O1_PREVIEW, GPT_4O_MINI, GPT_4O};
 pub use self::market_config::MarketConfig;
