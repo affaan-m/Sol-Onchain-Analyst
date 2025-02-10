@@ -34,32 +34,40 @@ async fn main() -> Result<()> {
         Err(e) => return Err(e.into()),
     }
 
+    // Drop existing vector search index if it exists
+    info!("Checking for existing vector search index...");
+    let drop_index_command = doc! {
+        "dropSearchIndex": "token_analytics",
+        "name": "vector_index"
+    };
+    
+    match db.run_command(drop_index_command).await {
+        Ok(_) => info!("Dropped existing vector search index"),
+        Err(e) if e.to_string().contains("not found") => {
+            info!("No existing vector search index found")
+        }
+        Err(e) => info!("Error dropping index: {}", e),
+    }
+
     // Create vector search index for token_analytics
     info!("Creating vector search index for token_analytics...");
     let command = doc! {
         "createSearchIndexes": "token_analytics",
         "indexes": [{
             "name": "vector_index",
+            "type": "vectorSearch",
             "definition": {
-                "mappings": {
-                    "dynamic": true,
-                    "fields": {
-                        "embedding": {
-                            "type": "knnVector",
-                            "dimensions": 1536,
-                            "similarity": "cosine"
-                        }
-                    }
-                }
+                "fields": [{
+                    "path": "embedding",
+                    "numDimensions": 1536,
+                    "similarity": "cosine"
+                }]
             }
         }]
     };
     
     match db.run_command(command).await {
         Ok(_) => info!("Created vector search index for token_analytics"),
-        Err(e) if e.to_string().contains("already exists") => {
-            info!("Vector search index for token_analytics already exists")
-        }
         Err(e) => return Err(e.into()),
     }
 
