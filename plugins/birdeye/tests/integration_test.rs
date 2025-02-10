@@ -2,7 +2,7 @@ use rig_birdeye::{
     actions::{TokenSearchAction, WalletSearchAction},
     providers::birdeye::BirdeyeProvider,
     types::{
-        api::{TokenSortBy, SortType, TokenSearchParams},
+        api::{SortType, TokenSearchParams, TokenSortBy},
         error::BirdeyeError,
     },
 };
@@ -10,15 +10,14 @@ use std::env;
 
 fn setup() -> BirdeyeProvider {
     // Load environment variables from .env file
-    dotenv::dotenv().ok();
-    
+    dotenvy::dotenv().ok();
+
     // Initialize logging
     tracing_subscriber::fmt::init();
-    
+
     // Create Birdeye provider
-    let api_key = env::var("BIRDEYE_API_KEY")
-        .expect("BIRDEYE_API_KEY must be set");
-    
+    let api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
+
     BirdeyeProvider::new(&api_key)
 }
 
@@ -36,7 +35,7 @@ async fn test_token_search() -> Result<(), Box<dyn std::error::Error>> {
 
     let tokens = provider.search_tokens(params).await?;
     assert!(!tokens.is_empty(), "No tokens found");
-    
+
     // Validate first token
     let token = &tokens[0];
     assert!(!token.address.is_empty(), "Token address is empty");
@@ -56,8 +55,14 @@ async fn test_wallet_search() -> Result<(), Box<dyn std::error::Error>> {
 
     let portfolio = provider.search_wallet(&wallet_address).await?;
     assert_eq!(portfolio.wallet, wallet_address, "Wallet address mismatch");
-    assert!(portfolio.total_usd >= 0.0, "Total USD should be non-negative");
-    assert!(!portfolio.items.is_empty(), "Portfolio should contain tokens");
+    assert!(
+        portfolio.total_usd >= 0.0,
+        "Total USD should be non-negative"
+    );
+    assert!(
+        !portfolio.items.is_empty(),
+        "Portfolio should contain tokens"
+    );
 
     Ok(())
 }
@@ -76,7 +81,7 @@ async fn test_invalid_api_key() {
 
     let result = provider.search_tokens(params).await;
     assert!(result.is_err(), "Expected error with invalid API key");
-    
+
     match result.unwrap_err() {
         BirdeyeError::InvalidApiKey => (),
         err => panic!("Expected InvalidApiKey error, got: {:?}", err),
@@ -86,11 +91,11 @@ async fn test_invalid_api_key() {
 #[tokio::test]
 async fn test_token_overview() -> Result<(), Box<dyn std::error::Error>> {
     let provider = setup();
-    
+
     // Use SOL token address for testing
     let token_address = "So11111111111111111111111111111111111111112";
     let overview = provider.get_token_overview(token_address).await?;
-    
+
     assert_eq!(overview.address, token_address);
     assert_eq!(overview.symbol, "SOL");
     assert!(overview.price > 0.0);

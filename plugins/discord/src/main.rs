@@ -3,18 +3,18 @@
 mod rig_agent;
 
 use anyhow::Result;
+use dotenvy::dotenv;
+use rig_agent::RigAgent;
 use serenity::async_trait;
 use serenity::model::application::command::Command;
-use serenity::model::application::interaction::{Interaction, InteractionResponseType};
-use serenity::model::gateway::Ready;
-use serenity::model::channel::Message;
-use serenity::prelude::*;
 use serenity::model::application::command::CommandOptionType;
+use serenity::model::application::interaction::{Interaction, InteractionResponseType};
+use serenity::model::channel::Message;
+use serenity::model::gateway::Ready;
+use serenity::prelude::*;
 use std::env;
 use std::sync::Arc;
-use tracing::{error, info, debug};
-use rig_agent::RigAgent;
-use dotenv::dotenv;
+use tracing::{debug, error, info};
 
 // Define a key for storing the bot's user ID in the TypeMap
 struct BotUserId;
@@ -121,9 +121,7 @@ impl EventHandler for Handler {
         let commands = Command::set_global_application_commands(&ctx.http, |commands| {
             commands
                 .create_application_command(|command| {
-                    command
-                        .name("hello")
-                        .description("Say hello to the bot")
+                    command.name("hello").description("Say hello to the bot")
                 })
                 .create_application_command(|command| {
                     command
@@ -146,7 +144,7 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
+    dotenvy().ok();
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)

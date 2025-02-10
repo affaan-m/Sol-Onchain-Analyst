@@ -1,8 +1,8 @@
 //! Market Data Synchronization Service
-//! 
+//!
 //! This binary runs a service that continuously synchronizes market data from various sources
 //! (primarily BirdEye) into MongoDB for analysis and trading decisions. It handles:
-//! 
+//!
 //! - Fetching trending tokens at configurable intervals
 //! - Storing token states with price, volume, and market data
 //! - Detailed logging of all operations for monitoring
@@ -10,7 +10,7 @@
 //!
 //! # Configuration
 //! The service is configured through environment variables:
-//! - `MONGODB_URI`: MongoDB connection string (default: mongodb://localhost:32768)
+//! - `MONGODB_URI`: MongoDB connection string (default: mongodb://localhost:32770)
 //! - `BIRDEYE_API_KEY`: API key for BirdEye data
 //! - `DATA_SYNC_INTERVAL_SECONDS`: Interval between syncs (default: 60)
 //! - `RUST_LOG`: Logging level configuration
@@ -20,26 +20,22 @@
 //! cargo run --bin sync
 //! ```
 
-use std::sync::Arc;
+use crate::config::mongodb::MongoConfig;
+use crate::config::pool::MongoPoolConfig;
 use anyhow::Result;
-use dotenv::dotenv;
-use tracing::{info, error, debug, warn, instrument};
-use tracing_subscriber::{fmt, EnvFilter};
 use chrono::Utc;
+use dotenvy::dotenv;
+use rig_mongodb::MongoDbPool;
 use rig_solana_trader::{
     database::DatabaseClient,
     market_data::{
-        AggregatedDataProvider,
-        birdeye::BirdEyeProvider,
-        MarketTrend,
-        DataProvider,
-        TokenMetadata,
+        birdeye::BirdEyeProvider, AggregatedDataProvider, DataProvider, MarketTrend, TokenMetadata,
     },
 };
-use serde::{Serialize, Deserialize};
-use rig_mongodb::MongoDbPool;
-use crate::config::mongodb::MongoConfig;
-use crate::config::pool::MongoPoolConfig;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tracing::{debug, error, info, instrument, warn};
+use tracing_subscriber::{fmt, EnvFilter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TokenState {
@@ -62,16 +58,10 @@ struct DataSyncService {
 
 impl DataSyncService {
     #[instrument]
-    fn new(
-        data_provider: Arc<AggregatedDataProvider>,
-        db: Arc<DatabaseClient>,
-    ) -> Self {
+    fn new(data_provider: Arc<AggregatedDataProvider>, db: Arc<DatabaseClient>) -> Self {
         info!("Creating new DataSyncService instance");
-        let service = Self {
-            data_provider,
-            db,
-        };
-        
+        let service = Self { data_provider, db };
+
         service.start_sync_tasks();
         info!("DataSyncService initialized successfully");
         service
@@ -87,14 +77,14 @@ impl DataSyncService {
             loop {
                 info!("Beginning new market data sync cycle");
                 debug!("Fetching trending tokens from data provider");
-                
+
                 match data_provider.as_ref().get_trending_tokens(100).await {
                     Ok(trends) => {
                         info!(
                             token_count = trends.len(),
                             "Successfully fetched trending tokens"
                         );
-                        
+
                         for trend in trends {
                             debug!(
                                 token.address = %trend.token_address,
@@ -141,7 +131,7 @@ impl DataSyncService {
                                 ),
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         error!(
                             error = %e,
@@ -160,8 +150,8 @@ impl DataSyncService {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
-    
+    dotenvy::dotenv().ok();
+
     // Initialize MongoDB with custom sync configuration
     let config = MongoConfig {
         database: "solana_trades".to_string(),
@@ -172,34 +162,40 @@ async fn main() -> Result<()> {
         },
         ..Default::default()
     };
-    
+
     info!("Connecting to MongoDB at {}", config.uri);
     let pool = config.create_pool().await?;
     info!("Successfully connected to MongoDB");
-    
+
     // Initialize collections with proper schemas
     let db = pool.database(&config.database);
-    
+
     // Setup collections for trade sync
-    db.create_collection("token_states", Some(doc! {
-        "timeseries": {
-            "timeField": "timestamp",
-            "metaField": "token_address",
-            "granularity": "minutes"
-        }
-    })).await?;
-    
-    db.collection("token_states").create_index(
-        doc! {
-            "token_address": 1,
-            "timestamp": -1
-        },
-        None,
-    ).await?;
-    
+    db.create_collection(
+        "token_states",
+        Some(doc! {
+            "timeseries": {
+                "timeField": "timestamp",
+                "metaField": "token_address",
+                "granularity": "minutes"
+            }
+        }),
+    )
+    .await?;
+
+    db.collection("token_states")
+        .create_index(
+            doc! {
+                "token_address": 1,
+                "timestamp": -1
+            },
+            None,
+        )
+        .await?;
+
     // Start sync process
     sync_tokens(pool).await?;
-    
+
     Ok(())
 }
 

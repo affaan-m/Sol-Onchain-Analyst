@@ -8,9 +8,9 @@ readme = "README.md"
 keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
 
-# [[bin]]
-# name = "autonomous-trader"
-# path = "cainam-trader/examples/autonomous_trader.rs"
+[[bin]]
+name = "mongodb_setup"
+path = "migrations/01_mongodb_setup.rs"
 
 [workspace]
 resolver = "2"
@@ -23,7 +23,6 @@ members = [
 exclude = [
     "examples",
     "memory-bank",
-    "migrations",
     "phases_output",
 ]
 
@@ -70,4 +69,4 @@ spl-associated-token-account = "2.2"
 # Additional utilities
 serde_json = "1.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
-dotenvy = "0.15"
+dotenvy = "0.15.7"

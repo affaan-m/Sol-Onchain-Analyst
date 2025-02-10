@@ -2,8 +2,8 @@ use crate::config::mongodb::MongoDbPool;
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;
-use chrono::{Duration, TimeZone, Utc};
 use bson::DateTime;
+use chrono::{Duration, TimeZone, Utc};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -99,7 +99,7 @@ impl AnalystAgent {
 //     use rig_mongodb::MongoDbPool;
 
 //     async fn setup_test_db() -> Arc<MongoDbPool> {
-//         MongoDbPool::new_from_uri("mongodb://localhost:32768", "cainam_test")
+//         MongoDbPool::new_from_uri("mongodb://localhost:32770", "cainam_test")
 //             .await
 //             .expect("Failed to create test database pool")
 //             .into()

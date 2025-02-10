@@ -1,6 +1,6 @@
-use crate::services::token_analytics::TokenAnalyticsService;
-use crate::models::token_analytics::TokenAnalytics;
 use crate::config::MarketConfig;
+use crate::models::token_analytics::TokenAnalytics;
+use crate::services::token_analytics::TokenAnalyticsService;
 use crate::{
     birdeye::{MockBirdeyeApi, TokenInfo},
     error::AgentError,
@@ -11,17 +11,21 @@ use rig_mongodb::MongoDbPool::MongoDbPool;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{setup_test_db, cleanup_test_db};
+    use crate::test_utils::{cleanup_test_db, setup_test_db};
     use rig_mongodb::MongoDbPool;
     use std::sync::Arc;
 
-    async fn setup_test_environment() -> (Arc<MongoDbPool>, Arc<MockBirdeyeApi>, Arc<BirdeyeExtendedClient>) {
+    async fn setup_test_environment() -> (
+        Arc<MongoDbPool>,
+        Arc<MockBirdeyeApi>,
+        Arc<BirdeyeExtendedClient>,
+    ) {
         let db = setup_test_db()
             .await
             .expect("Failed to setup test database");
-        
+
         let (birdeye, birdeye_extended) = setup_mock_birdeye();
-        
+
         (db, birdeye, birdeye_extended)
     }
 
@@ -32,7 +36,7 @@ mod tests {
     }
 
     async fn setup_test_db() -> Arc<MongoDbPool> {
-        let connection_string = "mongodb://localhost:32768";
+        let connection_string = "mongodb://localhost:32770";
         MongoDbPool::new_from_uri(connection_string, "cainam_test")
             .await
             .expect("Failed to create test database pool")
@@ -41,18 +45,20 @@ mod tests {
 
     fn setup_mock_birdeye() -> (Arc<MockBirdeyeApi>, Arc<cainam_birdeye::BirdeyeClient>) {
         let mut mock = MockBirdeyeApi::new();
-        mock.expect_get_token_info()
-            .returning(|_| {
-                Ok(TokenInfo {
-                    price: 100.0,
-                    volume_24h: 1000000.0,
-                    price_change_24h: 5.0,
-                    liquidity: 500000.0,
-                    trade_24h: 1000,
-                })
-            });
+        mock.expect_get_token_info().returning(|_| {
+            Ok(TokenInfo {
+                price: 100.0,
+                volume_24h: 1000000.0,
+                price_change_24h: 5.0,
+                liquidity: 500000.0,
+                trade_24h: 1000,
+            })
+        });
 
-        (Arc::new(mock), Arc::new(cainam_birdeye::BirdeyeClient::new("test_key")))
+        (
+            Arc::new(mock),
+            Arc::new(cainam_birdeye::BirdeyeClient::new("test_key")),
+        )
     }
 
     #[tokio::test]
@@ -60,15 +66,13 @@ mod tests {
         let db = setup_test_db().await;
         let (birdeye, birdeye_extended) = setup_mock_birdeye();
         let market_config = MarketConfig::default();
-        
-        let service = TokenAnalyticsService::new(
-            db,
-            birdeye,
-            birdeye_extended,
-            Some(market_config),
-        );
 
-        let analytics = service.fetch_and_store_token_info("SOL", "test_address").await?;
+        let service =
+            TokenAnalyticsService::new(db, birdeye, birdeye_extended, Some(market_config));
+
+        let analytics = service
+            .fetch_and_store_token_info("SOL", "test_address")
+            .await?;
         assert_eq!(analytics.token_symbol, "SOL");
         assert_eq!(analytics.price, f64_to_decimal(100.0));
         Ok(())
@@ -78,16 +82,15 @@ mod tests {
     async fn test_invalid_token_price() -> AgentResult<()> {
         let db = setup_test_db().await;
         let mut mock = MockBirdeyeApi::new();
-        mock.expect_get_token_info()
-            .returning(|_| {
-                Ok(TokenInfo {
-                    price: -1.0, // Invalid price
-                    volume_24h: 1000000.0,
-                    price_change_24h: 5.0,
-                    liquidity: 500000.0,
-                    trade_24h: 1000,
-                })
-            });
+        mock.expect_get_token_info().returning(|_| {
+            Ok(TokenInfo {
+                price: -1.0, // Invalid price
+                volume_24h: 1000000.0,
+                price_change_24h: 5.0,
+                liquidity: 500000.0,
+                trade_24h: 1000,
+            })
+        });
 
         let service = TokenAnalyticsService::new(
             db,
@@ -96,7 +99,9 @@ mod tests {
             Some(MarketConfig::default()),
         );
 
-        let result = service.fetch_and_store_token_info("SOL", "test_address").await;
+        let result = service
+            .fetch_and_store_token_info("SOL", "test_address")
+            .await;
         assert!(matches!(result, Err(AgentError::Validation(_))));
         Ok(())
     }
@@ -106,18 +111,16 @@ mod tests {
         let db = setup_test_db().await;
         let (birdeye, birdeye_extended) = setup_mock_birdeye();
         let mut market_config = MarketConfig::default();
-        
+
         // Set up config to generate invalid confidence
         market_config.base_confidence = f64_to_decimal(2.0); // Will result in confidence > 1
-        
-        let service = TokenAnalyticsService::new(
-            db,
-            birdeye,
-            birdeye_extended,
-            Some(market_config),
-        );
 
-        let result = service.fetch_and_store_token_info("SOL", "test_address").await;
+        let service =
+            TokenAnalyticsService::new(db, birdeye, birdeye_extended, Some(market_config));
+
+        let result = service
+            .fetch_and_store_token_info("SOL", "test_address")
+            .await;
         assert!(matches!(result, Err(AgentError::Validation(_))));
         Ok(())
     }
@@ -127,13 +130,9 @@ mod tests {
         let db = setup_test_db().await;
         let (birdeye, birdeye_extended) = setup_mock_birdeye();
         let market_config = MarketConfig::default();
-        
-        let service = TokenAnalyticsService::new(
-            db.clone(),
-            birdeye,
-            birdeye_extended,
-            Some(market_config),
-        );
+
+        let service =
+            TokenAnalyticsService::new(db.clone(), birdeye, birdeye_extended, Some(market_config));
 
         // First store some historical data
         let mut tx = db.begin().await?;
@@ -150,13 +149,17 @@ mod tests {
             timestamp: Utc::now() - chrono::Duration::hours(1),
             created_at: None,
         };
-        service.store_token_analytics_tx(&mut tx, &analytics).await?;
+        service
+            .store_token_analytics_tx(&mut tx, &analytics)
+            .await?;
         tx.commit().await?;
 
         // Now fetch current data which should generate a signal
-        let result = service.fetch_and_store_token_info("TEST", "test_address").await?;
+        let result = service
+            .fetch_and_store_token_info("TEST", "test_address")
+            .await?;
         let signal = service.generate_market_signals(&result).await?;
-        
+
         assert!(signal.is_some());
         let signal = signal.unwrap();
         assert_eq!(signal.signal_type, SignalType::PriceSpike);
@@ -170,13 +173,9 @@ mod tests {
         let db = setup_test_db().await;
         let (birdeye, birdeye_extended) = setup_mock_birdeye();
         let market_config = MarketConfig::default();
-        
-        let service = TokenAnalyticsService::new(
-            db.clone(),
-            birdeye,
-            birdeye_extended,
-            Some(market_config),
-        );
+
+        let service =
+            TokenAnalyticsService::new(db.clone(), birdeye, birdeye_extended, Some(market_config));
 
         // Start a transaction
         let mut tx = db.begin().await?;
@@ -196,7 +195,9 @@ mod tests {
             created_at: None,
         };
 
-        service.store_token_analytics_tx(&mut tx, &analytics).await?;
+        service
+            .store_token_analytics_tx(&mut tx, &analytics)
+            .await?;
 
         // Rollback the transaction
         tx.rollback().await?;
@@ -204,7 +205,7 @@ mod tests {
         // Verify the data wasn't stored
         let result = service.get_latest_token_analytics("test_address").await?;
         assert!(result.is_none());
-        
+
         Ok(())
     }
 }

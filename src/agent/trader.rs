@@ -1,4 +1,5 @@
 // use crate::models::trade::Trade;
+use crate::config::mongodb::MongoDbPool;
 use crate::{
     birdeye::BirdeyeClient,
     config::{AgentConfig, MarketConfig},
@@ -17,7 +18,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::sleep;
 use tracing::{error, info};
-use crate::config::mongodb::MongoDbPool;
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: u64 = 1000; // 1 second
@@ -87,19 +87,14 @@ impl TradingAgent {
 
         info!("Initializing Birdeye clients...");
         let birdeye = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-        let birdeye_extended = Arc::new(BirdeyeClient::new(
-            config.birdeye_api_key.clone(),
-        ));
+        let birdeye_extended = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
 
         // Initialize market config
         let market_config = MarketConfig::new_from_env()?;
 
         // Initialize analytics service
-        let analytics_service = Arc::new(TokenAnalyticsService::new(
-            db.clone(),
-            birdeye,
-            Some(market_config),
-        ).await?);
+        let analytics_service =
+            Arc::new(TokenAnalyticsService::new(db.clone(), birdeye, Some(market_config)).await?);
 
         Ok(Self {
             agent,
@@ -279,7 +274,7 @@ impl TradingAgent {
 //     use crate::twitter::MockTwitterApi;
 
 //     async fn setup_test_db() -> Arc<MongoDbPool> {
-//         MongoDbPool::new_from_uri("mongodb://localhost:32768", "cainam_test")
+//         MongoDbPool::new_from_uri("mongodb://localhost:32770", "cainam_test")
 //             .await
 //             .expect("Failed to create test database pool")
 //             .into()
