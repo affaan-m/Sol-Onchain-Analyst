@@ -72,6 +72,9 @@ async fn main() -> Result<()> {
     
     match db.run_command(command).await {
         Ok(_) => info!("Created vector search index for token_analytics"),
+        Err(e) if e.to_string().contains("IndexAlreadyExists") => {
+            info!("Vector search index already exists for token_analytics")
+        }
         Err(e) => return Err(e.into()),
     }
 
