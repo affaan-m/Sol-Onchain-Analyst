@@ -108,23 +108,66 @@ impl TokenAnalyticsService {
 
         let signals_collection = db.collection("market_signals");
         println!(">> market_signals collections {:?}", signals_collection);
-        
-        // let vector_index = MongoDbVectorIndex::new(
-        //     collection.clone(),
-        //     TEXT_EMBEDDING_ADA_002,
-        //     "token_vector_index",
-        //     Default::default()
-        // ).await.map_err(|e| AgentError::Database(e.to_string()))?;
 
         let openai_client = openai::Client::from_env();
-        let model = openai_client.embedding_model(openai::TEXT_EMBEDDING_ADA_002); // <-- replace with your embedding model.
+        let model = openai_client.embedding_model(openai::TEXT_EMBEDDING_ADA_002);
+
+        // Check if vector search index exists
+        let list_indexes_command = doc! {
+            "listSearchIndexes": "token_analytics"
+        };
+        
+        let index_exists = match db.run_command(list_indexes_command).await {
+            Ok(result) => {
+                let indexes = result.get_document("cursor")
+                    .and_then(|cursor| cursor.get_array("firstBatch"))
+                    .map(|batch| !batch.is_empty())
+                    .unwrap_or(false);
+                if indexes {
+                    info!("Vector search index already exists for token_analytics");
+                }
+                indexes
+            }
+            Err(_) => false
+        };
+
+        // Create vector search index if it doesn't exist
+        if !index_exists {
+            info!("Creating vector search index for token_analytics");
+            let command = doc! {
+                "createSearchIndexes": "token_analytics",
+                "indexes": [{
+                    "name": "vector_index",
+                    "definition": {
+                        "mappings": {
+                            "dynamic": true,
+                            "fields": {
+                                "embedding": {
+                                    "type": "knnVector",
+                                    "dimensions": 1536,
+                                    "similarity": "cosine"
+                                }
+                            }
+                        }
+                    }
+                }]
+            };
+            
+            match db.run_command(command).await {
+                Ok(_) => info!("Created vector index for token_analytics"),
+                Err(e) => {
+                    info!("Failed to create vector index: {}", e);
+                    return Err(AgentError::Database(e));
+                }
+            }
+        }
 
         let vector_index = MongoDbVectorIndex::new(
             collection.clone(),
             model,
-            "token_address",
+            "vector_index",  // Use the same name as created above
             Default::default()
-        ).await.expect("msg");
+        ).await.map_err(|e| AgentError::VectorStore(e.to_string()))?;
         
         Ok(Self {
             pool: pool,
