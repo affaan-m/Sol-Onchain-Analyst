@@ -1,6 +1,6 @@
 use crate::error::{AgentError, AgentResult};
-use std::time::Duration;
 use std::env;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
@@ -81,10 +81,12 @@ fn parse_duration_secs(key: &str, default: u64) -> AgentResult<Duration> {
     let secs = env::var(key)
         .map(|v| v.parse::<u64>())
         .unwrap_or(Ok(default))
-        .map_err(|_| AgentError::InvalidConfig(
-            key.to_string(),
-            "must be a valid number of seconds".to_string(),
-        ))?;
+        .map_err(|_| {
+            AgentError::InvalidConfig(
+                key.to_string(),
+                "must be a valid number of seconds".to_string(),
+            )
+        })?;
 
     Ok(Duration::from_secs(secs))
 }
@@ -94,10 +96,9 @@ fn parse_f64(key: &str, default: f64) -> AgentResult<f64> {
     let value = env::var(key)
         .map(|v| v.parse::<f64>())
         .unwrap_or(Ok(default))
-        .map_err(|_| AgentError::InvalidConfig(
-            key.to_string(),
-            "must be a valid number".to_string(),
-        ))?;
+        .map_err(|_| {
+            AgentError::InvalidConfig(key.to_string(), "must be a valid number".to_string())
+        })?;
 
     Ok(value)
 }
@@ -132,4 +133,4 @@ mod tests {
         env::set_var("TWITTER_EMAIL", "invalid_email");
         assert!(AgentConfig::new_from_env().is_err());
     }
-} 
+}

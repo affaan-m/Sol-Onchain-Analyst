@@ -1,7 +1,10 @@
-use anyhow::{Result, anyhow};
-use reqwest::{Client, header::{HeaderMap, HeaderValue, CONTENT_TYPE}};
+use anyhow::{anyhow, Result};
+use reqwest::{
+    header::{HeaderMap, HeaderValue, CONTENT_TYPE},
+    Client,
+};
 use serde_json::json;
-use tracing::{info, error};
+use tracing::{error, info};
 
 // Remove trait definition since we're not using trait objects
 pub struct TwitterClient {
@@ -34,7 +37,8 @@ impl TwitterClient {
             "password": self.password
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://x.com/i/flow/login")
             .headers(headers)
             .json(&payload)
@@ -67,11 +71,11 @@ impl TwitterClient {
 
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        
+
         // Add auth token cookie
         headers.insert(
-            "cookie", 
-            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?
+            "cookie",
+            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?,
         );
 
         let payload = json!({
@@ -79,7 +83,8 @@ impl TwitterClient {
             "queryId": "PvJGyyJKzm2-aIsTo6tLSg"  // Twitter's internal query ID for posting tweets
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://x.com/i/api/graphql/PvJGyyJKzm2-aIsTo6tLSg/CreateTweet")
             .headers(headers)
             .json(&payload)
@@ -103,11 +108,11 @@ impl TwitterClient {
 
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        
+
         // Add auth token cookie
         headers.insert(
-            "cookie", 
-            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?
+            "cookie",
+            HeaderValue::from_str(&format!("auth_token={}", self.auth_token.as_ref().unwrap()))?,
         );
 
         let payload = json!({
@@ -115,7 +120,8 @@ impl TwitterClient {
             "queryId": "VaenaVgh5q5ih7kvyVjgtg"  // Twitter's internal query ID for deleting tweets
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://x.com/i/api/graphql/VaenaVgh5q5ih7kvyVjgtg/DeleteTweet")
             .headers(headers)
             .json(&payload)
@@ -145,7 +151,7 @@ fn extract_auth_token(cookie_str: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_extract_auth_token() {
         let cookie_str = "auth_token=abc123; Path=/; Domain=.x.com; Secure; HttpOnly";
@@ -163,7 +169,7 @@ mod tests {
         // Test that unauthorized operations fail
         let tweet_result = client.post_tweet("Test tweet").await;
         assert!(tweet_result.is_err());
-        
+
         let delete_result = client.delete_tweet("123").await;
         assert!(delete_result.is_err());
     }

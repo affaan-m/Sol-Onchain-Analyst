@@ -1,9 +1,9 @@
 pub mod api;
 pub mod error;
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TimeInterval {
@@ -52,4 +52,4 @@ impl FromStr for TimeInterval {
             _ => Err(error::BirdeyeError::InvalidTimeInterval(s.to_string())),
         }
     }
-} 
+}

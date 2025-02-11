@@ -1,6 +1,5 @@
 pub mod trading_engine;
 
-
 use anyhow::Result;
 use solana_client::rpc_client::RpcClient;
 
@@ -20,13 +19,14 @@ impl SolanaAgentKit {
     pub fn new_from_env() -> Result<Self> {
         let rpc_url = std::env::var("SOLANA_RPC_URL")?;
         let wallet_key = std::env::var("SOLANA_PRIVATE_KEY")?;
-        
+
         // Parse the array string into bytes
         let key_str = wallet_key.trim_start_matches('[').trim_end_matches(']');
-        let key_bytes: Vec<u8> = key_str.split(',')
+        let key_bytes: Vec<u8> = key_str
+            .split(',')
             .map(|s| s.trim().parse::<u8>())
             .collect::<std::result::Result<Vec<u8>, _>>()?;
-            
+
         let wallet_keypair = solana_sdk::signer::keypair::Keypair::from_bytes(&key_bytes)?;
 
         Ok(Self::new(&rpc_url, wallet_keypair))

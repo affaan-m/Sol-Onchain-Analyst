@@ -1,30 +1,30 @@
 use crate::{
     agent::trader::TradingAgent,
     config::AgentConfig,
-    models::market_signal::{SignalType, MarketSignal},
+    models::market_signal::{MarketSignal, SignalType},
     trading::SolanaAgentKit,
-    utils::f64_to_decimal, 
+    utils::f64_to_decimal,
 };
-use std::io::{self, Write};
+use anyhow::Result;
 use bson::DateTime;
 use config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
 use solana_sdk::signature::Keypair;
-use tokio;
-use std::sync::Arc;
-use anyhow::Result;
-use tracing::{info, error};
+use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio;
+use tracing::{error, info};
 
 mod agent;
+mod birdeye;
 mod config;
 mod error;
-mod trading;
-mod twitter;
-mod birdeye;
+mod logging;
 mod models;
 mod services;
+mod trading;
+mod twitter;
 mod utils;
-mod logging;
 
 async fn handle_user_input(
     trader: Arc<TradingAgent>,
@@ -51,12 +51,9 @@ async fn handle_user_input(
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
-                let parts: Vec<String> = input
-                    .trim()
-                    .split_whitespace()
-                    .map(String::from)
-                    .collect();
-                
+                let parts: Vec<String> =
+                    input.trim().split_whitespace().map(String::from).collect();
+
                 if parts.is_empty() {
                     continue;
                 }
@@ -121,7 +118,13 @@ async fn handle_user_input(
                                     risk_score: f64_to_decimal(0.2),
                                     sentiment_score: Some(f64_to_decimal(0.6)),
                                     volume_change_24h: Some(f64_to_decimal(0.15)),
-                                    price_change_24h: Some(f64_to_decimal(if signal_type == SignalType::StrongBuy { 0.05 } else { -0.05 })),
+                                    price_change_24h: Some(f64_to_decimal(
+                                        if signal_type == SignalType::StrongBuy {
+                                            0.05
+                                        } else {
+                                            -0.05
+                                        },
+                                    )),
                                     price: f64_to_decimal(10.0),
                                     volume_change: f64_to_decimal(0.2),
                                     timestamp: DateTime::now(),
@@ -135,7 +138,15 @@ async fn handle_user_input(
                                         Ok(signature) => {
                                             println!("\nTrade executed successfully!");
                                             println!("Transaction: {}", signature);
-                                            if let Err(e) = trader.post_trade_update(&symbol, &parts[2], amount, &signal_type).await {
+                                            if let Err(e) = trader
+                                                .post_trade_update(
+                                                    &symbol,
+                                                    &parts[2],
+                                                    amount,
+                                                    &signal_type,
+                                                )
+                                                .await
+                                            {
                                                 println!("Failed to post trade update: {}", e);
                                             }
                                         }
@@ -173,12 +184,11 @@ async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
     let config = MongoConfig {
         uri: std::env::var("MONGODB_URI")
             .unwrap_or_else(|_| "mongodb://localhost:32770".to_string()),
-        database: std::env::var("MONGODB_DATABASE")
-            .unwrap_or_else(|_| "cainam".to_string()),
+        database: std::env::var("MONGODB_DATABASE").unwrap_or_else(|_| "cainam".to_string()),
         app_name: std::env::var("MONGODB_APP_NAME").ok(),
         pool_config: MongoPoolConfig::from_env(),
     };
-    
+
     info!("Connecting to MongoDB at {}", config.uri);
     let pool = MongoDbPool::create_pool(config).await?;
     info!("Successfully connected to MongoDB");
@@ -189,7 +199,7 @@ async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
 async fn main() -> Result<()> {
     // Initialize logging
     // logging::init_logging()?;
-    
+
     println!("Starting Cainam Core...");
 
     // Load environment variables from .env file
@@ -199,7 +209,7 @@ async fn main() -> Result<()> {
     // Initialize MongoDB connection pool using rig-mongodb
     let db_pool = init_mongodb().await?;
     println!("init pool...");
-    
+
     // TODO: zTgx hardcoded
     // Initialize Solana agent
     let rpc_url = "https://api.devnet.solana.com";
@@ -220,9 +230,9 @@ async fn main() -> Result<()> {
     //     birdeye_extended.clone(),
     //     Some(market_config.clone()),
     // ).await?;
-    
+
     // let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
-    
+
     // // Initialize vector store
     // let vector_store = VectorStore::new().await?;
 

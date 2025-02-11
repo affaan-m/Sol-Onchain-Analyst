@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::TimeInterval;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 // Token Search Types

@@ -1,5 +1,5 @@
 use bson::{self, oid::ObjectId, DateTime};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub mod market_signal;
 pub mod token_analytics;
@@ -38,4 +38,3 @@ impl VectorDocument {
         "vectors"
     }
 }
-

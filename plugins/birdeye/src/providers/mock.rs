@@ -1,10 +1,10 @@
+use crate::{
+    types::api::TokenInfo, LiquidityAnalysis, MarketImpact, PricePoint, TokenOverview,
+    WalletPortfolio,
+};
+use serde_json::json;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
-use serde_json::json;
-use crate::{
-    types::api::TokenInfo,
-    TokenOverview, WalletPortfolio, LiquidityAnalysis, MarketImpact, PricePoint,
-};
 
 /// Mock response data for testing
 #[derive(Clone)]
@@ -22,7 +22,7 @@ pub struct MockHttpClient {
 impl MockHttpClient {
     pub fn new() -> Self {
         let mut responses = HashMap::new();
-        
+
         // Add default mock responses
         responses.insert(
             "/token/search".to_string(),
@@ -89,7 +89,8 @@ impl MockHttpClient {
                 body: json!({"error": "Rate limit exceeded"}),
                 delay: Duration::from_millis(50),
             },
-        ).await;
+        )
+        .await;
     }
 
     /// Simulate a network error
@@ -101,7 +102,8 @@ impl MockHttpClient {
                 body: json!({"error": "Internal server error"}),
                 delay: Duration::from_millis(50),
             },
-        ).await;
+        )
+        .await;
     }
 
     /// Get mock response for an endpoint
@@ -211,15 +213,17 @@ mod tests {
     #[tokio::test]
     async fn test_mock_client_custom_response() {
         let client = MockHttpClient::new();
-        client.set_response(
-            "/custom",
-            MockResponse {
-                status: 200,
-                body: json!({"test": true}),
-                delay: Duration::from_millis(0),
-            },
-        ).await;
-        
+        client
+            .set_response(
+                "/custom",
+                MockResponse {
+                    status: 200,
+                    body: json!({"test": true}),
+                    delay: Duration::from_millis(0),
+                },
+            )
+            .await;
+
         let response = client.get("/custom").await.unwrap();
         assert_eq!(response.status, 200);
         assert_eq!(response.body, json!({"test": true}));

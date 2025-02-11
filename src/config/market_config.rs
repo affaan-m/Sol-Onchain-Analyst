@@ -1,7 +1,7 @@
 use crate::error::{AgentError, AgentResult};
-use std::env;
 use crate::utils::f64_to_decimal;
 use bigdecimal::BigDecimal;
+use std::env;
 
 #[derive(Debug, Clone)]
 pub struct MarketConfig {
@@ -65,11 +65,14 @@ impl Default for MarketConfig {
 
 fn parse_decimal_env(key: &str, default: f64) -> AgentResult<BigDecimal> {
     match env::var(key) {
-        Ok(val) => val.parse::<f64>()
-            .map_err(|_| AgentError::InvalidConfig(
-                key.to_string(),
-                "must be a valid decimal number".to_string(),
-            ))
+        Ok(val) => val
+            .parse::<f64>()
+            .map_err(|_| {
+                AgentError::InvalidConfig(
+                    key.to_string(),
+                    "must be a valid decimal number".to_string(),
+                )
+            })
             .map(f64_to_decimal),
         Err(_) => Ok(f64_to_decimal(default)),
     }

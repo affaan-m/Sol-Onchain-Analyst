@@ -1,7 +1,7 @@
-use mongodb::{bson::doc, Client, Database, IndexModel};
-use mongodb::bson::Document;
 use anyhow::{Context, Result};
 use cainam_core::config::mongodb::MongoConfig;
+use mongodb::bson::Document;
+use mongodb::{bson::doc, Client, Database, IndexModel};
 use tracing::info;
 
 #[tokio::main]
@@ -60,9 +60,10 @@ async fn main() -> Result<()> {
     let metadata_index = doc! {
         "metadata": 1
     };
-    match db.collection::<Document>("token_analytics")
+    match db
+        .collection::<Document>("token_analytics")
         .create_index(IndexModel::builder().keys(metadata_index).build())
-        .await 
+        .await
     {
         Ok(_) => info!("Created metadata index for token_analytics"),
         Err(e) if e.to_string().contains("already exists") => {
@@ -79,7 +80,7 @@ async fn main() -> Result<()> {
             "timestamp": -1
         })
         .build();
-    
+
     let collection = db.collection::<Document>("market_signals");
     match collection.create_index(index_model).await {
         Ok(_) => info!("Created metadata index for market_signals"),
@@ -91,4 +92,4 @@ async fn main() -> Result<()> {
 
     info!("Vector store initialization complete");
     Ok(())
-} 
+}

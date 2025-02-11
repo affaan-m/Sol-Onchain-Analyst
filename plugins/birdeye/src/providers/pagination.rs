@@ -1,7 +1,7 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::marker::PhantomData;
 use crate::types::error::BirdeyeError;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::pin::Pin;
 
 #[derive(Debug, Clone)]
 pub struct PaginationParams {
@@ -25,7 +25,11 @@ impl Default for PaginationParams {
 }
 
 pub trait PaginatedRequest<T>: Send + Sync {
-    fn execute(&self, offset: u32, limit: u32) -> Pin<Box<dyn Future<Output = Result<Vec<T>, BirdeyeError>> + Send>>;
+    fn execute(
+        &self,
+        offset: u32,
+        limit: u32,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<T>, BirdeyeError>> + Send>>;
 }
 
 impl<F, Fut, T> PaginatedRequest<T> for F
@@ -33,7 +37,11 @@ where
     F: Fn(u32, u32) -> Fut + Send + Sync,
     Fut: Future<Output = Result<Vec<T>, BirdeyeError>> + Send + 'static,
 {
-    fn execute(&self, offset: u32, limit: u32) -> Pin<Box<dyn Future<Output = Result<Vec<T>, BirdeyeError>> + Send>> {
+    fn execute(
+        &self,
+        offset: u32,
+        limit: u32,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<T>, BirdeyeError>> + Send>> {
         Box::pin(self(offset, limit))
     }
 }
@@ -72,7 +80,10 @@ where
             }
         }
 
-        let result = self.request.execute(self.current_offset, self.page_size).await;
+        let result = self
+            .request
+            .execute(self.current_offset, self.page_size)
+            .await;
         match result {
             Ok(items) => {
                 if items.is_empty() {

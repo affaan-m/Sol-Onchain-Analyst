@@ -1,10 +1,10 @@
-mod market_config;
 mod agent_config;
+mod market_config;
 pub mod mongodb;
 
-use rig::providers::openai::{O1_MINI, O1_PREVIEW, GPT_4O_MINI, GPT_4O};
-pub use self::market_config::MarketConfig;
 pub use self::agent_config::AgentConfig;
+pub use self::market_config::MarketConfig;
+use rig::providers::openai::{GPT_4O, GPT_4O_MINI, O1_MINI, O1_PREVIEW};
 
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 

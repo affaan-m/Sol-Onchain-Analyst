@@ -456,7 +456,10 @@ async fn check_upload_status(
     Err(TwitterError::Api("Video processing timeout".into()))
 }
 
-pub async fn get_tweet(client: &TwitterClient, id: &str) -> Result<(Option<Tweet>, Option<Vec<Tweet>>)> {
+pub async fn get_tweet(
+    client: &TwitterClient,
+    id: &str,
+) -> Result<(Option<Tweet>, Option<Vec<Tweet>>)> {
     let mut headers = HeaderMap::new();
     client.auth.install_headers(&mut headers).await?;
     let tweet_detail_request = Endpoints::tweet_detail(id);

@@ -1,11 +1,14 @@
-use std::time::Duration;
-use reqwest::Client;
-use serde::Deserialize;
 use crate::types::{
-    api::{TokenSearchParams, WalletPortfolio, TokenOverview, LiquidityAnalysis, MarketImpact, PricePoint, TokenInfo},
+    api::{
+        LiquidityAnalysis, MarketImpact, PricePoint, TokenInfo, TokenOverview, TokenSearchParams,
+        WalletPortfolio,
+    },
     error::BirdeyeError,
     TimeInterval,
 };
+use reqwest::Client;
+use serde::Deserialize;
+use std::time::Duration;
 
 const API_BASE_URL: &str = "https://public-api.birdeye.so";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -32,9 +35,13 @@ impl BirdeyeProvider {
         }
     }
 
-    pub async fn search_tokens(&self, params: TokenSearchParams) -> Result<Vec<TokenInfo>, BirdeyeError> {
+    pub async fn search_tokens(
+        &self,
+        params: TokenSearchParams,
+    ) -> Result<Vec<TokenInfo>, BirdeyeError> {
         let url = format!("{}/search/tokens", API_BASE_URL);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .query(&[("query", &params.query)])
@@ -52,7 +59,8 @@ impl BirdeyeProvider {
 
     pub async fn get_token_overview(&self, address: String) -> Result<TokenOverview, BirdeyeError> {
         let url = format!("{}/token/{}/overview", API_BASE_URL, address);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -65,9 +73,13 @@ impl BirdeyeProvider {
             .map_err(|e| BirdeyeError::SerializationError(e.to_string()))
     }
 
-    pub async fn analyze_liquidity(&self, address: &str) -> Result<LiquidityAnalysis, BirdeyeError> {
+    pub async fn analyze_liquidity(
+        &self,
+        address: &str,
+    ) -> Result<LiquidityAnalysis, BirdeyeError> {
         let url = format!("{}/token/{}/liquidity", API_BASE_URL, address);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -80,9 +92,14 @@ impl BirdeyeProvider {
             .map_err(|e| BirdeyeError::SerializationError(e.to_string()))
     }
 
-    pub async fn get_market_impact(&self, address: &str, size_usd: f64) -> Result<MarketImpact, BirdeyeError> {
+    pub async fn get_market_impact(
+        &self,
+        address: &str,
+        size_usd: f64,
+    ) -> Result<MarketImpact, BirdeyeError> {
         let url = format!("{}/token/{}/impact", API_BASE_URL, address);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .query(&[("size_usd", size_usd.to_string())])
@@ -96,9 +113,14 @@ impl BirdeyeProvider {
             .map_err(|e| BirdeyeError::SerializationError(e.to_string()))
     }
 
-    pub async fn get_price_history(&self, address: &str, interval: TimeInterval) -> Result<Vec<PricePoint>, BirdeyeError> {
+    pub async fn get_price_history(
+        &self,
+        address: &str,
+        interval: TimeInterval,
+    ) -> Result<Vec<PricePoint>, BirdeyeError> {
         let url = format!("{}/token/{}/price", API_BASE_URL, address);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .query(&[("interval", interval.to_string())])
@@ -112,9 +134,13 @@ impl BirdeyeProvider {
             .map_err(|e| BirdeyeError::SerializationError(e.to_string()))
     }
 
-    pub async fn get_wallet_portfolio(&self, wallet_address: &str) -> Result<WalletPortfolio, BirdeyeError> {
+    pub async fn get_wallet_portfolio(
+        &self,
+        wallet_address: &str,
+    ) -> Result<WalletPortfolio, BirdeyeError> {
         let url = format!("{}/wallet/{}/portfolio", API_BASE_URL, wallet_address);
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-KEY", &self.api_key)
             .send()
@@ -156,7 +182,9 @@ mod tests {
     async fn test_get_token_overview() -> Result<(), BirdeyeError> {
         let api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
         let provider = BirdeyeProvider::new(api_key);
-        let overview = provider.get_token_overview("So11111111111111111111111111111111111111112".to_string()).await?;
+        let overview = provider
+            .get_token_overview("So11111111111111111111111111111111111111112".to_string())
+            .await?;
         assert!(overview.price > 0.0);
         Ok(())
     }

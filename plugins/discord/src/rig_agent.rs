@@ -1,14 +1,14 @@
 // rig_agent.rs
 
 use anyhow::{Context, Result};
+use rig::agent::Agent;
+use rig::completion::Document;
+use rig::completion::Prompt;
+use rig::embeddings::EmbeddingsBuilder;
 use rig::providers::openai;
 use rig::vector_store::in_memory_store::InMemoryVectorStore;
-use rig::embeddings::EmbeddingsBuilder;
-use rig::completion::Document;
-use rig::agent::Agent;
-use rig::completion::Prompt;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 
 pub struct RigAgent {
@@ -77,6 +77,9 @@ impl RigAgent {
     }
 
     pub async fn process_message(&self, message: &str) -> Result<String> {
-        self.agent.prompt(message).await.map_err(anyhow::Error::from)
+        self.agent
+            .prompt(message)
+            .await
+            .map_err(anyhow::Error::from)
     }
 }

@@ -30,7 +30,7 @@ impl RateLimiter {
         let mut state = self.state.lock().await;
         let now = Instant::now();
         let elapsed = now.duration_since(state.last_update).as_secs_f64();
-        
+
         // Add new tokens based on elapsed time
         state.tokens = (state.tokens + elapsed * state.rate).min(state.burst);
         state.last_update = now;

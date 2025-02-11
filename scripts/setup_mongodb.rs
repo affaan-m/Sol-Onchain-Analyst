@@ -1,17 +1,21 @@
+use cainam_core::config::mongodb::MongoConfig;
 use mongodb::{
     bson::Document,
-    options::{IndexOptions, ClientOptions, CreateCollectionOptions},
+    options::{ClientOptions, CreateCollectionOptions, IndexOptions},
     Client, IndexModel,
 };
 use std::error::Error;
-use cainam_core::config::mongodb::MongoConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize MongoDB client using configuration
     let config = MongoConfig::from_env();
     let mut client_options = ClientOptions::parse(&config.uri).await?;
-    client_options.server_api = Some(mongodb::options::ServerApi::builder().version(mongodb::options::ServerApiVersion::V1).build());
+    client_options.server_api = Some(
+        mongodb::options::ServerApi::builder()
+            .version(mongodb::options::ServerApiVersion::V1)
+            .build(),
+    );
     let client = Client::with_options(client_options)?;
     let db = client.database(&config.database);
 
@@ -20,12 +24,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Create collections if they don't exist
     println!("Creating collections...");
     let collections = db.list_collection_names().await?;
-    
+
     if !collections.contains(&"token_analytics".to_string()) {
         db.create_collection("token_analytics").await?;
         println!("Created token_analytics collection");
     }
-    
+
     if !collections.contains(&"market_signals".to_string()) {
         db.create_collection("market_signals").await?;
         println!("Created market_signals collection");
@@ -37,7 +41,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Create indexes for token_analytics collection
     println!("Creating indexes for token_analytics collection...");
-    
+
     // Compound index on token_address and timestamp
     let compound_index_options = IndexOptions::builder().build();
     let compound_index = IndexModel::builder()
@@ -68,13 +72,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }]
     };
-    
+
     db.run_command(vector_search_command).await?;
     println!("Created vector search index for token_analytics collection");
 
     // Create indexes for market_signals collection
     println!("Creating indexes for market_signals collection...");
-    
+
     let market_index_options = IndexOptions::builder().build();
     let market_index = IndexModel::builder()
         .keys(mongodb::bson::doc! {
@@ -89,4 +93,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Successfully created all MongoDB indexes");
 
     Ok(())
-} 
+}

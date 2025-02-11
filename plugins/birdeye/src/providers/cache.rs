@@ -1,11 +1,11 @@
+use serde::{de::DeserializeOwned, Serialize};
+use std::future::Future;
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::RwLock;
-use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
 
 #[derive(Debug)]
 struct CacheEntry<T> {
@@ -67,7 +67,7 @@ impl<T: Send + Sync + 'static> CachedClient<T> {
 
         // Get the inner reference
         let inner = Arc::clone(&self.state.read().await.inner);
-        
+
         // Execute the function
         let result = f(inner).await;
 

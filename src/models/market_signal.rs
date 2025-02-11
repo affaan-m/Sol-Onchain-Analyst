@@ -1,11 +1,11 @@
 use bigdecimal::BigDecimal;
 // use bson::{Document, oid::ObjectId};
 // use chrono::DateTime;
-use serde::{Serialize, Deserialize};
 use crate::utils::f64_to_decimal;
-use std::fmt;
-use bson::{self,DateTime, Document};
+use bson::{self, DateTime, Document};
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SignalType {
@@ -169,12 +169,9 @@ mod tests {
     #[test]
     fn test_market_signal_builder_defaults() {
         let price = f64_to_decimal(100.0);
-        let signal = MarketSignalBuilder::new(
-            "test_address".to_string(),
-            SignalType::Hold,
-            price.clone(),
-        )
-        .build();
+        let signal =
+            MarketSignalBuilder::new("test_address".to_string(), SignalType::Hold, price.clone())
+                .build();
 
         assert_eq!(signal.confidence, f64_to_decimal(0.5)); // Default confidence
         assert_eq!(signal.risk_score, f64_to_decimal(0.5)); // Default risk score

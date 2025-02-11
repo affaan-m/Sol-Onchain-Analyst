@@ -1,6 +1,6 @@
 use bigdecimal::BigDecimal;
 // use crate::MongoDbPool;
-use bson::{DateTime, Document, oid::ObjectId};
+use bson::{oid::ObjectId, DateTime, Document};
 use serde::{Deserialize, Serialize};
 // use time::OffsetDateTime;
 

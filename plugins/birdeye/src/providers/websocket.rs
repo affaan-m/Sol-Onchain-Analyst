@@ -1,8 +1,8 @@
+use crate::types::error::BirdeyeError;
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use serde::{Deserialize, Serialize};
-use crate::types::error::BirdeyeError;
 
 const WEBSOCKET_URL: &str = "wss://public-api.birdeye.so/socket";
 
@@ -52,7 +52,7 @@ impl WebSocketProvider {
     pub fn new(api_key: &str) -> Self {
         let (market_sender, _) = broadcast::channel(1000);
         let (trade_sender, _) = broadcast::channel(1000);
-        
+
         Self {
             api_key: api_key.to_string(),
             market_sender,
@@ -73,7 +73,7 @@ impl WebSocketProvider {
         let (ws_stream, _) = connect_async(&url)
             .await
             .map_err(|e| BirdeyeError::WebSocketError(e.to_string()))?;
-        
+
         let (mut write, mut read) = ws_stream.split();
 
         // Subscribe to tokens
@@ -83,11 +83,12 @@ impl WebSocketProvider {
                 token,
                 api_key: self.api_key.clone(),
             };
-            
+
             let msg = serde_json::to_string(&subscribe_msg)
                 .map_err(|e| BirdeyeError::SerializationError(e.to_string()))?;
-            
-            write.send(Message::Text(msg))
+
+            write
+                .send(Message::Text(msg))
                 .await
                 .map_err(|e| BirdeyeError::WebSocketError(e.to_string()))?;
         }
@@ -102,7 +103,8 @@ impl WebSocketProvider {
                     Ok(Message::Text(text)) => {
                         if let Ok(market_update) = serde_json::from_str::<MarketUpdate>(&text) {
                             let _ = market_sender.send(market_update);
-                        } else if let Ok(trade_update) = serde_json::from_str::<TradeUpdate>(&text) {
+                        } else if let Ok(trade_update) = serde_json::from_str::<TradeUpdate>(&text)
+                        {
                             let _ = trade_sender.send(trade_update);
                         }
                     }
@@ -123,7 +125,7 @@ impl WebSocketProvider {
 // Example usage:
 //
 // let ws_provider = WebSocketProvider::new("your-api-key");
-// 
+//
 // // Subscribe to market updates
 // let mut market_rx = ws_provider.subscribe_market_updates();
 // tokio::spawn(async move {

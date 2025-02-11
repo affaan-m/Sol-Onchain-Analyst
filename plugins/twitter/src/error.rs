@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use thiserror::Error;
 use std::env::VarError;
+use thiserror::Error;
 
 #[derive(Debug, Error, Deserialize)]
 pub enum TwitterError {

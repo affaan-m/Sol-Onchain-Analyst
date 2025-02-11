@@ -1,8 +1,8 @@
-use thiserror::Error;
 use mongodb::error::Error as MongoError;
-use std::num::ParseFloatError;
-use std::fmt;
 use std::error::Error as StdError;
+use std::fmt;
+use std::num::ParseFloatError;
+use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("MongoDB error: {0}")]
@@ -43,7 +43,9 @@ impl fmt::Display for AgentError {
         match self {
             AgentError::Config(msg) => write!(f, "Configuration error: {}", msg),
             AgentError::MissingEnvVar(var) => write!(f, "Environment variable '{}' not found", var),
-            AgentError::InvalidConfig(field, msg) => write!(f, "Invalid value for {}: {}", field, msg),
+            AgentError::InvalidConfig(field, msg) => {
+                write!(f, "Invalid value for {}: {}", field, msg)
+            }
             AgentError::TwitterApi(msg) => write!(f, "Twitter API error: {}", msg),
             AgentError::Trading(msg) => write!(f, "Trading error: {}", msg),
             AgentError::Database(err) => write!(f, "Database error: {}", err),
@@ -168,10 +170,7 @@ mod tests {
     #[test]
     fn test_error_display() {
         let err = AgentError::missing_env("TEST_VAR");
-        assert_eq!(
-            err.to_string(),
-            "Environment variable 'TEST_VAR' not found"
-        );
+        assert_eq!(err.to_string(), "Environment variable 'TEST_VAR' not found");
 
         let err = AgentError::invalid_config("threshold", "must be positive");
         assert_eq!(
