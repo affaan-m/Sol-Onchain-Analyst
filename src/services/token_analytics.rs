@@ -163,7 +163,7 @@ impl TokenAnalyticsService {
             }
         }
 
-        let mut search_params = SearchParams::new()
+        let search_params = SearchParams::new()
             .exact(true)
             .num_candidates(100);
 

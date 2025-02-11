@@ -1,13 +1,16 @@
 use cainam_core::config::mongodb::MongoConfig;
 use mongodb::{
     bson::Document,
-    options::{ClientOptions, CreateCollectionOptions, IndexOptions},
+    options::{ClientOptions, IndexOptions},
     Client, IndexModel,
 };
 use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // Load environment variables first
+    dotenvy::dotenv().ok();
+    
     // Initialize MongoDB client using configuration
     let config = MongoConfig::from_env();
     let mut client_options = ClientOptions::parse(&config.uri).await?;
@@ -28,11 +31,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !collections.contains(&"token_analytics".to_string()) {
         db.create_collection("token_analytics").await?;
         println!("Created token_analytics collection");
+    } else {
+        println!("Collection token_analytics already exists");
     }
 
     if !collections.contains(&"market_signals".to_string()) {
         db.create_collection("market_signals").await?;
         println!("Created market_signals collection");
+    } else {
+        println!("Collection market_signals already exists");
     }
 
     // Get collections
@@ -51,7 +58,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .options(compound_index_options)
         .build();
-    token_analytics.create_index(compound_index).await?;
+    
+    match token_analytics.create_index(compound_index).await {
+        Ok(_) => println!("Created compound index for token_analytics"),
+        Err(e) if e.to_string().contains("already exists") => {
+            println!("Compound index already exists for token_analytics");
+        }
+        Err(e) => return Err(e.into()),
+    }
 
     // Create vector search index for embeddings
     let vector_search_command = mongodb::bson::doc! {
@@ -73,8 +87,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }]
     };
 
-    db.run_command(vector_search_command).await?;
-    println!("Created vector search index for token_analytics collection");
+    match db.run_command(vector_search_command).await {
+        Ok(_) => println!("Created vector search index for token_analytics collection"),
+        Err(e) if e.to_string().contains("already exists") => {
+            println!("Vector search index already exists for token_analytics collection");
+        }
+        Err(e) => return Err(e.into()),
+    }
 
     // Create indexes for market_signals collection
     println!("Creating indexes for market_signals collection...");
@@ -87,10 +106,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .options(market_index_options)
         .build();
-    market_signals.create_index(market_index).await?;
+    
+    match market_signals.create_index(market_index).await {
+        Ok(_) => println!("Created index for market_signals"),
+        Err(e) if e.to_string().contains("already exists") => {
+            println!("Index already exists for market_signals");
+        }
+        Err(e) => return Err(e.into()),
+    }
 
-    println!("Created indexes for market_signals collection");
-    println!("Successfully created all MongoDB indexes");
+    println!("MongoDB setup completed successfully!");
 
     Ok(())
 }
