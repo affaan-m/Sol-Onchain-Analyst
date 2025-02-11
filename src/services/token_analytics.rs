@@ -12,7 +12,7 @@ use futures::StreamExt;
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::Collection;
 use rig::providers::openai::{self, EmbeddingModel};
-use rig_mongodb::MongoDbVectorIndex;
+use rig_mongodb::{MongoDbVectorIndex, SearchParams};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -102,7 +102,6 @@ impl TokenAnalyticsService {
         birdeye: Arc<dyn BirdeyeApi>,
         market_config: Option<MarketConfig>,
     ) -> AgentResult<Self> {
-        // Change return type to AgentResult
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
         println!(">> token_analytics collections {:?}", collection);
@@ -164,11 +163,15 @@ impl TokenAnalyticsService {
             }
         }
 
+        let mut search_params = SearchParams::new()
+            .exact(true)
+            .num_candidates(100);
+
         let vector_index = MongoDbVectorIndex::new(
             collection.clone(),
             model,
-            "vector_index", // Use the same name as created above
-            Default::default(),
+            "vector_index",
+            search_params
         )
         .await
         .map_err(|e| AgentError::VectorStore(e.to_string()))?;
