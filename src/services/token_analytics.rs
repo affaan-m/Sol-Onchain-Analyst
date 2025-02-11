@@ -451,7 +451,7 @@ impl TokenAnalyticsService {
             .collection
             .find(filter)
             .await
-            .map_err(|e| AgentError::Database(e))?;
+            .map_err(AgentError::Database)?;
 
         let mut results = Vec::new();
         while let Some(doc) = cursor.next().await {
@@ -471,7 +471,7 @@ impl TokenAnalyticsService {
             .collection
             .find_one(filter)
             .await
-            .map_err(|e| AgentError::Database(e))?;
+            .map_err(AgentError::Database)?;
 
         Ok(analytics)
     }
@@ -552,7 +552,7 @@ impl TokenAnalyticsService {
                 .map(|v| v.to_f64().unwrap_or_default()),
             confidence: signal.confidence.to_f64().unwrap_or_default(),
             risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(|| DateTime::now()),
+            created_at: signal.created_at.unwrap_or_else(DateTime::now),
         };
 
         log_market_signal(&signal_log);
@@ -584,7 +584,7 @@ impl From<MarketSignal> for MarketSignalLog {
             volume_change_24h: signal.volume_change_24h.and_then(|v| v.to_f64()),
             confidence: signal.confidence.to_f64().unwrap_or_default(),
             risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(|| DateTime::now()),
+            created_at: signal.created_at.unwrap_or_else(DateTime::now),
         }
     }
 }
