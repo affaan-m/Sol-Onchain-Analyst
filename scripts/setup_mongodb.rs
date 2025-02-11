@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match db.run_command(vector_search_command).await {
         Ok(_) => println!("Created vector search index for token_analytics collection"),
-        Err(e) if e.to_string().contains("already exists") => {
+        Err(e) if e.to_string().contains("already defined") => {
             println!("Vector search index already exists for token_analytics collection");
         }
         Err(e) => return Err(e.into()),
