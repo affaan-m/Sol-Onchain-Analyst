@@ -2,56 +2,78 @@
 
 ## Vector Store Implementation
 
-### PostgreSQL Setup
+### MongoDB Atlas Setup
 
-- Enabled pgvector extension for vector similarity search capabilities
-- Created documents table with UUID, content, metadata, and vector embedding fields
-- Implemented IVFFlat index for efficient similarity search using cosine distance
-- Added vector_similarity_search function for flexible querying with threshold and limit parameters
+- Enabled Atlas Search for vector similarity search capabilities
+- Created token_analytics collection with document structure for embeddings
+- Implemented vector search index for efficient similarity search using cosine distance
+- Added vector store integration with proper connection pooling
 
 ### Database Schema
 
-The vector store implementation uses the following schema:
+The vector store implementation uses the following document structure:
 
-```sql
-CREATE TABLE documents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}',
-    embedding vector(1536),
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
+```json
+{
+    "_id": ObjectId,
+    "token_address": String,
+    "token_name": String,
+    "token_symbol": String,
+    "embedding": Array<float>,
+    "created_at": ISODate
+}
 ```
 
-### Search Function
+### Search Configuration
 
-Implemented a PostgreSQL function for vector similarity search that:
+Implemented MongoDB vector search with:
 
-- Takes query embedding, threshold, and limit as parameters
-- Returns matching documents with similarity scores
-- Uses cosine similarity for distance calculation
-- Supports metadata filtering through JSONB
+- Vector search index on embedding field
+- Cosine similarity for distance calculation
+- Configurable search parameters:
+  - Exact matching option
+  - Number of candidates
+  - Field specification for embedding search
 
 ### Integration Notes
 
 - Using OpenAI's text-embedding-3-small model (1536 dimensions)
-- Configured with IVFFlat index for balance of speed and accuracy
-- Supports batch document insertion for efficiency
-- Includes timestamp tracking for document versioning
+- Configured with MongoDB Atlas Search for vector similarity
+- Supports batch document insertion
+- Includes proper connection pooling
+- Implements retry logic for operations
 
-### Fixed Issues
+### Current Implementation
 
-1. Corrected DateTime type conversions between chrono::DateTime<Utc> and time::OffsetDateTime
-2. Fixed Option<String> handling in token name assignments using unwrap_or
-3. Improved Option<f64> to BigDecimal conversions in token analytics
-4. Added proper error handling for tracing_subscriber::filter::ParseError
-5. Fixed temporary value lifetime issues with serde_json::json!
-6. Corrected Option<BigDecimal> handling in portfolio optimizer
-7. Implemented proper vector store initialization with PostgreSQL
+1. MongoDB Connection Pool
+   - Configurable min/max pool size
+   - Connection timeout settings
+   - Error handling for connection issues
+
+2. Vector Store Operations
+   - Document insertion with embeddings
+   - Vector similarity search
+   - Top-N query support
+   - Proper error handling
+
+3. Data Models
+   - TokenAnalyticsData structure
+   - Proper serialization/deserialization
+   - ObjectId handling
+   - Embedding field management
 
 ### Error Handling
 
-- Added From implementation for tracing_subscriber::filter::ParseError
-- Improved error propagation in logging initialization
-- Enhanced type safety in database operations
-- Added proper error context for vector store operations
+- Comprehensive error types for MongoDB operations
+- Connection error handling
+- Vector store operation error handling
+- Proper error propagation
+- Logging integration with tracing
+
+### Pending Improvements
+
+1. SearchParams configuration refinement
+2. Enhanced error context for vector operations
+3. Additional logging for debugging
+4. Performance optimization for batch operations
+5. Connection pool monitoring

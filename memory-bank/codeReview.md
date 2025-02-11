@@ -1,226 +1,207 @@
-# Code Review Report
+# Code Review Guidelines
 
-Last Updated: 2025-02-02
+Last Updated: 2025-02-11
 
-## Critical Issues
+## Focus Areas
 
-### 1. Error Handling
+### 1. MongoDB Integration
 
-- **Unwrap Usage in Configuration**
+- Connection pooling configuration
+- Error handling and retry logic
+- Proper use of MongoDB Atlas features
+- Vector store implementation
 
-  ```rust
-  let config = AgentConfig {
-      trade_max_amount: std::env::var("TRADE_MAX_AMOUNT")
-          .unwrap_or_else(|_| "1000.0".to_string())
-          .parse()
-          .unwrap_or(1000.0),
-  };
-  ```
+### 2. Vector Search Implementation
 
-  - Impact: Potential runtime panics
-  - Recommendation: Use proper error propagation with Result types
+- Proper embedding handling
+- Search parameter configuration
+- Index creation and management
+- Query optimization
 
-### 2. Transaction Safety
-
-- **Missing Transaction Boundaries**
-  - No explicit transaction handling in token_analytics service
-  - Impact: Potential data inconsistency if operations fail
-  - Recommendation: Implement proper transaction boundaries for multi-step operations
-
-## High Priority Issues
-
-### 1. Code Duplication
-
-- **Repeated Market Signal Creation**
-
-  ```rust
-  // Duplicated in multiple places with similar structure
-  MarketSignal {
-      id: None,
-      asset_address: analytics.token_address.clone(),
-      signal_type: SignalType::PriceSpike,
-      // ... repeated fields
-  }
-  ```
-
-  - Recommendation: Extract signal creation into a builder pattern or factory method
-
-### 2. Configuration Management
-
-- **Hard-coded Values**
-
-  ```rust
-  let threshold = f64_to_decimal(0.05);
-  let base_confidence = f64_to_decimal(0.5);
-  ```
-
-  - Impact: Difficult to adjust system parameters
-  - Recommendation: Move to configuration file or environment variables
-
-### 3. Type Safety
-
-- **Inconsistent Enum Usage**
-
-  ```sql
-  CREATE TYPE signal_type AS ENUM (...);
-  ```
-
-  vs
-
-  ```rust
-  signal_type VARCHAR NOT NULL,
-  ```
-
-  - Impact: Loss of type safety at database level
-  - Recommendation: Use proper enum types consistently
-
-## Medium Priority Issues
-
-### 1. Performance Optimization
-
-- **Database Query Optimization**
-
-  ```rust
-  pub async fn get_token_history(&self, address: &str, ...) -> Result<Vec<TokenAnalytics>> {
-      // No limit on result size
-      .fetch_all(&*self.db)
-  ```
-
-  - Impact: Potential memory issues with large datasets
-  - Recommendation: Implement pagination
-
-### 2. Code Organization
-
-- **Large Function Sizes**
-  - `generate_market_signals` is over 50 lines
-  - Impact: Reduced maintainability
-  - Recommendation: Break into smaller, focused functions
-
-### 3. Testing Coverage
-
-- **Missing Test Cases**
-  - Limited test coverage for market signal generation
-  - No integration tests for full trade flow
-  - Recommendation: Add comprehensive test suite
-
-## Low Priority Issues
-
-### 1. Documentation
-
-- **Incomplete Function Documentation**
-  - Many functions lack proper documentation
-  - Recommendation: Add comprehensive doc comments
-
-### 2. Logging
-
-✓ **Basic Logging Implementation** (Completed)
-
-- Implemented structured logging with MarketSignalLog
-- Added detailed context for market signals
-- Integrated with existing logging infrastructure
-- Added proper module organization
-
-### 3. Code Style
-
-- **Inconsistent Error Handling Patterns**
-  - Mix of `anyhow::Result` and specific error types
-  - Recommendation: Standardize error handling approach
-
-## Architecture Recommendations
-
-### 1. Dependency Injection
+### 3. Error Handling
 
 ```rust
-pub struct TokenAnalyticsService {
-    db: Arc<PgPool>,
-    birdeye: Arc<dyn BirdeyeApi>,
-    birdeye_extended: Arc<BirdeyeExtendedClient>,
+// Good: Proper error context and handling
+pub async fn search_tokens(query: &str) -> Result<Vec<TokenAnalytics>> {
+    let results = pool.top_n("token_analytics", model, query, 10)
+        .await
+        .context("Failed to perform vector search")?;
+    
+    process_results(results)
+        .context("Failed to process search results")
+}
+
+// Bad: Missing error context
+pub async fn search_tokens(query: &str) -> Result<Vec<TokenAnalytics>> {
+    let results = pool.top_n("token_analytics", model, query, 10).await?;
+    process_results(results)
 }
 ```
 
-- Good use of dependency injection
-- Consider adding service factory pattern
+### 4. Connection Management
 
-### 2. Database Design
+```rust
+// Good: Proper connection pool configuration
+let pool_config = MongoPoolConfig {
+    min_pool_size: 5,
+    max_pool_size: 10,
+    connect_timeout: Duration::from_secs(20),
+};
 
-- Good use of TimescaleDB features
-- Well-designed compression and retention policies
-- Consider adding:
-  - Materialized views for common queries
-  - Additional indexes for performance
+// Bad: Hardcoded values without configuration
+let client = Client::with_uri_str("mongodb://localhost").await?;
+```
 
-### 3. Error Handling Strategy
+### 5. Vector Store Operations
 
-- Implement custom error types
-- Add error context
-- Standardize error handling patterns
+```rust
+// Good: Proper search parameters
+let search_params = SearchParams::new()
+    .exact(true)
+    .num_candidates(100)
+    .fields(vec!["embedding"]);
 
-## Performance Considerations
+// Bad: Missing required parameters
+let search_params = SearchParams::new()
+    .exact(true)
+    .num_candidates(100);
+```
 
-### 1. Database Optimization
+## Review Checklist
 
-- Current:
+### MongoDB Integration
 
-  ```sql
-  CREATE INDEX idx_market_signals_asset_time ON market_signals(asset_address, timestamp);
-  ```
+- [ ] Proper connection pool configuration
+- [ ] Error handling with context
+- [ ] Retry logic for transient failures
+- [ ] Proper use of MongoDB Atlas features
+- [ ] Connection string security
 
-- Add:
-  - Partial indexes for active trades
-  - Composite indexes for common query patterns
+### Vector Store Implementation
 
-### 2. Caching Strategy
+- [ ] Proper embedding field configuration
+- [ ] Search parameter completeness
+- [ ] Index creation and management
+- [ ] Query optimization
+- [ ] Error handling for vector operations
 
-- Implement caching for:
-  - Token information
-  - Market signals
-  - Recent analytics
+### Code Quality
 
-### 3. Connection Pooling
+- [ ] Error handling with proper context
+- [ ] Logging for important operations
+- [ ] Performance considerations
+- [ ] Type safety and null handling
+- [ ] Documentation completeness
 
-- Review pool settings
-- Monitor connection usage
-- Implement circuit breakers
+### Testing
 
-## Security Recommendations
+- [ ] Unit tests for vector operations
+- [ ] Integration tests for MongoDB
+- [ ] Error case coverage
+- [ ] Performance benchmarks
+- [ ] Connection pool tests
 
-### 1. Authentication
+## Common Issues to Watch
 
-- Replace plaintext credentials
-- Implement proper token management
-- Add API key rotation
+1. MongoDB Operations
+   - Missing error context
+   - Improper connection handling
+   - Missing retry logic
+   - Hardcoded configuration
 
-### 2. Data Protection
+2. Vector Store
+   - Missing search parameters
+   - Improper embedding handling
+   - Missing index configuration
+   - Inefficient queries
 
-- Encrypt sensitive data
-- Implement audit logging
-- Add access control
+3. Error Handling
+   - Generic error types
+   - Missing error context
+   - Improper error propagation
+   - Missing logging
 
-### 3. Input Validation
+4. Performance
+   - Connection pool misconfiguration
+   - Missing indexes
+   - Inefficient queries
+   - Resource leaks
 
-- Add request validation
-- Implement rate limiting
-- Add parameter sanitization
+## Best Practices
 
-## Next Steps
+### MongoDB Integration
 
-1. Address critical security issues
-2. Implement proper error handling
-3. Add comprehensive testing
-4. Optimize database queries
-5. Enhance monitoring and logging
-6. Improve documentation
+```rust
+// Connection Pool
+impl MongoDbPool {
+    pub async fn create_pool(config: MongoConfig) -> Result<Arc<MongoDbPool>> {
+        let mut client_options = ClientOptions::parse(&config.uri).await?;
+        config.pool_config.apply_to_options(&mut client_options);
+        
+        let client = Client::with_options(client_options)?;
+        Ok(Arc::new(MongoDbPool { client, config }))
+    }
+}
 
-## Monitoring Recommendations
+// Error Handling
+pub async fn insert_documents(docs: Vec<Document>) -> Result<()> {
+    let collection = self.get_collection()?;
+    collection
+        .insert_many(docs)
+        .await
+        .context("Failed to insert documents")?;
+    Ok(())
+}
+```
 
-1. Add metrics for:
-   - Trade execution latency
-   - Signal processing time
-   - Database query performance
-   - API response times
+### Vector Store Operations
 
-2. Implement alerts for:
-   - Failed trades
-   - API errors
-   - Database issues
-   - Performance degradation
+```rust
+// Search Implementation
+pub async fn search_similar(query: &str, limit: usize) -> Result<Vec<Document>> {
+    let search_params = SearchParams::new()
+        .exact(true)
+        .num_candidates(100)
+        .fields(vec!["embedding"]);
+
+    let index = MongoDbVectorIndex::new(
+        collection,
+        model,
+        "vector_index",
+        search_params
+    ).await?;
+
+    index.top_n(query, limit).await
+}
+```
+
+## Documentation Requirements
+
+1. Function Documentation
+```rust
+/// Performs a vector similarity search in the token analytics collection
+/// 
+/// # Arguments
+/// * `query` - The search query string
+/// * `limit` - Maximum number of results to return
+/// 
+/// # Returns
+/// * `Result<Vec<TokenAnalytics>>` - Search results or error with context
+pub async fn search_tokens(query: &str, limit: usize) -> Result<Vec<TokenAnalytics>>
+```
+
+2. Error Documentation
+```rust
+/// Possible errors during vector store operations
+#[derive(Error, Debug)]
+pub enum VectorStoreError {
+    #[error("MongoDB operation failed: {0}")]
+    MongoError(#[from] mongodb::error::Error),
+    
+    #[error("Vector search failed: {0}")]
+    SearchError(String),
+    
+    #[error("Invalid configuration: {0}")]
+    ConfigError(String),
+}
+```

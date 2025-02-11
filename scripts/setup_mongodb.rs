@@ -76,6 +76,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "mappings": {
                     "dynamic": true,
                     "fields": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "token_address": {
+                            "type": "string"
+                        },
+                        "token_name": {
+                            "type": "string"
+                        },
+                        "token_symbol": {
+                            "type": "string"
+                        },
                         "embedding": {
                             "type": "knnVector",
                             "dimensions": 1536,
