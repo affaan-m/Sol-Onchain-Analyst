@@ -1,14 +1,13 @@
 use anyhow::{Context, Result};
-use rig_core::embeddings::{self, Embeddings};
-use rig_mongodb::{store::{MongoVectorStore, SearchParams}, MongoClient};
+use rig_core::vector_store::{Document, Store};
+use rig_mongodb::MongoStore;
 use std::sync::Arc;
 use tracing::{info, warn};
 use crate::config::mongodb::{MongoConfig, MongoDbPool};
 use serde_json;
 
 pub struct VectorStore {
-    store: Arc<MongoVectorStore>,
-    embeddings: Arc<Embeddings>,
+    store: Arc<MongoStore>,
 }
 
 impl VectorStore {
@@ -30,32 +29,22 @@ impl VectorStore {
             }]
         });
             
-        let mut search_params = SearchParams::default();
-        search_params
-            .set_num_candidates(100)
-            .set_index_name("vector_index")
-            .set_fields(fields);
-            
-        let store = MongoVectorStore::new(
-            pool.as_client(), 
+        let store = MongoStore::new(
+            pool.client(), 
             &config.database, 
             "token_analytics",
-            search_params
+            fields
         ).await
             .context("Failed to create vector store")?;
 
-        info!("Initializing embeddings model");
-        
-        let embeddings = Arc::new(Embeddings::default());
         Ok(Self {
             store: Arc::new(store),
-            embeddings,
         })
     }
 
     pub async fn insert_documents<T>(&self, documents: Vec<T>) -> Result<()> 
     where
-        T: Send + Sync + 'static + serde::Serialize,
+        T: Send + Sync + 'static + serde::Serialize + Document,
     {
         info!("Inserting documents into vector store");
         self.store.insert_documents(&documents)
@@ -93,7 +82,6 @@ impl VectorStore {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
-    use rig_core::embeddings::Embed;
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
     #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -102,7 +90,7 @@ mod tests {
         content: String,
     }
 
-    impl embeddings::Document for TestDocument {
+    impl Document for TestDocument {
         fn text(&self) -> &str {
             &self.content
         }
@@ -141,13 +129,7 @@ mod tests {
             },
         ];
 
-        let embeddings = embeddings::Builder::default()
-            .documents(&docs)
-            .build()
-            .await
-            .context("Failed to create embeddings")?;
-
-        store.insert_documents(embeddings)
+        store.insert_documents(docs)
             .await
             .context("Failed to insert test documents")?;
 

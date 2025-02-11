@@ -356,6 +356,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,7 +801,7 @@ dependencies = [
  "mockall",
  "pretty_assertions",
  "reqwest",
- "rig-core",
+ "rig-core 0.7.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -804,7 +826,7 @@ dependencies = [
  "mockall",
  "mongodb",
  "reqwest",
- "rig-core",
+ "rig-core 0.8.0",
  "rig-mongodb",
  "serde",
  "serde_derive",
@@ -830,7 +852,7 @@ dependencies = [
  "async-trait",
  "dotenvy",
  "reqwest",
- "rig-core",
+ "rig-core 0.7.0",
  "schemars",
  "serde",
  "serde_json",
@@ -2325,6 +2347,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2505,6 +2533,26 @@ name = "log"
 version = "0.4.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
+
+[[package]]
+name = "lopdf"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5c8ecfc6c72051981c0459f75ccc585e7ff67c70829560cda8e647882a9abff"
+dependencies = [
+ "chrono",
+ "encoding_rs",
+ "flate2",
+ "indexmap 2.7.1",
+ "itoa",
+ "log",
+ "md-5",
+ "nom",
+ "rangemap",
+ "rayon",
+ "time",
+ "weezl",
+]
 
 [[package]]
 name = "lru-cache"
@@ -3508,6 +3556,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rangemap"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f60fcc7d6849342eff22c4350c8b9a989ee8ceabc4b481253e8946b9fe83d684"
+
+[[package]]
 name = "rayon"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3670,14 +3724,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig-mongodb"
-version = "0.2.3"
+name = "rig-core"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "339aaeb83cc366e1376faa34ce3ee76a992c2772951ed14348048559fbc83d9b"
+checksum = "7aaf53f8631db9cc12287b5595b14964ae36a213f0d247055efcd26714f2da2b"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures",
+ "glob",
+ "lopdf",
+ "ordered-float 4.6.0",
+ "rayon",
+ "reqwest",
+ "rig-derive",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "rig-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e08c252975eff73b87872cfbf0077215413e402bbd98976c78cd3abdbd9995c7"
+dependencies = [
+ "indoc",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "rig-mongodb"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc5f4a7c864ee7f20959e20f5f1611ed84c3a9d3056df63ceb1782946ace5fe"
 dependencies = [
  "futures",
  "mongodb",
- "rig-core",
+ "rig-core 0.8.0",
  "serde",
  "serde_json",
  "tracing",
@@ -6125,6 +6213,12 @@ name = "webpki-roots"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1"
+
+[[package]]
+name = "weezl"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53a85b86a771b1c87058196170769dd264f66c0782acf1ae6cc51bfd64b39082"
 
 [[package]]
 name = "widestring"

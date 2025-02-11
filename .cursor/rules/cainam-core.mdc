@@ -15,7 +15,12 @@ Solana Program Development with Rust and Anchor:
 - Use Anchor to streamline Solana program development, taking advantage of its features for simplifying account management, error handling, and program interactions.
 - Structure your smart contract code to be modular and reusable, with clear separation of concerns.
 - Ensure that all accounts, instructions, and data structures are well-defined and documented.
-  
+
+Cargo.toml Best Practices:
+
+- ALWAYS check what features a crate has before updating the cargo.toml file.
+- Never add features that aren't available to the crate you are updating.
+
 Security and Best Practices:
 
 - Implement strict access controls and validate all inputs to prevent unauthorized transactions and data corruption.

@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+---
+
+# Your rule content
+
+- Run `cargo search rig-core` to view the list of crates within rig-core

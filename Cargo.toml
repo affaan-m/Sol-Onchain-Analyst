@@ -48,9 +48,9 @@ codegen-units = 1
 opt-level = "z"
 
 [dependencies]
-rig-core = { version = "0.7.0", features = ["embeddings"] }
-rig-mongodb = { version = "0.2.3", features = ["vector-store"] }
-mongodb = { version = "3.2.1" }
+rig-core = { version = "0.8.0", features = ["all"] }
+rig-mongodb = "0.2.4"
+mongodb = { version = "3.2.1", default-features = false, features = ["sync"] }
 anyhow = "1.0"
 chrono = "0.4"
 bigdecimal = { version = "0.2", features = ["serde"] }
