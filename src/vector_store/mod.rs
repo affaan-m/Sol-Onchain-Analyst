@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
-use rig_core::{embeddings::Embeddings, vector_store::VectorStoreIndex};
-use rig_mongodb::{MongoVectorStore, MongoDbPool, SearchParams};
+use rig_core::embeddings::{self, Embeddings};
+use rig_mongodb::{store::{MongoVectorStore, SearchParams}, MongoClient};
 use std::sync::Arc;
 use tracing::{info, warn};
-use crate::config::mongodb::MongoConfig;
+use crate::config::mongodb::{MongoConfig, MongoDbPool};
+use serde_json;
 
 pub struct VectorStore {
     store: Arc<MongoVectorStore>,
@@ -16,44 +17,54 @@ impl VectorStore {
         let config = MongoConfig::from_env();
         info!("Initializing vector store connection");
         
-        let pool = config.create_pool()
+        let pool = MongoDbPool::create_pool(config.clone())
             .await
             .context("Failed to create MongoDB pool")?;
             
-        // Configure vector store with optimized search parameters
-        let search_params = SearchParams::new()
-            .with_num_candidates(100)
-            .with_num_probes(10);
+        // Configure vector store with optimized search parameters and fields
+        let fields = serde_json::json!({
+            "fields": [{
+                "path": "embedding",
+                "numDimensions": 1536,
+                "similarity": "cosine"
+            }]
+        });
             
-        let store = MongoVectorStore::new_with_params(
-            pool, 
+        let mut search_params = SearchParams::default();
+        search_params
+            .set_num_candidates(100)
+            .set_index_name("vector_index")
+            .set_fields(fields);
+            
+        let store = MongoVectorStore::new(
+            pool.as_client(), 
             &config.database, 
-            "vectors",
+            "token_analytics",
             search_params
         ).await
             .context("Failed to create vector store")?;
 
-        info!("Initializing OpenAI embeddings model");
+        info!("Initializing embeddings model");
         
-        let embeddings = Arc::new(Embeddings::new());
+        let embeddings = Arc::new(Embeddings::default());
         Ok(Self {
             store: Arc::new(store),
             embeddings,
         })
     }
 
-    pub async fn insert_documents<T>(&self, documents: Embeddings<T>) -> Result<()> 
+    pub async fn insert_documents<T>(&self, documents: Vec<T>) -> Result<()> 
     where
-        T: Send + Sync + 'static,
+        T: Send + Sync + 'static + serde::Serialize,
     {
         info!("Inserting documents into vector store");
-        self.store.insert_documents(documents)
+        self.store.insert_documents(&documents)
             .await
             .context("Failed to insert documents into vector store")?;
         Ok(())
     }
 
-    pub async fn top_n<T>(&self, query: &str, limit: usize) -> Result<Vec<(f32, String, T)>>
+    pub async fn top_n<T>(&self, query: &str, limit: usize) -> Result<Vec<(f32, T)>>
     where
         T: Send + Sync + for<'de> serde::de::Deserialize<'de> + 'static,
     {
@@ -63,7 +74,7 @@ impl VectorStore {
         }
         
         info!("Performing vector similarity search with limit {}", limit);
-        let results = self.store.top_n::<T>(query, limit)
+        let results = self.store.search::<T>(query, limit)
             .await
             .context("Failed to perform vector similarity search")?;
             
@@ -82,14 +93,19 @@ impl VectorStore {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
-    use rig_core::Embed;
+    use rig_core::embeddings::Embed;
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-    #[derive(Embed, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+    #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
     struct TestDocument {
         id: String,
-        #[embed]
         content: String,
+    }
+
+    impl embeddings::Document for TestDocument {
+        fn text(&self) -> &str {
+            &self.content
+        }
     }
 
     fn init_test_logging() {
@@ -125,12 +141,8 @@ mod tests {
             },
         ];
 
-        let openai_client = rig_core::providers::openai::Client::from_env();
-        let model = openai_client.embedding_model(rig_core::providers::openai::TEXT_EMBEDDING_3_SMALL);
-        
-        let embeddings = rig_core::embeddings::EmbeddingsBuilder::new(model)
-            .documents(docs)
-            .unwrap()
+        let embeddings = embeddings::Builder::default()
+            .documents(&docs)
             .build()
             .await
             .context("Failed to create embeddings")?;

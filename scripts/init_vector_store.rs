@@ -1,18 +1,20 @@
-use anyhow::Result;
-use mongodb::{
-    bson::{doc, Document},
-    Client, IndexModel,
-};
+use mongodb::{bson::doc, Client, Database, IndexModel};
+use mongodb::bson::Document;
+use anyhow::{Context, Result};
+use cainam_core::config::mongodb::MongoConfig;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load environment variables
     dotenvy::dotenv().ok();
-    info!("Initializing vector store collections...");
+    info!("Initializing vector store...");
 
+    // Initialize MongoDB connection
+    let config = MongoConfig::from_env();
     let uri = std::env::var("MONGODB_URI").expect("MONGODB_URI must be set");
     let client = Client::with_uri_str(&uri).await?;
-    let db = client.database("cainam");
+    let db = client.database(&config.database);
 
     // Create token_analytics collection
     info!("Creating token_analytics collection...");
@@ -22,31 +24,6 @@ async fn main() -> Result<()> {
             info!("Collection token_analytics already exists")
         }
         Err(e) => return Err(e.into()),
-    }
-
-    // Create market_signals collection
-    info!("Creating market_signals collection...");
-    match db.create_collection("market_signals").await {
-        Ok(_) => info!("Created market_signals collection"),
-        Err(e) if e.to_string().contains("already exists") => {
-            info!("Collection market_signals already exists")
-        }
-        Err(e) => return Err(e.into()),
-    }
-
-    // Drop existing vector search index if it exists
-    info!("Checking for existing vector search index...");
-    let drop_index_command = doc! {
-        "dropSearchIndex": "token_analytics",
-        "name": "vector_index"
-    };
-    
-    match db.run_command(drop_index_command).await {
-        Ok(_) => info!("Dropped existing vector search index"),
-        Err(e) if e.to_string().contains("not found") => {
-            info!("No existing vector search index found")
-        }
-        Err(e) => info!("Error dropping index: {}", e),
     }
 
     // Create vector search index for token_analytics
@@ -69,7 +46,7 @@ async fn main() -> Result<()> {
             }
         }]
     };
-    
+
     match db.run_command(command).await {
         Ok(_) => info!("Created vector search index for token_analytics"),
         Err(e) if e.to_string().contains("IndexAlreadyExists") => {
@@ -80,18 +57,16 @@ async fn main() -> Result<()> {
 
     // Create metadata index for token_analytics
     info!("Creating metadata index for token_analytics...");
-    let index_model = IndexModel::builder()
-        .keys(doc! {
-            "token_address": 1,
-            "timestamp": -1
-        })
-        .build();
-    
-    let collection = db.collection::<Document>("token_analytics");
-    match collection.create_index(index_model).await {
+    let metadata_index = doc! {
+        "metadata": 1
+    };
+    match db.collection::<Document>("token_analytics")
+        .create_index(IndexModel::builder().keys(metadata_index).build())
+        .await 
+    {
         Ok(_) => info!("Created metadata index for token_analytics"),
         Err(e) if e.to_string().contains("already exists") => {
-            info!("Metadata index for token_analytics already exists")
+            info!("Metadata index already exists for token_analytics")
         }
         Err(e) => return Err(e.into()),
     }
@@ -114,6 +89,6 @@ async fn main() -> Result<()> {
         Err(e) => return Err(e.into()),
     }
 
-    info!("Vector store initialization completed successfully!");
+    info!("Vector store initialization complete");
     Ok(())
 } 
