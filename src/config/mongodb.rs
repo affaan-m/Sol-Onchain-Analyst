@@ -1,10 +1,13 @@
 use std::sync::Arc;
 use anyhow::Result;
 use mongodb::{
-    options::ClientOptions,
-    Client,
-    bson::doc,
+    bson::doc, options::ClientOptions, Client, Collection
 };
+use rig::{embeddings::EmbeddingsBuilder, providers::openai::EmbeddingModel, vector_store::VectorStoreIndexDyn, Embed, Embed as TEmbed};
+use rig_mongodb::{MongoDbVectorIndex, SearchParams};
+// use rig_derive::Embed;
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -120,5 +123,98 @@ impl MongoDbPool {
 
     pub fn get_config(&self) -> &MongoConfig {
         &self.config
+    }
+
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+}
+
+
+#[derive(Embed, Clone, Deserialize, Debug)]
+pub struct TokenAnalyticsData {
+    #[serde(rename = "_id", deserialize_with = "deserialize_object_id")]
+    id: String,
+
+    #[embed]
+    token_address: String,
+
+    #[embed]
+    token_name: String,
+
+    #[embed]
+    token_symbol: String,
+}
+
+fn deserialize_object_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::String(s) => Ok(s),
+        Value::Object(map) => {
+            if let Some(Value::String(oid)) = map.get("$oid") {
+                Ok(oid.to_string())
+            } else {
+                Err(serde::de::Error::custom(
+                    "Expected $oid field with string value",
+                ))
+            }
+        }
+        _ => Err(serde::de::Error::custom(
+            "Expected string or object with $oid field",
+        )),
+    }
+}
+
+/*
+* Move insert_documents & top_n functions from vector_store to mongodb.
+
+TODO:
+* need more tests
+* fix hardcoded 
+*/
+
+impl MongoDbPool {
+    pub async fn insert_token_analytics_documents<T: TEmbed + Send>(&self, collection: &str, model: EmbeddingModel, documents: Vec<TokenAnalyticsData>) -> Result<()> {
+        let collection: Collection<bson::Document> = self.client
+        .database("cainam")
+        .collection(collection);
+
+        let embeddings = EmbeddingsBuilder::new(model.clone())
+        .documents(documents)?
+        .build()
+        .await?;
+
+        let mongo_documents = embeddings
+        .iter()
+        .map(|(TokenAnalyticsData { id, token_address, .. }, embedding)| {
+            doc! {
+                "id": id.clone(),
+                "token_address": token_address.clone(),
+                "embedding": embedding.first().vec.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+        collection.insert_many(mongo_documents).await?;
+
+        Ok(())
+    }
+
+    pub async fn top_n(&self, collection: &str, model: EmbeddingModel, query: &str, limit: usize) -> Result<Vec<(f64, String, Value)>>
+    {
+        let collection: Collection<bson::Document> = self.client
+        .database("cainam")
+        .collection(collection);
+
+        let index =
+        MongoDbVectorIndex::new(collection, model, "vector_index", SearchParams::new()).await.expect("msg");
+
+        // Query the index
+        let data = index.top_n(query, limit).await?;
+
+        Ok(data)
     }
 }

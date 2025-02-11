@@ -10,7 +10,7 @@ pub mod services;
 pub mod trading;
 pub mod twitter;
 pub mod utils;
-pub mod vector_store;
+// pub mod vector_store;
 // pub mod test_utils;
 
 // ... rest of the file ...
