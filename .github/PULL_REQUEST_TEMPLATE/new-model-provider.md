@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-# New model provider: <Model Provider Name>
+# <Model Provider Name>
 
 ## Description
 
@@ -22,7 +22,7 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Test A
 - [ ] Test B
 
-## Checklist:
+## Checklist
 
 - [ ] My code follows the style guidelines of this project
 - [ ] I have commented my code, particularly in hard-to-understand areas

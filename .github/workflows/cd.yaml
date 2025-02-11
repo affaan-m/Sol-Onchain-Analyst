@@ -9,7 +9,7 @@ on:
 jobs:
   run-ci:
     permissions:
-        checks: write
+      checks: write
     uses: ./.github/workflows/ci.yaml
     secrets: inherit
 
@@ -18,13 +18,14 @@ jobs:
     needs: run-ci
     runs-on: ubuntu-latest
     permissions:
-        pull-requests: write
-        contents: write
+      pull-requests: write
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -36,5 +37,5 @@ jobs:
       - name: Run release-plz
         uses: MarcoIeni/release-plz-action@v0.5
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
