@@ -1,15 +1,20 @@
-use anyhow::{Result, Context};
-use mongodb::{bson::doc, options::ClientOptions, Client, Collection};
+use anyhow::{Result, Context, anyhow};
+use mongodb::{
+    bson::{doc, Document},
+    options::{ClientOptions, IndexOptions},
+    Client, Database, IndexModel,
+};
 use rig::{
-    embeddings::EmbeddingsBuilder, providers::openai::EmbeddingModel,
-    vector_store::VectorStoreIndexDyn, Embed, Embed as TEmbed,
+    embeddings::{EmbeddingsBuilder, Embed},
+    providers::openai::EmbeddingModel,
+    vector_store::VectorStoreIndexDyn,
 };
 use rig_mongodb::{MongoDbVectorIndex, SearchParams};
-use std::sync::Arc;
-// use rig_derive::Embed;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Serialize, Deserializer};
 use serde_json::Value;
-use std::time::Duration;
+use std::{env, sync::Arc, time::Duration};
+use async_trait::async_trait;
+use futures::TryStreamExt;
 
 #[derive(Debug, Clone)]
 pub struct MongoPoolConfig {
@@ -76,77 +81,26 @@ impl Default for MongoConfig {
 
 impl MongoConfig {
     pub fn from_env() -> Self {
+        let uri = env::var("MONGODB_URI").expect("MONGODB_URI must be set");
+        let database = env::var("MONGODB_DATABASE").expect("MONGODB_DATABASE must be set");
+
         Self {
-            uri: std::env::var("MONGODB_URI")
-                .unwrap_or_else(|_| "mongodb://localhost:32770".to_string()),
-            database: std::env::var("MONGODB_DATABASE").unwrap_or_else(|_| "cainam".to_string()),
-            app_name: std::env::var("MONGODB_APP_NAME").ok(),
+            uri,
+            database,
+            app_name: None,
             pool_config: MongoPoolConfig::default(),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct MongoDbPool {
-    client: Client,
-    config: MongoConfig,
-}
-
-impl MongoDbPool {
-    pub async fn create_pool(config: MongoConfig) -> Result<Arc<MongoDbPool>> {
-        let mut client_options = ClientOptions::parse(&config.uri).await?;
-
-        if let Some(app_name) = &config.app_name {
-            client_options.app_name = Some(app_name.clone());
-        }
-
-        // Set server API version to ensure compatibility
-        client_options.server_api = Some(
-            mongodb::options::ServerApi::builder()
-                .version(mongodb::options::ServerApiVersion::V1)
-                .build(),
-        );
-
-        // Apply pool configuration
-        config.pool_config.apply_to_options(&mut client_options);
-
-        let client = Client::with_options(client_options)?;
-
-        // Test the connection
-        client
-            .database("admin")
-            .run_command(doc! {"ping": 1})
-            .await?;
-
-        Ok(Arc::new(MongoDbPool { client, config }))
-    }
-
-    pub fn database(&self, name: &str) -> mongodb::Database {
-        self.client.database(name)
-    }
-
-    pub fn get_config(&self) -> &MongoConfig {
-        &self.config
-    }
-
-    pub fn client(&self) -> &Client {
-        &self.client
-    }
-}
-
-#[derive(Embed, Clone, Deserialize, Debug)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TokenAnalyticsData {
     #[serde(rename = "_id", deserialize_with = "deserialize_object_id")]
     pub id: String,
-
-    #[embed]
     pub token_address: String,
-
-    #[embed]
     pub token_name: String,
-
-    #[embed]
     pub token_symbol: String,
+    pub embedding: Vec<f32>,
 }
 
 fn deserialize_object_id<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -171,78 +125,145 @@ where
     }
 }
 
-/*
-* Move insert_documents & top_n functions from vector_store to mongodb.
-
-TODO:
-* need more tests
-* fix hardcoded
-*/
+#[derive(Clone)]
+pub struct MongoDbPool {
+    client: Client,
+    config: MongoConfig,
+    db: Database,
+}
 
 impl MongoDbPool {
-    pub async fn insert_token_analytics_documents<T: TEmbed + Send>(
-        &self,
-        collection: &str,
-        model: EmbeddingModel,
-        documents: Vec<TokenAnalyticsData>,
-    ) -> Result<()> {
-        let collection: Collection<bson::Document> =
-            self.client.database(&self.config.database).collection(collection);
+    pub async fn create_pool(config: MongoConfig) -> Result<Arc<MongoDbPool>> {
+        let mut client_options = ClientOptions::parse(&config.uri).await?;
 
-        let embeddings = EmbeddingsBuilder::new(model.clone())
+        if let Some(app_name) = &config.app_name {
+            client_options.app_name = Some(app_name.clone());
+        }
+
+        // Set server API version to ensure compatibility
+        client_options.server_api = Some(
+            mongodb::options::ServerApi::builder()
+                .version(mongodb::options::ServerApiVersion::V1)
+                .build(),
+        );
+
+        // Apply pool configuration
+        config.pool_config.apply_to_options(&mut client_options);
+
+        let client = Client::with_options(client_options)?;
+        let db = client.database(&config.database);
+
+        // Test the connection
+        client
+            .database("admin")
+            .run_command(doc! {"ping": 1})
+            .await?;
+
+        Ok(Arc::new(MongoDbPool { client, config, db }))
+    }
+
+    pub fn database(&self, name: &str) -> mongodb::Database {
+        self.db.clone()
+    }
+
+    pub fn get_config(&self) -> &MongoConfig {
+        &self.config
+    }
+
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+}
+
+#[async_trait]
+pub trait TokenAnalyticsDataExt {
+    async fn insert_token_analytics_documents<T>(
+        &self,
+        collection_name: &str,
+        embedding_model: EmbeddingModel,
+        documents: Vec<T>,
+    ) -> Result<()>
+    where
+        T: Serialize + Send + Sync + Embed;
+
+    async fn top_n(
+        &self,
+        collection_name: &str,
+        embedding_model: EmbeddingModel,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<Document>>;
+}
+
+#[async_trait]
+impl TokenAnalyticsDataExt for MongoDbPool {
+    async fn insert_token_analytics_documents<T>(
+        &self,
+        collection_name: &str,
+        embedding_model: EmbeddingModel,
+        documents: Vec<T>,
+    ) -> Result<()>
+    where
+        T: Serialize + Send + Sync + Embed,
+    {
+        let collection = self.db.collection::<Document>(collection_name);
+
+        let index_options = IndexOptions::builder()
+            .name("vector_index".to_string())
+            .build();
+        let index_model = IndexModel::builder()
+            .keys(doc! { "embedding": "vector" })
+            .options(index_options)
+            .build();
+
+        if let Err(e) = collection.create_index(index_model).await {
+            if !e.to_string().contains("Index already exists") {
+                return Err(e.into());
+            }
+        }
+
+        let embeddings = EmbeddingsBuilder::new(embedding_model.clone())
             .documents(documents)?
             .build()
             .await?;
 
-        let mongo_documents = embeddings
-            .iter()
-            .map(
-                |(
-                    TokenAnalyticsData {
-                        id, token_address, token_name, token_symbol
-                    },
-                    embedding,
-                )| {
-                    doc! {
-                        "id": id.clone(),
-                        "token_address": token_address.clone(),
-                        "token_name": token_name.clone(),
-                        "token_symbol": token_symbol.clone(),
-                        "embedding": embedding.first().vec.clone(),
-                        "timestamp": bson::DateTime::now(),
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
-
-        collection.insert_many(mongo_documents).await?;
+        for (doc, embedding) in embeddings {
+            let token_data_doc = bson::to_document(&doc)
+                .map_err(|e| anyhow!("Serialization error: {}", e))?;
+            let mut doc_with_embedding = token_data_doc;
+            doc_with_embedding.insert("embedding", bson::to_bson(&embedding)?);
+            collection.insert_one(doc_with_embedding).await?;
+        }
 
         Ok(())
     }
 
-    pub async fn top_n(
+    async fn top_n(
         &self,
         collection_name: &str,
-        model: EmbeddingModel,
+        embedding_model: EmbeddingModel,
         query: &str,
-        limit: usize,
-    ) -> Result<Vec<(f64, String, Value)>> {
-        let collection: Collection<bson::Document> =
-            self.client.database(&self.config.database).collection(collection_name);
-
+        limit: i64,
+    ) -> Result<Vec<Document>> {
+        let collection = self.db.collection::<Document>(collection_name);
+        
         let search_params = SearchParams::new()
             .exact(true)
             .num_candidates((limit * 10) as u32);
 
-        let index = MongoDbVectorIndex::new(collection, model, "vector_index", search_params)
+        let index = MongoDbVectorIndex::new(collection, embedding_model, "vector_index", search_params)
             .await
             .context("Failed to create vector index")?;
 
-        // Query the index
-        let data = index.top_n(query, limit)
+        let results = index.top_n(query, limit as usize)
             .await
             .context("Failed to perform vector search")?;
 
-        Ok(data)
+        // Convert the results to Documents
+        let documents = results.into_iter()
+            .map(|(_, _, doc)| bson::to_document(&doc))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(documents)
     }
 }

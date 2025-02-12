@@ -3,6 +3,8 @@ description:
 globs: 
 ---
 
-# Your rule content
+# RIG Guidelines
 
-- Run `cargo search rig-core` to view the list of crates within rig-core
+- Run `cargo search rig-core` to view the list of crates within rig-core.
+- The only crates you are using from rig is `rig-core` and `rig-mongodb`.
+- When referencing `rig-core` you should use `rig` and when referring to `rig-mongodb` you should use `rig_mongodb`

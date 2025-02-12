@@ -93,3 +93,51 @@ db.getCollection("sales").aggregate([
     },
   },
 ])
+
+// Replace with your actual database and collection names
+use cainam;
+
+db.token_analytics.aggregate([
+  {
+    $searchIndex: {
+      name: "vector_index", // The name of your index
+      definition: {
+        mappings: {
+          dynamic: false, // Good practice for vector search
+          fields: {
+            embedding: {
+              type: "vector",
+              dimensions: 1536,
+              similarity: "cosine",
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    $limit: 1, // Add a limit stage to avoid processing all documents
+  },
+]);
+
+// To actually CREATE the index, you need to run this command:
+db.runCommand({
+  createSearchIndexes: "token_analytics",
+  indexes: [
+    {
+      name: "vector_index",
+      definition: {
+        mappings: {
+          dynamic: false,
+          fields: {
+            embedding: {
+              type: "vector",
+              dimensions: 1536,
+              similarity: "cosine",
+            },
+          },
+        },
+      },
+    },
+  ],
+});

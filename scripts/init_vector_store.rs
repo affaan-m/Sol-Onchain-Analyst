@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use cainam_core::config::mongodb::MongoConfig;
 use mongodb::bson::Document;
-use mongodb::{bson::doc, Client, Database, IndexModel};
+use mongodb::{bson::doc, Client, IndexModel};
 use tracing::info;
 use tracing_subscriber::fmt;
 
@@ -32,39 +32,6 @@ async fn main() -> Result<()> {
         Ok(_) => info!("Created token_analytics collection"),
         Err(e) if e.to_string().contains("already exists") => {
             info!("Collection token_analytics already exists")
-        }
-        Err(e) => return Err(e.into()),
-    }
-
-    // Create vector search index for token_analytics
-    info!("Creating vector search index for token_analytics...");
-    let command = doc! {
-        "createSearchIndexes": "token_analytics",
-        "indexes": [{
-            "name": "vector_index",
-            "definition": {
-                "mappings": {
-                    "dynamic": false,
-                    "fields": {
-                        "embedding": {
-                            "dimensions": 1536,
-                            "similarity": "cosine",
-                            "type": "knnVector"
-                        },
-                        "token_address": { "type": "string" },
-                        "token_name": { "type": "string" },
-                        "token_symbol": { "type": "string" },
-                        "timestamp": { "type": "date" }
-                    }
-                }
-            }
-        }]
-    };
-
-    match db.run_command(command).await {
-        Ok(_) => info!("Created vector search index for token_analytics"),
-        Err(e) if e.to_string().contains("IndexAlreadyExists") => {
-            info!("Vector search index already exists for token_analytics")
         }
         Err(e) => return Err(e.into()),
     }
