@@ -1,8 +1,8 @@
 use anyhow::{Result, Context, anyhow};
 use mongodb::{
     bson::{doc, Document},
-    options::{ClientOptions, IndexOptions},
-    Client, Database, IndexModel,
+    options::ClientOptions,
+    Client, Database,
 };
 use rig::{
     embeddings::{EmbeddingsBuilder, Embed},
@@ -251,15 +251,19 @@ impl TokenAnalyticsDataExt for MongoDbPool {
             .exact(true)
             .num_candidates((limit * 10) as u32);
 
-        let index = MongoDbVectorIndex::new(collection, embedding_model, "vector_index", search_params)
-            .await
-            .context("Failed to create vector index")?;
+        let index = MongoDbVectorIndex::new(
+            collection,
+            embedding_model,
+            "vector_index",
+            search_params
+        )
+        .await
+        .context("Failed to create vector index")?;
 
         let results = index.top_n(query, limit as usize)
             .await
             .context("Failed to perform vector search")?;
 
-        // Convert the results to Documents
         let documents = results.into_iter()
             .map(|(_, _, doc)| bson::to_document(&doc))
             .collect::<Result<Vec<_>, _>>()?;
