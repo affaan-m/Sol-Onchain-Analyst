@@ -245,26 +245,22 @@ impl TokenAnalyticsDataExt for MongoDbPool {
         query: &str,
         limit: i64,
     ) -> Result<Vec<Document>> {
-        let collection = self.db.collection::<Document>(collection_name);
+        let collection = self.db.collection::<TokenAnalyticsData>(collection_name);
         
-        let search_params = SearchParams::new()
-            .exact(true)
-            .num_candidates((limit * 10) as u32);
-
-        let index = MongoDbVectorIndex::new(
+        let index = MongoDbVectorIndex::<_, TokenAnalyticsData>::new(
             collection,
             embedding_model,
             "vector_index",
-            search_params
-        )
-        .await
-        .context("Failed to create vector index")?;
+            SearchParams::new()
+        ).await?;
 
-        let results = index.top_n(query, limit as usize)
+        let results = index
+            .top_n(query, limit as usize)
             .await
             .context("Failed to perform vector search")?;
 
-        let documents = results.into_iter()
+        let documents = results
+            .into_iter()
             .map(|(_, _, doc)| bson::to_document(&doc))
             .collect::<Result<Vec<_>, _>>()?;
 

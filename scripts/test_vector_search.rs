@@ -1,6 +1,7 @@
 use anyhow::Result;
 use cainam_core::config::mongodb::MongoConfig;
 use cainam_core::config::mongodb::{MongoDbPool, TokenAnalyticsData, TokenAnalyticsDataExt};
+use mongodb::bson::doc;
 use rig::providers::openai::{Client as OpenAiClient, EmbeddingModel, TEXT_EMBEDDING_3_SMALL};
 use std::env;
 use tracing::info;
@@ -44,14 +45,20 @@ async fn main() -> Result<()> {
     info!("Starting vector search test...");
 
     // Initialize MongoDB connection using the configuration from the environment.
-    // Note that create_pool now returns an Arc<MongoDbPool>, so we dereference it
     let config = MongoConfig::from_env();
     let pool = MongoDbPool::create_pool(config).await?;
-    
+
+    // Clear the collection before inserting test data
+    pool.client()
+        .database("cainam")
+        .collection::<TokenAnalyticsData>("token_analytics")
+        .delete_many(doc! {})
+        .await?;
+
     // Initialize the OpenAI client and create an embedding model using TEXT_EMBEDDING_3_SMALL.
     let openai_api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
     let openai_client = OpenAiClient::new(&openai_api_key);
-    let embedding_model = EmbeddingModel::new(openai_client, TEXT_EMBEDDING_3_SMALL, 1536);
+    let embedding_model = openai_client.embedding_model(TEXT_EMBEDDING_3_SMALL);
 
     // Define sample test token data.
     // Here we leave the embedding vector empty so that insert_token_analytics_documents can generate it.
