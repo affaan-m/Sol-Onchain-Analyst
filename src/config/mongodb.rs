@@ -208,7 +208,7 @@ impl TokenAnalyticsDataExt for MongoDbPool {
     {
         let collection = self.db.collection::<Document>(collection_name);
 
-        let index_options = IndexOptions::builder()
+        /* let index_options = IndexOptions::builder()
             .name("vector_index".to_string())
             .build();
         let index_model = IndexModel::builder()
@@ -220,7 +220,7 @@ impl TokenAnalyticsDataExt for MongoDbPool {
             if !e.to_string().contains("Index already exists") {
                 return Err(e.into());
             }
-        }
+        } */
 
         let embeddings = EmbeddingsBuilder::new(embedding_model.clone())
             .documents(documents)?
