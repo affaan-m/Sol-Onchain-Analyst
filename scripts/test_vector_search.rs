@@ -2,7 +2,7 @@ use anyhow::Result;
 use cainam_core::config::mongodb::MongoConfig;
 use cainam_core::config::mongodb::{MongoDbPool, TokenAnalyticsData, TokenAnalyticsDataExt};
 use mongodb::bson::doc;
-use rig::providers::openai::{Client as OpenAiClient, EmbeddingModel, TEXT_EMBEDDING_3_SMALL};
+use rig::providers::openai::{Client as OpenAiClient, TEXT_EMBEDDING_3_SMALL};
 use std::env;
 use tracing::info;
 use tracing_subscriber::fmt;
