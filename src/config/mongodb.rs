@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize, Deserializer};
 use serde_json::Value;
 use std::{env, sync::Arc, time::Duration};
 use async_trait::async_trait;
-use futures::TryStreamExt;
 
 #[derive(Debug, Clone)]
 pub struct MongoPoolConfig {
@@ -252,6 +251,9 @@ impl TokenAnalyticsDataExt for MongoDbPool {
             embedding_model,
             "vector_index",
             SearchParams::new()
+                .filter(doc! { "fields": ["embedding"] })
+                .exact(true)
+                .num_candidates(100),
         ).await?;
 
         let results = index
