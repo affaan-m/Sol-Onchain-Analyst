@@ -178,6 +178,7 @@ pub async fn search_similar(query: &str, limit: usize) -> Result<Vec<Document>> 
 ## Documentation Requirements
 
 1. Function Documentation
+
 ```rust
 /// Performs a vector similarity search in the token analytics collection
 /// 
@@ -191,6 +192,7 @@ pub async fn search_tokens(query: &str, limit: usize) -> Result<Vec<TokenAnalyti
 ```
 
 2. Error Documentation
+
 ```rust
 /// Possible errors during vector store operations
 #[derive(Error, Debug)]

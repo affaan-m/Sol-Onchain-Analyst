@@ -1,4 +1,5 @@
 # Operational Context
+
 Last Updated: 2025-01-30
 
 ## System Operation
@@ -6,6 +7,7 @@ Last Updated: 2025-01-30
 ### Core Services
 
 1. **Market Data Service**
+
    ```rust
    pub struct MarketDataService {
        birdeye_client: BirdeyeClient,
@@ -13,12 +15,14 @@ Last Updated: 2025-01-30
        cache: Cache,
    }
    ```
+
    - Real-time price and volume monitoring
    - Historical data aggregation
    - Market trend analysis
    - Data validation and cleaning
 
 2. **Trading Service**
+
    ```rust
    pub struct TradingService {
        engine: TradingEngine,
@@ -26,12 +30,14 @@ Last Updated: 2025-01-30
        solana_client: SolanaClient,
    }
    ```
+
    - Trade execution
    - Position management
    - Risk validation
    - Transaction signing
 
 3. **Agent Coordination Service**
+
    ```rust
    pub struct AgentCoordinator {
        agents: Vec<Box<dyn Agent>>,
@@ -39,6 +45,7 @@ Last Updated: 2025-01-30
        state_manager: StateManager,
    }
    ```
+
    - Agent lifecycle management
    - Inter-agent communication
    - State synchronization
@@ -47,6 +54,7 @@ Last Updated: 2025-01-30
 ### Error Handling Patterns
 
 1. **Database Errors**
+
    ```rust
    #[derive(Error, Debug)]
    pub enum DatabaseError {
@@ -58,11 +66,13 @@ Last Updated: 2025-01-30
        ValidationError(String),
    }
    ```
+
    - Connection retry logic
    - Query timeout handling
    - Data integrity checks
 
 2. **API Errors**
+
    ```rust
    #[derive(Error, Debug)]
    pub enum ApiError {
@@ -74,11 +84,13 @@ Last Updated: 2025-01-30
        RequestError(String),
    }
    ```
+
    - Rate limiting
    - Authentication handling
    - Request retries
 
 3. **Trading Errors**
+
    ```rust
    #[derive(Error, Debug)]
    pub enum TradingError {
@@ -90,6 +102,7 @@ Last Updated: 2025-01-30
        ExecutionError(String),
    }
    ```
+
    - Position validation
    - Balance checks
    - Transaction verification
@@ -118,6 +131,7 @@ Last Updated: 2025-01-30
 ### Performance Requirements
 
 1. **Latency Targets**
+
    ```rust
    pub struct PerformanceMetrics {
        trade_execution_ms: u64,    // Target: < 500ms
@@ -142,6 +156,7 @@ Last Updated: 2025-01-30
 ## Monitoring and Alerting
 
 ### System Health Monitoring
+
 ```rust
 pub struct HealthCheck {
     pub service: String,
@@ -192,6 +207,7 @@ pub struct HealthCheck {
 ## Recovery Procedures
 
 ### 1. Database Recovery
+
 ```sql
 -- Point-in-time recovery
 SELECT * FROM market_signals
@@ -205,6 +221,7 @@ WHERE status = 'FAILED'
 ```
 
 ### 2. Service Recovery
+
 ```rust
 impl RecoveryManager {
     async fn recover_service(&self) -> Result<()> {
@@ -218,6 +235,7 @@ impl RecoveryManager {
 ```
 
 ### 3. Data Integrity
+
 ```rust
 impl DataValidator {
     async fn validate_market_data(&self) -> Result<()> {
@@ -232,18 +250,21 @@ impl DataValidator {
 ## Maintenance Procedures
 
 ### 1. Database Maintenance
+
 - Daily backup verification
 - Weekly index optimization
 - Monthly data archival
 - Quarterly performance review
 
 ### 2. System Updates
+
 - Security patches
 - Dependency updates
 - Performance optimizations
 - Feature deployments
 
 ### 3. Monitoring Updates
+
 - Alert threshold adjustments
 - Metric collection tuning
 - Dashboard updates

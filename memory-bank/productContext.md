@@ -1,10 +1,10 @@
 # Product Context
 
-Last Updated: 2025-02-11
+Last Updated: 2025-02-12
 
 ## Core Problem
 
-Building a decentralized network of autonomous AI trading agents for the $CAINAM token platform on Solana requires efficient market data analysis, semantic search capabilities, and coordinated agent decision-making while ensuring reliability, security, and performance.
+Building a decentralized network of autonomous AI trading agents for the $CAINAM token platform on Solana requires efficient market data analysis, semantic search capabilities, and coordinated agent decision-making while ensuring reliability, security, and performance.  We need a way to quickly find tokens based on semantic meaning, not just keywords.
 
 ## Key Components/Solutions
 
@@ -14,7 +14,7 @@ Building a decentralized network of autonomous AI trading agents for the $CAINAM
 **Solution:**
 
 - MongoDB Atlas vector store implementation
-- Embedding-based similarity search
+- Embedding-based similarity search using `rig-mongodb`
 - Token analytics data storage and retrieval
 - Efficient connection pooling and error handling
 
@@ -42,23 +42,23 @@ Building a decentralized network of autonomous AI trading agents for the $CAINAM
 
 ### 1. Token Analytics Processing
 
-1. Token data collection and validation
-2. Embedding generation for token characteristics
+1. Token data collection and validation (from Birdeye, etc.)
+2. Embedding generation for token characteristics (using OpenAI)
 3. Storage in MongoDB with vector indexing
-4. Efficient similarity search capabilities
+4. Efficient similarity search capabilities (using `rig-mongodb`)
 
 ### 2. Market Analysis
 
 1. Real-time market data processing
-2. Vector-based pattern recognition
+2. Vector-based pattern recognition (future)
 3. Similarity search for historical patterns
-4. Decision making based on analysis
+4. Decision making based on analysis (future)
 
 ### 3. Agent Operations
 
 1. Continuous market monitoring
 2. Vector-based similarity analysis
-3. Pattern recognition and decision making
+3. Pattern recognition and decision making (future)
 4. Performance tracking and optimization
 
 ## Product Direction
@@ -66,7 +66,7 @@ Building a decentralized network of autonomous AI trading agents for the $CAINAM
 ### Phase 1: Vector Store Implementation (Current)
 
 - MongoDB Atlas integration
-- Vector search capabilities
+- Vector search capabilities using `rig-mongodb`
 - Token analytics storage
 - Connection pooling and error handling
 
@@ -87,8 +87,8 @@ Building a decentralized network of autonomous AI trading agents for the $CAINAM
 ## Development Priorities
 
 1. **Immediate Focus**
-   - Complete MongoDB vector store implementation
-   - Fix SearchParams configuration
+   - Complete MongoDB vector store implementation using `rig-mongodb`
+   - Ensure correct generic type usage with `rig-mongodb`
    - Implement comprehensive error handling
    - Add proper logging and monitoring
 
