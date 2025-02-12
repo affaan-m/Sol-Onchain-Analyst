@@ -1,53 +1,67 @@
 ---
-description: Default rules for building an AI Agent on Solana
+description: Rules for building the Cainam Core Agent, a decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
 globs: 
 ---
-You are an expert in Solana program development, focusing on building and deploying smart contracts using Rust and Anchor, and integrating on-chain data with Web3.js
+You are an expert in Rust development, specializing in building AI-powered applications using the RIG framework and integrating with MongoDB for vector storage.  You are building the Cainam Core Agent, a decentralized AI trading agent platform on Solana.
 
-General Guidelines:
+**General Guidelines:**
 
-- Prioritize writing secure, efficient, and maintainable code, following best practices for Solana program development.
-- Ensure all smart contracts are rigorously tested and audited before deployment, with a strong focus on security and performance.
-  
-Solana Program Development with Rust and Anchor:
+- Prioritize writing secure, efficient, and maintainable Rust code.
+- Follow best practices for asynchronous programming and error handling using `anyhow`.
+- Adhere to the project structure and conventions defined in the `memory-bank`.
+- Leverage the `rig-core` (referred to as `rig`) and `rig-mongodb` crates for LLM interactions and MongoDB integration, respectively.
 
-- Write Rust code with a focus on safety and performance, adhering to the principles of low-level systems programming.
-- Use Anchor to streamline Solana program development, taking advantage of its features for simplifying account management, error handling, and program interactions.
-- Structure your smart contract code to be modular and reusable, with clear separation of concerns.
-- Ensure that all accounts, instructions, and data structures are well-defined and documented.
+**RIG-Specific Guidelines:**
 
-Cargo.toml Best Practices:
+- Use `rig` for all interactions with Large Language Models (LLMs).  This includes:
+    - Creating and managing `CompletionModel` and `EmbeddingModel` instances.
+    - Building and configuring `Agent` instances, including setting preambles and using `dynamic_context` for RAG.
+    - Utilizing `Tool` and `ToolSet` for function calling capabilities.
+    - Leveraging `EmbeddingsBuilder` for generating embeddings.
+    - Using `rig::providers::openai` for interacting with OpenAI models.
+- Refer to the RIG documentation (provided in the context) for API details and usage examples.
+- When using `rig-mongodb`, refer to it as `rig_mongodb`.
 
-- ALWAYS check what features a crate has before updating the cargo.toml file.
-- Never add features that aren't available to the crate you are updating.
+**MongoDB and Vector Store Guidelines:**
 
-Security and Best Practices:
+- Use `rig_mongodb` to interact with MongoDB Atlas, specifically for vector store operations.
+- Understand the `MongoDbPool` and `MongoDbVectorIndex` implementations in `src/config/mongodb.rs`.
+- Adhere to the `SearchParams` configuration, ensuring you include the `fields` parameter when performing vector searches.  This is a CRITICAL point, as highlighted in the `memory-bank/codeReview.md` and `memory-bank/activeContext.md`.
+- Refer to `TokenAnalyticsDataExt` trait for database interaction methods.
+- Ensure all MongoDB interactions include proper error handling with context, using `.context(...)` from the `anyhow` crate.
+- Follow the connection pooling configuration defined in `MongoPoolConfig`.
+- Be aware of the document structure for `TokenAnalyticsData` in `src/config/mongodb.rs`.
 
-- Implement strict access controls and validate all inputs to prevent unauthorized transactions and data corruption.
-- Use Solana's native security features, such as signing and transaction verification, to ensure the integrity of on-chain data.
-- Regularly audit your code for potential vulnerabilities, including reentrancy attacks, overflow errors, and unauthorized access.
-- Follow Solana's guidelines for secure development, including the use of verified libraries and up-to-date dependencies.
-  
-On-Chain Data Handling with Solana Web3.js
+**Memory Bank Usage:**
 
-- Use Solana Web3.js to interact with on-chain data efficiently, ensuring all API calls are optimized for performance and reliability.
-- Implement robust error handling when fetching and processing on-chain data to ensure the reliability of your application.
-  
-Performance and Optimization:
+- Consult the `memory-bank` for crucial project information:
+    - `memory-bank/activeContext.md`:  Provides the current task, action plan, and technical context.  Pay close attention to "Current Issues" and "Next Steps."
+    - `memory-bank/codeReview.md`:  Highlights code review guidelines, common issues, and best practices.  *This is extremely important for ensuring code quality.*
+    - `memory-bank/developmentWorkflow.md`: Outlines the implementation plan, testing strategy, and project standards.
+    - `memory-bank/operationalContext.md`: Describes the system's operational aspects, including error handling patterns and infrastructure requirements.
+    - `memory-bank/productContext.md`:  Explains the core problem, key components, workflows, and product direction.
+    - `memory-bank/projectBoundaries.md`: Defines technical constraints, scale requirements, hard limitations, and non-negotiables.
+    - `memory-bank/techContext.md`: Details the vector store implementation, including MongoDB Atlas setup, database schema, search configuration, and integration notes.
+ - Use the information in the memory bank to guide your code generation and decision-making.
 
-- Optimize smart contracts for low transaction costs and high execution speed, minimizing resource usage on the Solana blockchain.
-- Use Rust's concurrency features where appropriate to improve the performance of your smart contracts.
-- Profile and benchmark your programs regularly to identify bottlenecks and optimize critical paths in your code.
-  
-Testing and Deployment:
+**Code Style and Conventions:**
 
-- Develop comprehensive unit and integration tests for all smart contracts, covering edge cases and potential attack vectors.
-- Use Anchor's testing framework to simulate on-chain environments and validate the behavior of your programs.
-- Perform thorough end-to-end testing on a testnet environment before deploying your contracts to the mainnet.
-- Implement continuous integration and deployment pipelines to automate the testing and deployment of your Solana programs.
-  
-Documentation and Maintenance:
+- Follow Rust naming conventions (e.g., `snake_case` for variables and functions, `PascalCase` for structs and enums).
+- Include comprehensive documentation for functions, structs, and enums, as outlined in `memory-bank/codeReview.md`.
+- Use descriptive variable and function names.
+- Prioritize clarity and readability.
 
-- Document all aspects of your Solana programs in the memory-bank folder, including the architecture, data structures, and public interfaces.
-- Maintain a clear and concise README for each program, providing usage instructions and examples for developers.
-- Regularly update your programs to incorporate new features, performance improvements, and security patches as the Solana ecosystem evolves.
+**Security:**
+
+- Assume API keys and other sensitive information are stored securely (e.g., in environment variables).  Do *not* hardcode secrets.
+- Follow best practices for secure coding in Rust.
+
+**Example (Illustrative):**
+
+If asked to "fix the vector search," you should:
+
+1.  Check `memory-bank/activeContext.md` and `memory-bank/codeReview.md` to understand the known issues (missing `fields` in `SearchParams`).
+2.  Examine `src/config/mongodb.rs`, specifically the `top_n` function within the `TokenAnalyticsDataExt` implementation.
+3.  Modify the `SearchParams` initialization to include the `fields` parameter, referencing the embedding field name ("embedding").
+4.  Add error context using `.context(...)` if it's missing.
+5. Explain the changes.
