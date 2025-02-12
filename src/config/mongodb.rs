@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, Context};
 use mongodb::{bson::doc, options::ClientOptions, Client, Collection};
 use rig::{
     embeddings::EmbeddingsBuilder, providers::openai::EmbeddingModel,
@@ -137,16 +137,16 @@ impl MongoDbPool {
 #[derive(Embed, Clone, Deserialize, Debug)]
 pub struct TokenAnalyticsData {
     #[serde(rename = "_id", deserialize_with = "deserialize_object_id")]
-    id: String,
+    pub id: String,
 
     #[embed]
-    token_address: String,
+    pub token_address: String,
 
     #[embed]
-    token_name: String,
+    pub token_name: String,
 
     #[embed]
-    token_symbol: String,
+    pub token_symbol: String,
 }
 
 fn deserialize_object_id<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -187,7 +187,7 @@ impl MongoDbPool {
         documents: Vec<TokenAnalyticsData>,
     ) -> Result<()> {
         let collection: Collection<bson::Document> =
-            self.client.database("cainam").collection(collection);
+            self.client.database(&self.config.database).collection(collection);
 
         let embeddings = EmbeddingsBuilder::new(model.clone())
             .documents(documents)?
@@ -199,14 +199,17 @@ impl MongoDbPool {
             .map(
                 |(
                     TokenAnalyticsData {
-                        id, token_address, ..
+                        id, token_address, token_name, token_symbol
                     },
                     embedding,
                 )| {
                     doc! {
                         "id": id.clone(),
                         "token_address": token_address.clone(),
+                        "token_name": token_name.clone(),
+                        "token_symbol": token_symbol.clone(),
                         "embedding": embedding.first().vec.clone(),
+                        "timestamp": bson::DateTime::now(),
                     }
                 },
             )
@@ -219,20 +222,26 @@ impl MongoDbPool {
 
     pub async fn top_n(
         &self,
-        collection: &str,
+        collection_name: &str,
         model: EmbeddingModel,
         query: &str,
         limit: usize,
     ) -> Result<Vec<(f64, String, Value)>> {
         let collection: Collection<bson::Document> =
-            self.client.database("cainam").collection(collection);
+            self.client.database(&self.config.database).collection(collection_name);
 
-        let index = MongoDbVectorIndex::new(collection, model, "vector_index", SearchParams::new())
+        let search_params = SearchParams::new()
+            .exact(true)
+            .num_candidates((limit * 10) as u32);
+
+        let index = MongoDbVectorIndex::new(collection, model, "vector_index", search_params)
             .await
-            .expect("msg");
+            .context("Failed to create vector index")?;
 
         // Query the index
-        let data = index.top_n(query, limit).await?;
+        let data = index.top_n(query, limit)
+            .await
+            .context("Failed to perform vector search")?;
 
         Ok(data)
     }

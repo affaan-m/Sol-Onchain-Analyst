@@ -3,9 +3,19 @@ use cainam_core::config::mongodb::MongoConfig;
 use mongodb::bson::Document;
 use mongodb::{bson::doc, Client, Database, IndexModel};
 use tracing::info;
+use tracing_subscriber::fmt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize tracing
+    fmt()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
+
     // Load environment variables
     dotenvy::dotenv().ok();
     info!("Initializing vector store...");
@@ -34,13 +44,17 @@ async fn main() -> Result<()> {
             "name": "vector_index",
             "definition": {
                 "mappings": {
-                    "dynamic": true,
+                    "dynamic": false,
                     "fields": {
                         "embedding": {
                             "dimensions": 1536,
                             "similarity": "cosine",
                             "type": "knnVector"
-                        }
+                        },
+                        "token_address": { "type": "string" },
+                        "token_name": { "type": "string" },
+                        "token_symbol": { "type": "string" },
+                        "timestamp": { "type": "date" }
                     }
                 }
             }
