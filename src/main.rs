@@ -12,7 +12,6 @@ use solana_sdk::signature::Keypair;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio;
 use tracing::{error, info};
 
 mod agent;
@@ -52,7 +51,7 @@ async fn handle_user_input(
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
                 let parts: Vec<String> =
-                    input.trim().split_whitespace().map(String::from).collect();
+                    input.split_whitespace().map(String::from).collect();
 
                 if parts.is_empty() {
                     continue;

@@ -132,7 +132,7 @@ impl MarketSignalBuilder {
             price_change_24h: self.price_change_24h,
             price: self.price,
             volume_change: self.volume_change.unwrap_or_else(|| BigDecimal::from(0)),
-            timestamp: DateTime::from(self.timestamp.unwrap_or_else(DateTime::now)),
+            timestamp: self.timestamp.unwrap_or_else(DateTime::now),
             metadata: self.metadata.map(|v| bson::to_document(&v).unwrap()),
             created_at: None,
         }

@@ -183,7 +183,7 @@ impl TokenAnalyticsService {
                 .map_err(|e| AgentError::VectorStore(e.to_string()))?;
 
         Ok(Self {
-            pool: pool,
+            pool,
             collection,
             signals_collection,
             vector_index,
@@ -395,7 +395,7 @@ impl TokenAnalyticsService {
         self.signals_collection
             .insert_one(signal)
             .await
-            .map_err(|e| AgentError::Database(e))?;
+            .map_err(AgentError::Database)?;
 
         Ok(())
     }
@@ -416,7 +416,7 @@ impl TokenAnalyticsService {
         self.collection
             .find_one(filter)
             .await
-            .map_err(|e| AgentError::Database(e))
+            .map_err(AgentError::Database)
     }
 
     async fn store_token_analytics(
@@ -427,7 +427,7 @@ impl TokenAnalyticsService {
             .collection
             .insert_one(analytics)
             .await
-            .map_err(|e| AgentError::Database(e))?;
+            .map_err(AgentError::Database)?;
 
         let mut stored = analytics.clone();
         stored.id = result.inserted_id.as_object_id();
