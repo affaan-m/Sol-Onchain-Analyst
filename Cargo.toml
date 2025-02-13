@@ -24,6 +24,14 @@ path = "scripts/init_vector_store.rs"
 name = "test_vector_search"
 path = "scripts/test_vector_search.rs"
 
+[[bin]]
+name = "run_agent"
+path = "scripts/run_agent.rs"
+
+[[bin]]
+name = "capture_market_data"
+path = "scripts/capture_market_data.rs"
+
 [workspace]
 resolver = "2"
 members = [

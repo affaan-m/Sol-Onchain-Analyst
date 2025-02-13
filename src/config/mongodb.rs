@@ -1,19 +1,14 @@
 use anyhow::{Result, Context, anyhow};
 use mongodb::{
-    bson::{doc, Document},
+    bson::{doc, Document, self},
     options::ClientOptions,
     Client, Database,
 };
-use rig::{
-    embeddings::{EmbeddingsBuilder, Embed},
-    providers::openai::EmbeddingModel,
-    vector_store::VectorStoreIndexDyn,
-};
-use rig_mongodb::{MongoDbVectorIndex, SearchParams};
 use serde::{Deserialize, Serialize, Deserializer};
 use serde_json::Value;
 use std::{env, sync::Arc, time::Duration};
 use async_trait::async_trait;
+use futures::TryStreamExt;
 
 #[derive(Debug, Clone)]
 pub struct MongoPoolConfig {
@@ -99,7 +94,12 @@ pub struct TokenAnalyticsData {
     pub token_address: String,
     pub token_name: String,
     pub token_symbol: String,
-    pub embedding: Vec<f32>,
+    pub price: f64,
+    pub volume_24h: Option<f64>,
+    pub market_cap: Option<f64>,
+    pub total_supply: Option<f64>,
+    pub timestamp: bson::DateTime,
+    pub created_at: Option<bson::DateTime>,
 }
 
 fn deserialize_object_id<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -179,17 +179,15 @@ pub trait TokenAnalyticsDataExt {
     async fn insert_token_analytics_documents<T>(
         &self,
         collection_name: &str,
-        embedding_model: EmbeddingModel,
         documents: Vec<T>,
     ) -> Result<()>
     where
-        T: Serialize + Send + Sync + Embed;
+        T: Serialize + Send + Sync;
 
-    async fn top_n(
+    async fn find_tokens(
         &self,
         collection_name: &str,
-        embedding_model: EmbeddingModel,
-        query: &str,
+        filter: Option<Document>,
         limit: i64,
     ) -> Result<Vec<Document>>;
 }
@@ -199,73 +197,34 @@ impl TokenAnalyticsDataExt for MongoDbPool {
     async fn insert_token_analytics_documents<T>(
         &self,
         collection_name: &str,
-        embedding_model: EmbeddingModel,
         documents: Vec<T>,
     ) -> Result<()>
     where
-        T: Serialize + Send + Sync + Embed,
+        T: Serialize + Send + Sync,
     {
         let collection = self.db.collection::<Document>(collection_name);
 
-        /* let index_options = IndexOptions::builder()
-            .name("vector_index".to_string())
-            .build();
-        let index_model = IndexModel::builder()
-            .keys(doc! { "embedding": "vector" })
-            .options(index_options)
-            .build();
-
-        if let Err(e) = collection.create_index(index_model).await {
-            if !e.to_string().contains("Index already exists") {
-                return Err(e.into());
-            }
-        } */
-
-        let embeddings = EmbeddingsBuilder::new(embedding_model.clone())
-            .documents(documents)?
-            .build()
-            .await?;
-
-        for (doc, embedding) in embeddings {
+        for doc in documents {
             let token_data_doc = bson::to_document(&doc)
                 .map_err(|e| anyhow!("Serialization error: {}", e))?;
-            let mut doc_with_embedding = token_data_doc;
-            doc_with_embedding.insert("embedding", bson::to_bson(&embedding)?);
-            collection.insert_one(doc_with_embedding).await?;
+            collection.insert_one(token_data_doc).await?;
         }
 
         Ok(())
     }
 
-    async fn top_n(
+    async fn find_tokens(
         &self,
         collection_name: &str,
-        embedding_model: EmbeddingModel,
-        query: &str,
+        filter: Option<Document>,
         limit: i64,
     ) -> Result<Vec<Document>> {
-        let collection = self.db.collection::<TokenAnalyticsData>(collection_name);
+        let collection = self.db.collection::<Document>(collection_name);
         
-        let index = MongoDbVectorIndex::<_, TokenAnalyticsData>::new(
-            collection,
-            embedding_model,
-            "vector_index",
-            SearchParams::new()
-                .filter(doc! { "fields": ["embedding"] })
-                .exact(true)
-                .num_candidates(100),
-        ).await?;
-
-        let results = index
-            .top_n(query, limit as usize)
-            .await
-            .context("Failed to perform vector search")?;
-
-        let documents = results
-            .into_iter()
-            .map(|(_, _, doc)| bson::to_document(&doc))
-            .collect::<Result<Vec<_>, _>>()?;
-
+        let filter = filter.unwrap_or_else(|| doc! {});
+        let cursor = collection.find(filter).await?;
+        
+        let documents: Vec<Document> = cursor.try_collect().await?;
         Ok(documents)
     }
 }
