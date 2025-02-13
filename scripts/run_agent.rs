@@ -7,7 +7,6 @@ use cainam_core::{
 };
 use dotenvy::dotenv;
 use tracing::{info, Level};
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
