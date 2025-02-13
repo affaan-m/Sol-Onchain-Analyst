@@ -10,7 +10,7 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>> {
     // Load environment variables first
     dotenvy::dotenv().ok();
-    
+
     // Initialize MongoDB client using configuration
     let config = MongoConfig::from_env();
     let mut client_options = ClientOptions::parse(&config.uri).await?;
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .options(compound_index_options)
         .build();
-    
+
     match token_analytics.create_index(compound_index).await {
         Ok(_) => println!("Created compound index for token_analytics"),
         Err(e) if e.to_string().contains("already exists") => {
@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .options(market_index_options)
         .build();
-    
+
     match market_signals.create_index(market_index).await {
         Ok(_) => println!("Created index for market_signals"),
         Err(e) if e.to_string().contains("already exists") => {

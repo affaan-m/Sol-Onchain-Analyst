@@ -11,6 +11,8 @@ use bson::{doc, DateTime};
 use futures::StreamExt;
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::Collection;
+use rig::providers::openai::{self, EmbeddingModel};
+use rig_mongodb::{MongoDbVectorIndex, SearchParams};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -89,6 +91,7 @@ pub struct TokenAnalyticsService {
     pool: Arc<MongoDbPool>,
     collection: Collection<TokenAnalytics>,
     signals_collection: Collection<MarketSignal>,
+    vector_index: MongoDbVectorIndex<EmbeddingModel, TokenAnalytics>,
     birdeye: Arc<dyn BirdeyeApi>,
     market_config: MarketConfig,
 }
@@ -101,12 +104,89 @@ impl TokenAnalyticsService {
     ) -> AgentResult<Self> {
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
+        println!(">> token_analytics collections {:?}", collection);
+
         let signals_collection = db.collection("market_signals");
+        println!(">> market_signals collections {:?}", signals_collection);
+
+        let openai_client = openai::Client::from_env();
+        let model = openai_client.embedding_model(openai::TEXT_EMBEDDING_ADA_002);
+
+        // Check if vector search index exists
+        let list_indexes_command = doc! {
+            "listSearchIndexes": "token_analytics"
+        };
+
+        let index_exists = match db.run_command(list_indexes_command).await {
+            Ok(result) => {
+                let indexes = result
+                    .get_document("cursor")
+                    .and_then(|cursor| cursor.get_array("firstBatch"))
+                    .map(|batch| !batch.is_empty())
+                    .unwrap_or(false);
+                if indexes {
+                    info!("Vector search index already exists for token_analytics");
+                }
+                indexes
+            }
+            Err(_) => false,
+        };
+
+        // Create vector search index if it doesn't exist
+        if !index_exists {
+            info!("Creating vector search index for token_analytics");
+            let command = doc! {
+                "createSearchIndexes": "token_analytics",
+                "indexes": [{
+                    "name": "vector_index",
+                    "definition": {
+                        "mappings": {
+                            "dynamic": true,
+                            "fields": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "token_address": {
+                                    "type": "string"
+                                },
+                                "token_name": {
+                                    "type": "string"
+                                },
+                                "token_symbol": {
+                                    "type": "string"
+                                },
+                                "embedding": {
+                                    "type": "knnVector",
+                                    "dimensions": 1536,
+                                    "similarity": "cosine"
+                                }
+                            }
+                        }
+                    }
+                }]
+            };
+
+            match db.run_command(command).await {
+                Ok(_) => info!("Created vector index for token_analytics"),
+                Err(e) => {
+                    info!("Failed to create vector index: {}", e);
+                    return Err(AgentError::Database(e));
+                }
+            }
+        }
+
+        let search_params = SearchParams::new().exact(true).num_candidates(100);
+
+        let vector_index =
+            MongoDbVectorIndex::new(collection.clone(), model, "vector_index", search_params)
+                .await
+                .map_err(|e| AgentError::VectorStore(e.to_string()))?;
 
         Ok(Self {
-            pool,
+            pool: pool,
             collection,
             signals_collection,
+            vector_index,
             birdeye,
             market_config: market_config.unwrap_or_default(),
         })
@@ -119,7 +199,7 @@ impl TokenAnalyticsService {
     ) -> AgentResult<TokenAnalytics> {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
-        // Fetch token info from Birdeye
+        // Fetch basic token info from Birdeye using address
         let token_info = match self.birdeye.get_token_info_by_address(address).await {
             Ok(info) => info,
             Err(e) => {
@@ -129,9 +209,24 @@ impl TokenAnalyticsService {
             }
         };
 
-        // Validate token data
+        // Fetch extended token info using the comprehensive client
+        let token_overview = match self.birdeye.get_token_info(address).await {
+            Ok(overview) => overview,
+            Err(e) => {
+                let err = AgentError::BirdeyeApi(format!("Failed to fetch token overview: {}", e));
+                logger.error(&err.to_string());
+                return Err(err);
+            }
+        };
+
+        // Validate token data and log metrics
         if token_info.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
+            logger.error(&err.to_string());
+            return Err(err);
+        }
+        if token_info.volume_24h < 0.0 {
+            let err = AgentError::validation("Token volume cannot be negative");
             logger.error(&err.to_string());
             return Err(err);
         }
@@ -147,34 +242,67 @@ impl TokenAnalyticsService {
         log_market_metrics(&metrics);
 
         // Convert to TokenAnalytics
-        let analytics = TokenAnalytics {
-            id: None,
-            token_address: address.to_string(),
-            token_name: "Unknown".to_string(), // Default since not available in TokenInfo
-            token_symbol: symbol.to_string(),
-            price: f64_to_decimal(token_info.price),
-            volume_24h: Some(f64_to_decimal(token_info.volume_24h)),
-            market_cap: None, // Not available in TokenInfo
-            total_supply: None, // Not available in TokenInfo
-            holder_count: None, // Not available in TokenInfo
-            timestamp: DateTime::now(),
-            created_at: None,
-            metadata: Some(doc! {
-                "price_change_24h": token_info.price_change_24h,
-                "liquidity": token_info.liquidity,
-                "trade_24h": token_info.trade_24h
-            }),
+        let analytics = match self
+            .convert_to_analytics(address, symbol, token_info, token_overview)
+            .await
+        {
+            Ok(analytics) => analytics,
+            Err(e) => {
+                logger.error(&e.to_string());
+                return Err(e);
+            }
         };
 
         // Store in database
         let stored = self.store_token_analytics(&analytics).await?;
 
         // Generate and process market signals
-        if let Some(signal) = self.generate_market_signals(&stored).await? {
-            self.store_market_signal(&signal).await?;
+        let signal = self.generate_market_signals(&stored).await?;
+
+        // Store the signal if present
+        if let Some(ref signal) = signal {
+            let zero = BigDecimal::from(0);
+            let one = BigDecimal::from(1);
+
+            if signal.confidence < zero || signal.confidence > one {
+                return Err(AgentError::validation(
+                    "Signal confidence must be between 0 and 1",
+                ));
+            }
+            if signal.risk_score < zero || signal.risk_score > one {
+                return Err(AgentError::validation("Risk score must be between 0 and 1"));
+            }
+
+            self.store_market_signal(signal).await?;
         }
 
         Ok(stored)
+    }
+
+    // TODO: zTgx hardcoded
+    async fn convert_to_analytics(
+        &self,
+        address: &str,
+        symbol: &str,
+        info: TokenInfo,
+        overview: TokenInfo,
+    ) -> AgentResult<TokenAnalytics> {
+        Ok(TokenAnalytics {
+            id: None,
+            token_address: address.to_string(),
+            token_name: "overview.name".to_string(),
+            token_symbol: symbol.to_string(),
+            price: f64_to_decimal(info.price),
+            volume_24h: Some(f64_to_decimal(info.volume_24h)),
+            market_cap: Some(f64_to_decimal(11.0)),
+            // market_cap: Some(f64_to_decimal(overview.market_cap)),
+            total_supply: Some(f64_to_decimal(11.1)),
+            // total_supply: Some(f64_to_decimal(overview.total_supply)),
+            holder_count: None,
+            timestamp: DateTime::now(),
+            created_at: None,
+            metadata: Some(doc! {}),
+        })
     }
 
     pub async fn generate_market_signals(
@@ -371,29 +499,6 @@ impl TokenAnalyticsService {
             };
             (current - prev_vol) / prev_value
         })
-    }
-
-    pub async fn update_market_data(&self) -> AgentResult<()> {
-        let logger = RequestLogger::new("token_analytics", "update_market_data");
-        
-        // Common token addresses from birdeye module
-        let tokens = [
-            ("SOL", "So11111111111111111111111111111111111111112"),
-            ("USDC", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-            ("BONK", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"),
-        ];
-
-        for (symbol, address) in tokens.iter() {
-            match self.fetch_and_store_token_info(symbol, address).await {
-                Ok(_) => info!("Updated market data for {}", symbol),
-                Err(e) => {
-                    logger.error(&format!("Failed to update {} data: {}", symbol, e));
-                    // Continue with next token even if one fails
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 

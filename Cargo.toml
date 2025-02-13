@@ -21,10 +21,6 @@ name = "init_vector_store"
 path = "scripts/init_vector_store.rs"
 
 [[bin]]
-name = "test_vector_search"
-path = "scripts/test_vector_search.rs"
-
-[[bin]]
 name = "run_agent"
 path = "scripts/run_agent.rs"
 

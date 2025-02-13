@@ -1,16 +1,16 @@
 use anyhow::Result;
 use cainam_core::{
-    config::{MarketConfig, mongodb::MongoConfig},
-    config::mongodb::MongoDbPool,
-    services::token_analytics::TokenAnalyticsService,
     birdeye::BirdeyeClient,
+    config::mongodb::MongoDbPool,
+    config::{mongodb::MongoConfig, MarketConfig},
+    services::token_analytics::TokenAnalyticsService,
 };
 use dotenvy::dotenv;
-use tracing::{info, Level};
-use tracing_subscriber;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
-use std::sync::Arc;
+use tracing::{info, Level};
+use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,9 +18,7 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("Starting Market Data Capture...");
 
@@ -32,16 +30,12 @@ async fn main() -> Result<()> {
     let db = MongoDbPool::create_pool(mongo_config).await?;
 
     // Initialize Birdeye API client
-    let birdeye_api_key = std::env::var("BIRDEYE_API_KEY")
-        .expect("BIRDEYE_API_KEY must be set");
+    let birdeye_api_key = std::env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
     let birdeye_api = Arc::new(BirdeyeClient::new(birdeye_api_key));
 
     // Create token analytics service
-    let token_analytics = TokenAnalyticsService::new(
-        db.clone(),
-        birdeye_api,
-        Some(market_config),
-    ).await?;
+    let token_analytics =
+        TokenAnalyticsService::new(db.clone(), birdeye_api, Some(market_config)).await?;
 
     info!("Services initialized. Beginning data capture...");
 
@@ -57,4 +51,4 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-} 
+}

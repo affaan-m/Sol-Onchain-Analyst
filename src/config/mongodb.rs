@@ -1,14 +1,14 @@
-use anyhow::{Result, Context, anyhow};
+use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
+use futures::TryStreamExt;
 use mongodb::{
-    bson::{doc, Document, self},
+    bson::{self, doc, Document},
     options::ClientOptions,
     Client, Database,
 };
-use serde::{Deserialize, Serialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::{env, sync::Arc, time::Duration};
-use async_trait::async_trait;
-use futures::TryStreamExt;
 
 #[derive(Debug, Clone)]
 pub struct MongoPoolConfig {
@@ -205,8 +205,8 @@ impl TokenAnalyticsDataExt for MongoDbPool {
         let collection = self.db.collection::<Document>(collection_name);
 
         for doc in documents {
-            let token_data_doc = bson::to_document(&doc)
-                .map_err(|e| anyhow!("Serialization error: {}", e))?;
+            let token_data_doc =
+                bson::to_document(&doc).map_err(|e| anyhow!("Serialization error: {}", e))?;
             collection.insert_one(token_data_doc).await?;
         }
 
@@ -220,10 +220,10 @@ impl TokenAnalyticsDataExt for MongoDbPool {
         limit: i64,
     ) -> Result<Vec<Document>> {
         let collection = self.db.collection::<Document>(collection_name);
-        
+
         let filter = filter.unwrap_or_else(|| doc! {});
         let cursor = collection.find(filter).await?;
-        
+
         let documents: Vec<Document> = cursor.try_collect().await?;
         Ok(documents)
     }

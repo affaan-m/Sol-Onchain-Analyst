@@ -2,11 +2,11 @@ use anyhow::Result;
 use cainam_core::config::mongodb::MongoConfig;
 use cainam_core::config::mongodb::{MongoDbPool, TokenAnalyticsData, TokenAnalyticsDataExt};
 use mongodb::bson::doc;
+use rig::embeddings::embed::{Embed, EmbedError, TextEmbedder};
 use rig::providers::openai::{Client as OpenAiClient, TEXT_EMBEDDING_3_SMALL};
 use std::env;
 use tracing::info;
 use tracing_subscriber::fmt;
-use rig::embeddings::embed::{Embed, TextEmbedder, EmbedError};
 
 // Add a local wrapper for TokenAnalyticsData to bypass the orphan rule.
 #[derive(serde::Serialize)]
@@ -113,4 +113,4 @@ async fn main() -> Result<()> {
 
     info!("Vector search test completed successfully");
     Ok(())
-} 
+}
