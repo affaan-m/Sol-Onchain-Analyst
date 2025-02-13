@@ -96,20 +96,43 @@ pub struct TokenMarketData {
     pub total_supply: Option<f64>,
 }
 
-// Wallet Portfolio Types
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WalletPortfolio {
-    pub wallet_address: String,
-    pub total_value_usd: f64,
-    pub tokens: Vec<TokenBalance>,
+pub struct WalletPortfolioResponse {
+    pub success: bool,
+    pub data: WalletPortfolio,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+// Wallet Portfolio Types
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct WalletPortfolio {
+    pub wallet: String,
+    pub total_usd: Option<f64>,
+    pub items: Vec<TokenBalance>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct TokenBalance {
-    pub token_address: String,
-    pub symbol: String,
-    pub amount: f64,
-    pub value_usd: f64,
+    pub address: String,
+    pub decimals: u8,
+    pub balance: u64,
+
+    #[serde(rename = "uiAmount")]
+    pub ui_amount: f64,
+
+    #[serde(rename = "chainId")]
+    pub chain_id: String,
+
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub icon: Option<String>,
+
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
+
+    #[serde(rename = "priceUsd")]
+    pub price_usd: Option<f64>,
+
+    pub value_usd: Option<f64>,
 }
 
 // Price History Types

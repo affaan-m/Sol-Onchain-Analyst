@@ -1,7 +1,7 @@
 use crate::types::{
     api::{
         LiquidityAnalysis, MarketImpact, PricePoint, TokenInfo, TokenOverview, TokenSearchParams,
-        WalletPortfolio,
+        WalletPortfolioResponse,
     },
     error::BirdeyeError,
     TimeInterval,
@@ -137,12 +137,15 @@ impl BirdeyeProvider {
     pub async fn get_wallet_portfolio(
         &self,
         wallet_address: &str,
-    ) -> Result<WalletPortfolio, BirdeyeError> {
-        let url = format!("{}/wallet/{}/portfolio", API_BASE_URL, wallet_address);
+    ) -> Result<WalletPortfolioResponse, BirdeyeError> {
+        let url = format!("{}/v1/wallet/token_list", API_BASE_URL);
         let response = self
             .client
             .get(&url)
+            .query(&[("wallet", wallet_address)])
+            .header("accept", "application/json")
             .header("X-API-KEY", &self.api_key)
+            .header("x-chain", "solana")
             .send()
             .await
             .map_err(|e| BirdeyeError::RequestError(e.to_string()))?;
@@ -186,6 +189,18 @@ mod tests {
             .get_token_overview("So11111111111111111111111111111111111111112".to_string())
             .await?;
         assert!(overview.price > 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_wallet_portfolio_works() -> Result<(), BirdeyeError> {
+        let api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
+        let provider = BirdeyeProvider::new(api_key);
+        let portfolio = provider
+            .get_wallet_portfolio("So11111111111111111111111111111111111111112")
+            .await?;
+
+        assert!(portfolio.data.wallet == "So11111111111111111111111111111111111111112");
         Ok(())
     }
 }
