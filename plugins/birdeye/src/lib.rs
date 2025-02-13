@@ -11,6 +11,7 @@ use crate::types::{
     TimeInterval,
 };
 use anyhow::Result;
+use types::api::WalletPortfolioResponse;
 use std::sync::Arc;
 
 pub struct BirdeyeClient {
@@ -107,7 +108,7 @@ impl BirdeyeClient {
     pub async fn get_wallet_portfolio(
         &self,
         wallet_address: String,
-    ) -> Result<WalletPortfolio, BirdeyeError> {
+    ) -> Result<WalletPortfolioResponse, BirdeyeError> {
         let cache_key = format!("portfolio:{}", wallet_address);
         let address = wallet_address.clone();
 

@@ -143,9 +143,10 @@ pub fn create_test_token_overview() -> TokenOverview {
 
 pub fn create_test_wallet_portfolio() -> WalletPortfolio {
     WalletPortfolio {
-        wallet_address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK".to_string(),
-        total_value_usd: 1000000.0,
-        tokens: vec![],
+        wallet: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK".to_string(),
+        total_usd: Some(1000000.0),
+        items: vec![],
+        ..Default::default()
     }
 }
 
