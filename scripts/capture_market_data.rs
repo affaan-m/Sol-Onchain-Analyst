@@ -3,7 +3,7 @@ use cainam_core::{
     config::{MarketConfig, mongodb::MongoConfig},
     config::mongodb::MongoDbPool,
     services::token_analytics::TokenAnalyticsService,
-    birdeye::{BirdeyeApi, BirdeyeClient},
+    birdeye::BirdeyeClient,
 };
 use dotenvy::dotenv;
 use tracing::{info, Level};

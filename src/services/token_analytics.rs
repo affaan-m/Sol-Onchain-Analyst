@@ -372,6 +372,29 @@ impl TokenAnalyticsService {
             (current - prev_vol) / prev_value
         })
     }
+
+    pub async fn update_market_data(&self) -> AgentResult<()> {
+        let logger = RequestLogger::new("token_analytics", "update_market_data");
+        
+        // Common token addresses from birdeye module
+        let tokens = [
+            ("SOL", "So11111111111111111111111111111111111111112"),
+            ("USDC", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+            ("BONK", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"),
+        ];
+
+        for (symbol, address) in tokens.iter() {
+            match self.fetch_and_store_token_info(symbol, address).await {
+                Ok(_) => info!("Updated market data for {}", symbol),
+                Err(e) => {
+                    logger.error(&format!("Failed to update {} data: {}", symbol, e));
+                    // Continue with next token even if one fails
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl TokenAnalyticsService {
