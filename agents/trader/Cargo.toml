@@ -5,9 +5,8 @@ edition = "2021"
 
 [dependencies]
 # Framework
-rig-core = "0.7.0"
-rig-mongodb = "0.2.3"
-
+rig-core = "0.8.0"
+rig-mongodb = "0.2.4"
 
 # Core dependencies
 tokio = "1.38.0"

@@ -13,6 +13,10 @@ name = "cainam-core"
 path = "src/main.rs"
 
 [[bin]]
+name = "agent_trader"
+path = "agents/trader/src/main.rs"
+
+[[bin]]
 name = "setup_mongodb"
 path = "scripts/setup_mongodb.rs"
 
@@ -67,6 +71,7 @@ mongodb = { version = "3.2.1", default-features = false, features = ["sync"] }
 reqwest = { version = "0.11", features = ["json"] }
 rig-core = "0.8.0"    
 rig-mongodb = "0.2.4"
+# rig-onchain-kit = { git = "https://github.com/0xPlaygrounds/rig-onchain-kit" }
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 thiserror = "1.0"
