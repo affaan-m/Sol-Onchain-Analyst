@@ -2,7 +2,7 @@ use crate::birdeye::{BirdeyeApi, TokenInfo};
 use crate::config::mongodb::MongoDbPool;
 use crate::config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
-use crate::logging::RequestLogger;
+use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
@@ -61,30 +61,6 @@ pub struct MarketSignalLog {
     pub confidence: f64,
     pub risk_score: f64,
     pub created_at: DateTime,
-}
-
-// Helper functions for logging with proper references
-fn log_market_metrics(metrics: &MarketMetrics) {
-    info!(
-        symbol = %metrics.symbol,
-        price = %metrics.price,
-        volume_24h = ?metrics.volume_24h,
-        signal_type = ?metrics.signal_type,
-        confidence = ?metrics.confidence,
-        "Market metrics recorded"
-    );
-}
-
-fn log_market_signal(signal: &MarketSignalLog) {
-    info!(
-        token = %signal.token_symbol,
-        signal_type = %signal.signal_type,
-        price_change = ?signal.price_change_24h,
-        volume_change = ?signal.volume_change_24h,
-        confidence = %signal.confidence,
-        risk_score = %signal.risk_score,
-        "Market signal generated"
-    );
 }
 
 pub struct TokenAnalyticsService {
