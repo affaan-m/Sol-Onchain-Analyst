@@ -34,12 +34,7 @@ path = "scripts/capture_market_data.rs"
 
 [workspace]
 resolver = "2"
-members = [
-    # plugins
-    "plugins/birdeye",
-    "plugins/discord",
-    "plugins/twitter",
-]
+members = []
 exclude = [
     "examples",
     "memory-bank",
@@ -72,20 +67,22 @@ reqwest = { version = "0.11", features = ["json"] }
 rig-core = "0.8.0"    
 rig-mongodb = "0.2.4"
 # rig-onchain-kit = { git = "https://github.com/0xPlaygrounds/rig-onchain-kit" }
-serde = { version = "1.0", features = ["derive"] }
-serde_derive = "1.0"
-thiserror = "1.0"
+solagent-core = "0.1.5"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_derive = "1.0.217"
+thiserror = "2.0.11"
 time = "0.3"
 tokio = { version = "1", features = ["full", "macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["std", "env-filter"] }
 
 # Blockchain dependencies
-solana-account-decoder = "1.17"
-solana-client = "1.17"
-solana-sdk = "1.17"
-spl-associated-token-account = "2.2"
-spl-token = "4.0"
+solana-account-decoder = "2.2.0"
+solana-client = "2.2.0"
+solana-sdk = "2.2.1"
+solana-program = "2.2.1"
+spl-associated-token-account = "6.0.0"
+spl-token = "7.0"
 
 # Additional utilities
 dotenvy = "0.15.7"
