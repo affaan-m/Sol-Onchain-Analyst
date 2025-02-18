@@ -32,6 +32,14 @@ path = "scripts/run_agent.rs"
 name = "capture_market_data"
 path = "scripts/capture_market_data.rs"
 
+[[bin]]
+name = "capture_trending_tokens"
+path = "scripts/capture_trending_tokens.rs"
+
+[[bin]]
+name = "capture_token_analytics"
+path = "scripts/capture_token_analytics.rs"
+
 [workspace]
 resolver = "2"
 members = []

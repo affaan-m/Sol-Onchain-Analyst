@@ -5,14 +5,16 @@ use cainam_core::{
     error::{AgentError, AgentResult},
     models::trending_token::TrendingToken,
 };
-use mongodb::Collection;
+use mongodb::{Collection, IndexModel, options::IndexOptions};
+use mongodb::bson::{doc, Document};
 use std::sync::Arc;
 use std::env;
 use tokio;
 use tracing::{info, error, Level};
 use dotenvy::dotenv;
 use bson::Uuid;
-use anyhow::Result;
+use anyhow::{Result, Context};
+use bson::oid::ObjectId;
 
 const MARKET_TOKENS_ENV: &str = "MARKET_TOKENS";
 
@@ -31,10 +33,14 @@ async fn main() -> Result<()> {
 
     // Load environment variables
     dotenv().ok();
+    println!("Loaded environment variables");
 
     // Get MongoDB connection details
-    let mongodb_uri = env::var("MONGODB_URI").expect("MONGODB_URI must be set");
-    let mongodb_database = env::var("MONGODB_DATABASE").expect("MONGODB_DATABASE must be set");
+    let mongodb_uri = env::var("MONGODB_URI")
+        .context("MONGODB_URI must be set")?;
+    let mongodb_database = env::var("MONGODB_DATABASE")
+        .context("MONGODB_DATABASE must be set")?;
+    println!("Got MongoDB connection details: {}", mongodb_uri);
 
     // Initialize MongoDB connection
     let config = MongoConfig {
@@ -44,73 +50,56 @@ async fn main() -> Result<()> {
         pool_config: MongoPoolConfig::default(),
     };
 
+    println!("Connecting to MongoDB...");
     let db_pool = MongoDbPool::create_pool(config).await?;
-    info!("Connected to MongoDB at {}", mongodb_uri);
+    println!("Successfully connected to MongoDB");
 
     // Initialize Birdeye client
-    let birdeye_api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
+    let birdeye_api_key = env::var("BIRDEYE_API_KEY")
+        .context("BIRDEYE_API_KEY must be set")?;
+    println!("Got Birdeye API key");
+    
     let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key.clone()));
     info!("Initialized Birdeye client");
 
     // Initialize token data service
-    let token_service = TokenDataService::new_with_pool(db_pool.clone(), birdeye_api_key).await?;
+    println!("Initializing token data service...");
+    let token_service = TokenDataService::new_with_pool(db_pool.clone(), birdeye_api_key).await
+        .context("Failed to create token data service")?;
     info!("Initialized token data service");
 
-    // Get trending tokens
-    info!("Fetching trending tokens...");
-    let trending_response = birdeye_client.get_trending_tokens_full().await?;
-
-    // Get MongoDB collection for trending tokens
+    // Get database from pool (database name is already configured)
     let db = db_pool.database("");
-    let trending_collection: Collection<TrendingToken> = db.collection(TrendingToken::collection_name());
+    
+    // Create trending tokens collection
+    let trending_collection = db.collection::<TrendingToken>("trending_tokens");
+    
+    // Create index for trending tokens collection
+    trending_collection.create_index(
+        mongodb::IndexModel::builder()
+            .keys(doc! { 
+                "address": 1,
+                "timestamp": -1 
+            })
+            .build()
+    ).await?;
 
-    // Store trending tokens with timestamp
-    let timestamp = bson::DateTime::now();
-    let tokens = trending_response.data.tokens.clone();
-    for mut token in tokens {
-        token.timestamp = Some(timestamp);
-        if let Err(e) = trending_collection.insert_one(token).await {
-            error!("Failed to store trending token: {}", e);
-            continue;
-        }
-    }
-
-    info!("Stored {} trending tokens", trending_response.data.tokens.len());
-
-    // Process each trending token
+    println!("Fetching trending tokens from Birdeye...");
+    let trending_response = birdeye_client.get_trending_tokens_full().await?;
+    
     for token in trending_response.data.tokens {
-        info!("Processing token: {} ({})", token.symbol, token.address);
-        
-        // Convert token data to TokenAnalyticsData
-        let token_data = TokenAnalyticsData {
-            id: Uuid::new().to_string(),
-            token_address: token.address.clone(),
-            token_name: token.name.clone(),
-            token_symbol: token.symbol.clone(),
-            price: token.price,
-            volume_24h: Some(token.volume_24h_usd),
-            market_cap: Some(token.marketcap),
-            total_supply: None, // Not available in trending token data
-            timestamp: token.timestamp.unwrap_or_else(bson::DateTime::now),
-            created_at: Some(bson::DateTime::now()),
+        // Add timestamp and id to token before storing
+        let token_with_meta = TrendingToken {
+            id: Some(ObjectId::new()),
+            timestamp: Some(bson::DateTime::now()),
+            ..token
         };
         
-        match token_service.store_token_data(token_data).await {
-            Ok(_) => {
-                info!(
-                    "Successfully captured data for {}: price=${:.4}, volume=${:.2}",
-                    token.symbol,
-                    token.price,
-                    token.volume_24h_usd
-                );
-            }
-            Err(e) => {
-                error!("Failed to capture data for {}: {}", token.symbol, e);
-                continue;
-            }
+        if let Err(e) = trending_collection.insert_one(token_with_meta).await {
+            println!("Error inserting token: {}", e);
         }
     }
 
-    info!("Market data capture completed");
+    println!("Successfully captured market data");
     Ok(())
 }
