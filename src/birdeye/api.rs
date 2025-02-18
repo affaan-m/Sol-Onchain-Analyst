@@ -1,5 +1,5 @@
 use super::{BIRDEYE_API_BASE};
-use crate::models::token_info::TokenInfo;
+use crate::models::token_info::{TokenInfo, TokenExtensions};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -24,25 +24,24 @@ pub struct TokenData {
     pub address: String,
     pub symbol: String,
     pub name: String,
+    #[serde(rename = "logoURI")]
     pub image: Option<String>,
-    pub price: f64,
     pub decimals: u8,
-    #[serde(rename = "price24h")]
-    pub price_24h: Option<f64>,
-    #[serde(rename = "priceChange24h")]
-    pub price_change_24h: Option<f64>,
-    #[serde(rename = "volume24h")]
-    pub volume_24h: Option<f64>,
-    #[serde(rename = "volumeChange24h")]
-    pub volume_change_24h: Option<f64>,
-    pub liquidity: Option<f64>,
-    #[serde(rename = "txns24h")]
-    pub trade_24h: Option<i64>,
-    pub holders: Option<i64>,
-    #[serde(rename = "fdv")]
-    pub fully_diluted_value: Option<f64>,
-    #[serde(rename = "mcap")]
+    #[serde(rename = "marketCap")]
     pub market_cap: Option<f64>,
+    pub fdv: Option<f64>,
+    pub liquidity: Option<f64>,
+    pub price: f64,
+    #[serde(rename = "priceChange24hPercent")]
+    pub price_change_24h: Option<f64>,
+    #[serde(rename = "v24h")]
+    pub volume_24h: Option<f64>,
+    #[serde(rename = "v24hChangePercent")]
+    pub volume_change_24h: Option<f64>,
+    #[serde(rename = "trade24h")]
+    pub trade_24h: Option<i64>,
+    pub holder: Option<i64>,
+    pub extensions: Option<TokenExtensions>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,7 +52,12 @@ pub struct MultiTokenData {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenMarketResponse {
-    pub value: f64,
+    pub fdv: f64,
+    #[serde(rename = "marketCap")]
+    pub market_cap: f64,
+    pub supply: f64,
+    #[serde(rename = "totalSupply")]
+    pub total_supply: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -62,12 +66,20 @@ pub struct TrendingToken {
     pub value: f64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OnchainMetrics {
+    pub unique_holders: u64,
+    pub active_wallets_24h: u64,
+    pub whale_transactions_24h: u64,
+}
+
 #[async_trait]
 pub trait BirdeyeApi: Send + Sync {
     async fn get_token_info(&self, symbol: &str) -> Result<TokenInfo>;
     async fn get_token_info_by_address(&self, address: &str) -> Result<TokenInfo>;
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse>;
     async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>>;
+    async fn get_onchain_metrics(&self, address: &str) -> Result<OnchainMetrics>;
 }
 
 pub struct BirdeyeClient {
@@ -109,7 +121,7 @@ impl BirdeyeClient {
 #[async_trait]
 impl BirdeyeApi for BirdeyeClient {
     async fn get_token_info(&self, symbol: &str) -> Result<TokenInfo> {
-        let endpoint = format!("/public/token_info/{}", symbol);
+        let endpoint = format!("/defi/v3/token/meta-data/multiple?list_address={}", symbol);
         let response: ApiResponse<TokenData> = self.get(&endpoint).await?.json().await?;
 
         if response.success {
@@ -139,7 +151,7 @@ impl BirdeyeApi for BirdeyeClient {
     }
 
     async fn get_token_info_by_address(&self, address: &str) -> Result<TokenInfo> {
-        let endpoint = format!("/public/token_info/{}", address);
+        let endpoint = format!("/defi/token_overview?address={}", address);
         let response: ApiResponse<TokenData> = self.get(&endpoint).await?.json().await?;
 
         if response.success {
@@ -157,7 +169,7 @@ impl BirdeyeApi for BirdeyeClient {
                 liquidity: token_data.liquidity.unwrap_or(0.0),
                 trade_24h: Some(token_data.trade_24h.unwrap_or(0)),
                 logo_uri: token_data.image,
-                extensions: None,
+                extensions: token_data.extensions,
                 timestamp: bson::DateTime::now(),
             })
         } else {
@@ -169,11 +181,17 @@ impl BirdeyeApi for BirdeyeClient {
     }
 
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse> {
-        let endpoint = format!("/public/token_price/{}", address);
-        let response: ApiResponse<TokenMarketResponse> = self.get(&endpoint).await?.json().await?;
+        let endpoint = format!("/defi/token_overview?address={}", address);
+        let response: ApiResponse<TokenData> = self.get(&endpoint).await?.json().await?;
 
         if response.success {
-            Ok(response.data)
+            let data = response.data;
+            Ok(TokenMarketResponse {
+                fdv: data.fdv.unwrap_or(0.0),
+                market_cap: data.market_cap.unwrap_or(0.0),
+                supply: data.fdv.unwrap_or(0.0) / data.price,
+                total_supply: data.fdv.unwrap_or(0.0) / data.price,
+            })
         } else {
             Err(anyhow!(
                 "Failed to get market data: {}",
@@ -183,7 +201,7 @@ impl BirdeyeApi for BirdeyeClient {
     }
 
     async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>> {
-        let endpoint = format!("/public/trending_tokens?limit={}", limit);
+        let endpoint = format!("/defi/v3/search?sort_by=volume_24h_usd&sort_type=desc&limit={}&verify_token=true", limit);
         let response: ApiResponse<Vec<TrendingToken>> = self.get(&endpoint).await?.json().await?;
 
         if response.success {
@@ -191,6 +209,20 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get trending tokens: {}",
+                response.message.unwrap_or_else(|| "Unknown error".to_string())
+            ))
+        }
+    }
+
+    async fn get_onchain_metrics(&self, address: &str) -> Result<OnchainMetrics> {
+        let endpoint = format!("/defi/v3/token/onchain-metrics?address={}", address);
+        let response: ApiResponse<OnchainMetrics> = self.get(&endpoint).await?.json().await?;
+
+        if response.success {
+            Ok(response.data)
+        } else {
+            Err(anyhow!(
+                "Failed to get onchain metrics: {}",
                 response.message.unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
@@ -255,5 +287,13 @@ impl BirdeyeApi for MockBirdeyeApi {
 
     async fn get_trending_tokens(&self, _limit: usize) -> Result<Vec<TrendingToken>> {
         self.trending_tokens.clone().ok_or(anyhow!("Mock not set"))
+    }
+
+    async fn get_onchain_metrics(&self, _address: &str) -> Result<OnchainMetrics> {
+        Ok(OnchainMetrics {
+            unique_holders: 0,
+            active_wallets_24h: 0,
+            whale_transactions_24h: 0,
+        })
     }
 }
