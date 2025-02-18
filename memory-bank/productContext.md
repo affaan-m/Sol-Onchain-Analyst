@@ -1,113 +1,68 @@
 # Product Context
 
-Last Updated: 2025-02-12
+## Overview
+Cainam Core is a decentralized AI trading agent platform built on Solana, designed to capture, analyze, and act on market data for cryptocurrency tokens.
 
-## Core Problem
+## Core Problems Solved
+1. Market Data Collection
+   - Automated capture of trending tokens
+   - Comprehensive token analytics collection
+   - Historical data preservation
 
-Building a decentralized network of autonomous AI trading agents for the $CAINAM token platform on Solana requires efficient market data analysis, semantic search capabilities, and coordinated agent decision-making while ensuring reliability, security, and performance.  We need a way to quickly find tokens based on semantic meaning, not just keywords.
+2. Market Analysis
+   - Technical indicator calculation
+   - Market signal generation
+   - Risk assessment
 
-## Key Components/Solutions
+3. Trading Automation
+   - Signal-based trading decisions
+   - Portfolio optimization
+   - Risk management
 
-### 1. Vector Store & Market Analysis
+## User Experience Goals
+1. Data Reliability
+   - Accurate market data capture
+   - Consistent analytics processing
+   - Reliable historical records
 
-**Problem:** Need efficient storage and semantic search of market data and token analytics
-**Solution:**
+2. System Performance
+   - Efficient data processing
+   - Responsive analytics
+   - Scalable architecture
 
-- MongoDB Atlas vector store implementation
-- Embedding-based similarity search using `rig-mongodb`
-- Token analytics data storage and retrieval
-- Efficient connection pooling and error handling
+3. Trading Effectiveness
+   - Timely market signals
+   - Accurate trading decisions
+   - Risk-aware execution
 
-### 2. Agent Intelligence
+## Key Features
+1. Market Data Pipeline
+   - Trending token discovery
+   - Detailed analytics collection
+   - Technical indicator calculation
 
-**Problem:** Agents need to make informed decisions based on historical and real-time data
-**Solution:**
+2. Analytics Engine
+   - Market signal generation
+   - Risk scoring
+   - Performance metrics
 
-- Vector-based similarity search for market patterns
-- Semantic analysis of token characteristics
-- Efficient data retrieval through MongoDB Atlas
-- Scalable document storage and indexing
-
-### 3. Data Management
-
-**Problem:** Need efficient storage and retrieval of market data and embeddings
-**Solution:**
-
-- MongoDB Atlas for document storage
-- Vector search capabilities for similarity matching
-- Efficient connection pooling
-- Proper error handling and retry logic
-
-## Core Workflows
-
-### 1. Token Analytics Processing
-
-1. Token data collection and validation (from Birdeye, etc.)
-2. Embedding generation for token characteristics (using OpenAI)
-3. Storage in MongoDB with vector indexing
-4. Efficient similarity search capabilities (using `rig-mongodb`)
-
-### 2. Market Analysis
-
-1. Real-time market data processing
-2. Vector-based pattern recognition (future)
-3. Similarity search for historical patterns
-4. Decision making based on analysis (future)
-
-### 3. Agent Operations
-
-1. Continuous market monitoring
-2. Vector-based similarity analysis
-3. Pattern recognition and decision making (future)
-4. Performance tracking and optimization
-
-## Product Direction
-
-### Phase 1: Vector Store Implementation (Current)
-
-- MongoDB Atlas integration
-- Vector search capabilities using `rig-mongodb`
-- Token analytics storage
-- Connection pooling and error handling
-
-### Phase 2: Agent Intelligence (Next)
-
-- Enhanced market analysis
-- Pattern recognition
-- Decision making logic
-- Performance optimization
-
-### Phase 3: Advanced Features (Future)
-
-- Advanced similarity search
-- Multi-dimensional analysis
-- Enhanced error handling
-- Performance monitoring
-
-## Development Priorities
-
-1. **Immediate Focus**
-   - Complete MongoDB vector store implementation using `rig-mongodb`
-   - Ensure correct generic type usage with `rig-mongodb`
-   - Implement comprehensive error handling
-   - Add proper logging and monitoring
-
-2. **Short-term Goals**
-   - Enhanced vector search capabilities
-   - Agent integration with vector store
-   - Performance optimization
-   - Testing infrastructure
-
-3. **Medium-term Goals**
-   - Advanced pattern recognition
-   - Enhanced decision making
-   - System scalability
-   - Advanced monitoring
+3. Trading System
+   - Automated trade execution
+   - Position management
+   - Portfolio balancing
 
 ## Success Metrics
+1. Data Quality
+   - Data completeness
+   - Analytics accuracy
+   - Signal reliability
 
-- Vector search accuracy and speed
-- System reliability and uptime
-- Query performance and latency
-- Error handling effectiveness
-- Connection pool efficiency
+2. System Performance
+   - Processing latency
+   - API efficiency
+   - Database performance
+
+3. Trading Results
+   - Signal accuracy
+   - Trading profitability
+   - Risk management effectiveness

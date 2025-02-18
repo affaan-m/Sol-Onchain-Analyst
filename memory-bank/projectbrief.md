@@ -1,37 +1,48 @@
 # Project Brief
 
-**Project Name:** Cainam Core Agent
+## Project Overview
+Cainam Core is a Rust-based autonomous trading system for the Solana blockchain, focusing on market data collection, analysis, and automated trading execution.
 
-**Last Updated:** 2025-02-12
+## Core Requirements
 
-**Objective:** Develop a decentralized network of autonomous AI trading agents for the $CAINAM token platform on Solana, focusing on efficient market data analysis, semantic search, and coordinated decision-making.
+### 1. Market Data Collection
+- Capture trending tokens from Birdeye API
+- Collect detailed token analytics
+- Store historical market data
+- Implement efficient data indexing
 
-**Core Requirements:**
+### 2. Market Analysis
+- Calculate technical indicators
+- Generate trading signals
+- Assess market conditions
+- Evaluate trading opportunities
 
-1. **Market Data Analysis:**
-    * Real-time and historical market data processing.
-    * Efficient semantic search capabilities for token analytics.
-    * Market pattern recognition and signal generation.
+### 3. Trading Automation
+- Execute trades based on signals
+- Manage portfolio positions
+- Implement risk management
+- Track trading performance
 
-2. **Autonomous Trading Agents:**
-    * Intelligent decision-making based on market data and analysis.
-    * Coordinated trading strategies.
-    * Risk management and portfolio optimization.
+## Technical Goals
+- Reliable data collection pipeline
+- Efficient MongoDB integration
+- Scalable architecture
+- Robust error handling
+- Comprehensive logging
+- Performance optimization
 
-3. **Decentralized Network:**
-    * Agent communication and coordination.
-    * Secure and reliable operation.
-    * Scalability to support multiple agents and markets.
+## Project Scope
+- Market data collection and storage
+- Technical analysis implementation
+- Trading signal generation
+- Automated trade execution
+- Performance monitoring
+- Risk management system
 
-4. **Technical Foundation:**
-    * Integration with Solana blockchain.
-    * Utilization of MongoDB Atlas for vector storage and search.
-    * Robust error handling and performance optimization.
-
-**Success Criteria:**
-
-* Accurate and efficient market data analysis.
-* Reliable vector search capabilities.
-* Functional autonomous trading agents.
-* Secure and scalable decentralized network.
-* Comprehensive error handling and monitoring.
+## Success Criteria
+- Accurate market data capture
+- Reliable signal generation
+- Efficient trade execution
+- Scalable data storage
+- Robust error handling
+- Comprehensive monitoring
