@@ -15,6 +15,10 @@
   - Implemented proper index creation
   - Fixed query syntax for sorting and filtering
 - Improved error handling and logging throughout the system
+- Cleaned up scripts directory:
+  - Removed redundant initialization scripts
+  - Consolidated MongoDB setup into single script
+  - Removed deprecated test scripts
 
 ## Active Decisions
 - Using MongoDB for data storage with specific collections:
@@ -22,13 +26,18 @@
   - `token_analytics`: Stores detailed token analytics and metrics
 - Implementing rate limiting (500ms delay) between API calls to respect Birdeye's limits
 - Using compound indexes for efficient querying by address and timestamp
+- Maintaining three core scripts:
+  1. `setup_mongodb.rs` for database initialization
+  2. `capture_trending_tokens.rs` for trending token collection
+  3. `capture_token_analytics.rs` for detailed analytics
 
 ## Next Steps
-1. Implement automated scheduling for both scripts
+1. Implement automated scheduling for both capture scripts
 2. Add data validation and cleanup processes
 3. Develop analytics dashboard for monitoring token performance
 4. Integrate with trading system for automated decision making
 5. Add more technical indicators and market metrics
+6. Clean up deprecated scripts from repository
 
 ## Current Considerations
 - Need to handle API rate limits carefully
@@ -36,6 +45,7 @@
 - Monitor MongoDB performance and indexing
 - Plan for scaling as data volume grows
 - Consider implementing data backup strategy
+- Maintain clear separation of concerns in scripts
 
 ## Technical Context
 
