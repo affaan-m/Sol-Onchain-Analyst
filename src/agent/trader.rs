@@ -1,6 +1,6 @@
 // use crate::models::trade::Trade;
 use crate::{
-    agent::AgentConfig,
+    config::AgentConfig,
     birdeye::api::BirdeyeClient,
     config::mongodb::MongoDbPool,
     config::MarketConfig,

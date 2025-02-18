@@ -500,7 +500,7 @@ mod tests {
     use super::*;
     use mockall::mock;
     use mockall::predicate::*;
-    use mongodb; // Add explicit mongodb dependency
+    use mongodb;
 
     mock! {
         pub BirdeyeApi {
@@ -509,82 +509,27 @@ mod tests {
         }
     }
 
-    // async fn setup_test_db() -> MongoDbPool {
-    //     let client_options = mongodb::options::ClientOptions::parse("mongodb://localhost:32770")
-    //         .await
-    //         .expect("Failed to parse MongoDB URI");
-
-    //     MongoDbPool::create_pool(client_options)
-    //         .await
-    //         .expect("Failed to create MongoDB pool")
-    // }
-
     fn setup_mock_birdeye() -> Arc<MockBirdeyeApi> {
         let mut mock = MockBirdeyeApi::new();
         mock.expect_get_token_info_by_address().returning(|_| {
             Ok(TokenInfo {
+                address: "So11111111111111111111111111111111111111112".to_string(),
+                symbol: "SOL".to_string(),
+                name: "Solana".to_string(),
+                decimals: 9,
                 price: 100.0,
                 volume_24h: 1000000.0,
-                price_change_24h: 5.0,
+                market_cap: Some(1000000000.0),
+                price_change_24h: Some(5.0),
+                volume_change_24h: Some(10.0),
                 liquidity: 500000.0,
-                trade_24h: 1000,
+                trade_24h: Some(1000),
+                logo_uri: Some("https://example.com/sol.png".to_string()),
+                extensions: None,
+                timestamp: DateTime::now(),
             })
         });
 
         Arc::new(mock)
     }
-
-    // #[tokio::test]
-    // async fn test_market_signal_generation() -> AgentResult<()> {
-    //     let pool = setup_test_db().await;
-    //     let birdeye = setup_mock_birdeye();
-
-    //     let market_config = MarketConfig {
-    //         price_change_threshold: f64_to_decimal(0.05),
-    //         volume_surge_threshold: f64_to_decimal(0.2),
-    //         base_confidence: f64_to_decimal(0.5),
-    //         price_weight: f64_to_decimal(0.3),
-    //         volume_weight: f64_to_decimal(0.2),
-    //     };
-
-    //     let service = TokenAnalyticsService::new(
-    //         pool,
-    //         birdeye,
-    //         Some(market_config),
-    //     ).await?;
-
-    //     // Create test data
-    //     let analytics = TokenAnalytics {
-    //         id: None,
-    //         token_address: "test_address".to_string(),
-    //         token_name: "Test Token".to_string(),
-    //         token_symbol: "TEST".to_string(),
-    //         price: f64_to_decimal(100.0),
-    //         volume_24h: Some(f64_to_decimal(1000000.0)),
-    //         market_cap: Some(f64_to_decimal(1000000.0)),
-    //         total_supply: Some(f64_to_decimal(10000.0)),
-    //         holder_count: Some(1000),
-    //         timestamp: Utc::now(),
-    //         created_at: Some(Utc::now()),
-    //         metadata: Some(serde_json::json!({
-    //             "network": "solana",
-    //             "decimals": 9
-    //         })),
-    //     };
-
-    //     let result = service.store_token_analytics(&analytics).await?;
-    //     assert!(result.id.is_some(), "Should have assigned an ID");
-
-    //     let history = service.get_token_history(
-    //         "test_address",
-    //         Utc::now() - chrono::Duration::hours(24),
-    //         Utc::now(),
-    //         10,
-    //         0
-    //     ).await?;
-
-    //     assert!(!history.is_empty(), "Should have historical data");
-
-    //     Ok(())
-    // }
 }

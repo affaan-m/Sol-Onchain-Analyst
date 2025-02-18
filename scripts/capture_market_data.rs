@@ -1,59 +1,94 @@
-use anyhow::Result;
 use cainam_core::{
-    birdeye::BirdeyeClient,
-    services::TokenDataService,
+    config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
+    services::TokenAnalyticsService,
+    birdeye::api::BirdeyeClient,
+    error::{AgentError, AgentResult},
 };
-use dotenvy::dotenv;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::time;
-use tracing::{info, Level};
-use tracing_subscriber;
+use std::env;
+use tokio;
+use tracing::{info, error, Level};
+use dotenvy::dotenv;
+use anyhow::Result;
+
+const MARKET_TOKENS_ENV: &str = "MARKET_TOKENS";
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    // Initialize logging
+async fn main() -> AgentResult<()> {
+    // Initialize tracing with a more visible format
     tracing_subscriber::fmt()
         .with_max_level(Level::INFO)
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
         .init();
+    
+    println!("Starting market data capture...");
 
     // Load environment variables
-    dotenv()?;
+    dotenv().ok();
 
-    let mongo_uri = std::env::var("MONGODB_URI")?;
-    let birdeye_api_key = std::env::var("BIRDEYE_API_KEY")?;
-    
-    // Initialize token data service
-    let token_data_service = TokenDataService::new(mongo_uri, birdeye_api_key).await?;
+    // Get MongoDB connection details
+    let mongodb_uri = env::var("MONGODB_URI").expect("MONGODB_URI must be set");
+    let mongodb_database = env::var("MONGODB_DATABASE").expect("MONGODB_DATABASE must be set");
+
+    // Initialize MongoDB connection
+    let config = MongoConfig {
+        uri: mongodb_uri.clone(),
+        database: mongodb_database.clone(),
+        app_name: Some("market-data-capture".to_string()),
+        pool_config: MongoPoolConfig::default(),
+    };
+
+    let db_pool = MongoDbPool::create_pool(config).await.map_err(|e| AgentError::Other(e.into()))?;
+    info!("Connected to MongoDB at {}", mongodb_uri);
+
+    // Initialize Birdeye client
+    let birdeye_api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
+    let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key));
+    info!("Initialized Birdeye client");
+
+    // Initialize analytics service
+    let analytics_service = TokenAnalyticsService::new(db_pool, birdeye_client.clone(), None).await?;
+    info!("Initialized analytics service");
 
     // Get market tokens from environment
-    let market_tokens = std::env::var("MARKET_TOKENS")?;
-    let token_pairs: Vec<(String, String)> = market_tokens
+    let market_tokens = env::var(MARKET_TOKENS_ENV)
+        .expect("MARKET_TOKENS must be set")
         .split(',')
-        .filter_map(|pair| {
+        .map(|pair| {
             let parts: Vec<&str> = pair.split(':').collect();
-            if parts.len() == 2 {
-                Some((parts[0].to_string(), parts[1].to_string()))
-            } else {
-                None
+            if parts.len() != 2 {
+                panic!("Invalid market token format. Expected FORMAT: SYMBOL:ADDRESS");
             }
+            (parts[0].to_string(), parts[1].to_string())
         })
-        .collect();
+        .collect::<Vec<_>>();
 
-    info!("Starting market data capture for {} tokens", token_pairs.len());
+    info!("Processing {} market tokens", market_tokens.len());
 
-    loop {
-        for (symbol, address) in &token_pairs {
-            match token_data_service.update_token_data(address, symbol).await {
-                Ok(_) => info!("Successfully updated market data for {}", symbol),
-                Err(e) => info!("Error updating market data for {}: {}", symbol, e),
+    // Process each token
+    for (symbol, address) in market_tokens {
+        info!("Processing token: {} ({})", symbol, address);
+        
+        match analytics_service.fetch_and_store_token_info(&symbol, &address).await {
+            Ok(analytics) => {
+                info!(
+                    "Successfully captured data for {}: price=${:.4}, volume=${:.2}",
+                    symbol,
+                    analytics.price,
+                    analytics.volume_24h.unwrap_or_default()
+                );
             }
-            // Small delay between tokens to respect rate limits
-            time::sleep(Duration::from_millis(500)).await;
+            Err(e) => {
+                error!("Failed to capture data for {}: {}", symbol, e);
+                // Continue with next token instead of stopping
+                continue;
+            }
         }
-
-        // Wait 5 minutes before next update
-        info!("Waiting 5 minutes before next update");
-        time::sleep(Duration::from_secs(300)).await;
     }
+
+    info!("Market data capture completed");
+    Ok(())
 }
