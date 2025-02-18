@@ -116,36 +116,96 @@ async fn main() -> Result<()> {
                 "token_symbol": { "type": "token" },
                 "decimals": { "type": "number" },
                 "logo_uri": { "type": "string" },
-                "price": { "type": "sortableNumberBetaV1" },
-                "price_change_24h": { "type": "number" },
-                "price_change_7d": { "type": "number" },
-                "volume_24h": { "type": "sortableNumberBetaV1" },
-                "volume_change_24h": { "type": "number" },
-                "volume_by_price_24h": { "type": "sortableNumberBetaV1" },
-                "market_cap": { "type": "sortableNumberBetaV1" },
-                "fully_diluted_market_cap": { "type": "sortableNumberBetaV1" },
-                "circulating_supply": { "type": "sortableNumberBetaV1" },
-                "total_supply": { "type": "sortableNumberBetaV1" },
-                "liquidity": { "type": "sortableNumberBetaV1" },
-                "liquidity_change_24h": { "type": "number" },
+                
+                // Price metrics (stored as Decimal128)
+                "price": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "price", "type": "decimal128" }
+                },
+                "price_change_24h": { "type": "sortableNumberBetaV1" },
+                "price_change_7d": { "type": "sortableNumberBetaV1" },
+                
+                // Volume metrics (stored as Decimal128)
+                "volume_24h": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "volume_24h", "type": "decimal128" }
+                },
+                "volume_change_24h": { "type": "sortableNumberBetaV1" },
+                "volume_by_price_24h": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "volume_by_price_24h", "type": "decimal128" }
+                },
+                
+                // Market metrics (stored as Decimal128)
+                "market_cap": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "market_cap", "type": "decimal128" }
+                },
+                "fully_diluted_market_cap": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "fully_diluted_market_cap", "type": "decimal128" }
+                },
+                "circulating_supply": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "circulating_supply", "type": "decimal128" }
+                },
+                "total_supply": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "total_supply", "type": "decimal128" }
+                },
+                
+                // Trading metrics
                 "trades_24h": { "type": "numberFacet" },
-                "average_trade_size": { "type": "sortableNumberBetaV1" },
+                "average_trade_size": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "average_trade_size", "type": "decimal128" }
+                },
+                
+                // Holder metrics
                 "holder_count": { "type": "numberFacet" },
                 "active_wallets_24h": { "type": "numberFacet" },
                 "whale_transactions_24h": { "type": "numberFacet" },
-                "rsi_14": { "type": "sortableNumberBetaV1" },
-                "macd": { "type": "sortableNumberBetaV1" },
-                "macd_signal": { "type": "sortableNumberBetaV1" },
-                "bollinger_upper": { "type": "sortableNumberBetaV1" },
-                "bollinger_lower": { "type": "sortableNumberBetaV1" },
-                "social_score": { "type": "sortableNumberBetaV1" },
+                
+                // Technical indicators (stored as Decimal128)
+                "rsi_14": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "rsi_14", "type": "decimal128" }
+                },
+                "macd": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "macd", "type": "decimal128" }
+                },
+                "macd_signal": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "macd_signal", "type": "decimal128" }
+                },
+                "bollinger_upper": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "bollinger_upper", "type": "decimal128" }
+                },
+                "bollinger_lower": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "bollinger_lower", "type": "decimal128" }
+                },
+                
+                // Social metrics
+                "social_score": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "social_score", "type": "decimal128" }
+                },
                 "social_volume": { "type": "numberFacet" },
-                "social_sentiment": { "type": "sortableNumberBetaV1" },
+                "social_sentiment": { 
+                    "type": "sortableNumberBetaV1",
+                    "path": { "value": "social_sentiment", "type": "decimal128" }
+                },
                 "dev_activity": { "type": "numberFacet" },
+                
+                // Timestamps
                 "timestamp": { "type": "sortableDateBetaV1" },
                 "created_at": { "type": "date" },
                 "last_trade_time": { "type": "date" },
-                "metadata": { "type": "document" },
+                
+                // Vector search
                 "embedding": {
                     "type": "knnVector",
                     "dimensions": 1536,
