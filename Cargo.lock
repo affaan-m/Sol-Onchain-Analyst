@@ -682,7 +682,6 @@ dependencies = [
  "mongodb",
  "reqwest",
  "rig-core 0.8.0",
- "rig-mongodb",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3421,20 +3420,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "rig-mongodb"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc5f4a7c864ee7f20959e20f5f1611ed84c3a9d3056df63ceb1782946ace5fe"
-dependencies = [
- "futures",
- "mongodb",
- "rig-core 0.8.0",
- "serde",
- "serde_json",
  "tracing",
 ]
 

@@ -1,12 +1,12 @@
 // use crate::models::trade::Trade;
 use crate::{
-    birdeye::BirdeyeClient,
+    agent::AgentConfig,
+    birdeye::api::BirdeyeClient,
     config::mongodb::MongoDbPool,
-    config::AgentConfig,
     config::MarketConfig,
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
-    services::token_analytics::TokenAnalyticsService,
+    services::TokenAnalyticsService,
     trading::trading_engine::TradingEngine,
     trading::SolanaAgentKit,
     utils::f64_to_decimal,
@@ -31,6 +31,8 @@ pub struct TradingAgent {
     config: AgentConfig,
     running: Arc<AtomicBool>,
     db: Arc<MongoDbPool>,
+    birdeye: Arc<BirdeyeClient>,
+    birdeye_extended: Arc<BirdeyeClient>,
 }
 
 impl TradingAgent {
@@ -96,7 +98,7 @@ impl TradingAgent {
 
         // Initialize analytics service
         let analytics_service =
-            Arc::new(TokenAnalyticsService::new(db.clone(), birdeye, Some(market_config)).await?);
+            Arc::new(TokenAnalyticsService::new(db.clone(), birdeye.clone(), Some(market_config)).await?);
 
         Ok(Self {
             agent,
@@ -105,6 +107,8 @@ impl TradingAgent {
             config,
             running: Arc::new(AtomicBool::new(false)),
             db,
+            birdeye,
+            birdeye_extended,
         })
     }
 

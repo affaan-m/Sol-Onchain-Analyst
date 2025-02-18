@@ -1,4 +1,5 @@
-use crate::birdeye::{BirdeyeApi, TokenInfo};
+use crate::birdeye::BirdeyeApi;
+use crate::models::token_info::TokenInfo;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
@@ -11,13 +12,8 @@ use bson::{doc, DateTime};
 use futures::StreamExt;
 use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::Collection;
-use rig::providers::openai::{self, EmbeddingModel};
-use rig_mongodb::{MongoDbVectorIndex, SearchParams};
 use std::sync::Arc;
-use tracing::info;
 use uuid::Uuid;
-
-const TEXT_EMBEDDING_ADA_002: &str = "text-embedding-ada-002";
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenAnalyticsError {
@@ -67,7 +63,6 @@ pub struct TokenAnalyticsService {
     pool: Arc<MongoDbPool>,
     collection: Collection<TokenAnalytics>,
     signals_collection: Collection<MarketSignal>,
-    vector_index: MongoDbVectorIndex<EmbeddingModel, TokenAnalytics>,
     birdeye: Arc<dyn BirdeyeApi>,
     market_config: MarketConfig,
 }
@@ -85,84 +80,10 @@ impl TokenAnalyticsService {
         let signals_collection = db.collection("market_signals");
         println!(">> market_signals collections {:?}", signals_collection);
 
-        let openai_client = openai::Client::from_env();
-        let model = openai_client.embedding_model(openai::TEXT_EMBEDDING_ADA_002);
-
-        // Check if vector search index exists
-        let list_indexes_command = doc! {
-            "listSearchIndexes": "token_analytics"
-        };
-
-        let index_exists = match db.run_command(list_indexes_command).await {
-            Ok(result) => {
-                let indexes = result
-                    .get_document("cursor")
-                    .and_then(|cursor| cursor.get_array("firstBatch"))
-                    .map(|batch| !batch.is_empty())
-                    .unwrap_or(false);
-                if indexes {
-                    info!("Vector search index already exists for token_analytics");
-                }
-                indexes
-            }
-            Err(_) => false,
-        };
-
-        // Create vector search index if it doesn't exist
-        if !index_exists {
-            info!("Creating vector search index for token_analytics");
-            let command = doc! {
-                "createSearchIndexes": "token_analytics",
-                "indexes": [{
-                    "name": "vector_index",
-                    "definition": {
-                        "mappings": {
-                            "dynamic": true,
-                            "fields": {
-                                "id": {
-                                    "type": "string"
-                                },
-                                "token_address": {
-                                    "type": "string"
-                                },
-                                "token_name": {
-                                    "type": "string"
-                                },
-                                "token_symbol": {
-                                    "type": "string"
-                                },
-                                "embedding": {
-                                    "type": "knnVector",
-                                    "dimensions": 1536,
-                                    "similarity": "cosine"
-                                }
-                            }
-                        }
-                    }
-                }]
-            };
-
-            match db.run_command(command).await {
-                Ok(_) => info!("Created vector index for token_analytics"),
-                Err(e) => {
-                    info!("Failed to create vector index: {}", e);
-                    return Err(AgentError::Database(e));
-                }
-            }
-        }
-
-        let search_params = SearchParams::new().exact(true).num_candidates(100);
-
-        let vector_index =
-            MongoDbVectorIndex::new(collection.clone(), model, "vector_index", search_params)
-                .await
-                .map_err(|e| AgentError::VectorStore(e.to_string()))?;
-
         Ok(Self {
             pool,
             collection,
             signals_collection,
-            vector_index,
             birdeye,
             market_config: market_config.unwrap_or_default(),
         })
@@ -440,7 +361,7 @@ impl TokenAnalyticsService {
 
         let mut results = Vec::new();
         while let Some(doc) = cursor.next().await {
-            results.push(doc?);
+            results.push(doc.map_err(AgentError::Database)?);
         }
 
         Ok(results)

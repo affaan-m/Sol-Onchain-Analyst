@@ -1,9 +1,7 @@
 use anyhow::Result;
 use cainam_core::{
     birdeye::BirdeyeClient,
-    config::mongodb::MongoDbPool,
-    config::{mongodb::MongoConfig, MarketConfig},
-    services::token_analytics::TokenAnalyticsService,
+    services::TokenDataService,
 };
 use dotenvy::dotenv;
 use std::sync::Arc;
@@ -14,41 +12,48 @@ use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load environment variables
-    dotenv().ok();
-
     // Initialize logging
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .init();
 
-    info!("Starting Market Data Capture...");
+    // Load environment variables
+    dotenv()?;
 
-    // Load configurations
-    let market_config = MarketConfig::new_from_env()?;
-    let mongo_config = MongoConfig::from_env();
+    let mongo_uri = std::env::var("MONGODB_URI")?;
+    let birdeye_api_key = std::env::var("BIRDEYE_API_KEY")?;
+    
+    // Initialize token data service
+    let token_data_service = TokenDataService::new(mongo_uri, birdeye_api_key).await?;
 
-    // Initialize MongoDB connection
-    let db = MongoDbPool::create_pool(mongo_config).await?;
+    // Get market tokens from environment
+    let market_tokens = std::env::var("MARKET_TOKENS")?;
+    let token_pairs: Vec<(String, String)> = market_tokens
+        .split(',')
+        .filter_map(|pair| {
+            let parts: Vec<&str> = pair.split(':').collect();
+            if parts.len() == 2 {
+                Some((parts[0].to_string(), parts[1].to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    // Initialize Birdeye API client
-    let birdeye_api_key = std::env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
-    let birdeye_api = Arc::new(BirdeyeClient::new(birdeye_api_key));
+    info!("Starting market data capture for {} tokens", token_pairs.len());
 
-    // Create token analytics service
-    let token_analytics =
-        TokenAnalyticsService::new(db.clone(), birdeye_api, Some(market_config)).await?;
-
-    info!("Services initialized. Beginning data capture...");
-
-    // Run continuous market data capture
     loop {
-        match token_analytics.update_market_data().await {
-            Ok(_) => info!("Successfully updated market data"),
-            Err(e) => info!("Error updating market data: {}", e),
+        for (symbol, address) in &token_pairs {
+            match token_data_service.update_token_data(address, symbol).await {
+                Ok(_) => info!("Successfully updated market data for {}", symbol),
+                Err(e) => info!("Error updating market data for {}: {}", symbol, e),
+            }
+            // Small delay between tokens to respect rate limits
+            time::sleep(Duration::from_millis(500)).await;
         }
 
-        // Wait for 5 minutes before next update
+        // Wait 5 minutes before next update
+        info!("Waiting 5 minutes before next update");
         time::sleep(Duration::from_secs(300)).await;
     }
-
-    Ok(())
 }
