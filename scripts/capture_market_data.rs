@@ -1,19 +1,23 @@
 use cainam_core::{
-    config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
-    services::TokenAnalyticsService,
-    birdeye::api::BirdeyeClient,
+    config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig, TokenAnalyticsData},
+    services::token_data_service::TokenDataService,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
     error::{AgentError, AgentResult},
+    models::trending_token::TrendingToken,
 };
+use mongodb::Collection;
 use std::sync::Arc;
 use std::env;
 use tokio;
 use tracing::{info, error, Level};
 use dotenvy::dotenv;
+use bson::Uuid;
+use anyhow::Result;
 
 const MARKET_TOKENS_ENV: &str = "MARKET_TOKENS";
 
 #[tokio::main]
-async fn main() -> AgentResult<()> {
+async fn main() -> Result<()> {
     // Initialize tracing with a more visible format
     tracing_subscriber::fmt()
         .with_max_level(Level::INFO)
@@ -40,49 +44,68 @@ async fn main() -> AgentResult<()> {
         pool_config: MongoPoolConfig::default(),
     };
 
-    let db_pool = MongoDbPool::create_pool(config).await.map_err(|e| AgentError::Other(e.into()))?;
+    let db_pool = MongoDbPool::create_pool(config).await?;
     info!("Connected to MongoDB at {}", mongodb_uri);
 
     // Initialize Birdeye client
     let birdeye_api_key = env::var("BIRDEYE_API_KEY").expect("BIRDEYE_API_KEY must be set");
-    let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key));
+    let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key.clone()));
     info!("Initialized Birdeye client");
 
-    // Initialize analytics service
-    let analytics_service = TokenAnalyticsService::new(db_pool, birdeye_client.clone(), None).await?;
-    info!("Initialized analytics service");
+    // Initialize token data service
+    let token_service = TokenDataService::new_with_pool(db_pool.clone(), birdeye_api_key).await?;
+    info!("Initialized token data service");
 
-    // Get market tokens from environment
-    let market_tokens = env::var(MARKET_TOKENS_ENV)
-        .expect("MARKET_TOKENS must be set")
-        .split(',')
-        .map(|pair| {
-            let parts: Vec<&str> = pair.split(':').collect();
-            if parts.len() != 2 {
-                panic!("Invalid market token format. Expected FORMAT: SYMBOL:ADDRESS");
-            }
-            (parts[0].to_string(), parts[1].to_string())
-        })
-        .collect::<Vec<_>>();
+    // Get trending tokens
+    info!("Fetching trending tokens...");
+    let trending_response = birdeye_client.get_trending_tokens_full().await?;
 
-    info!("Processing {} market tokens", market_tokens.len());
+    // Get MongoDB collection for trending tokens
+    let db = db_pool.database("");
+    let trending_collection: Collection<TrendingToken> = db.collection(TrendingToken::collection_name());
 
-    // Process each token
-    for (symbol, address) in market_tokens {
-        info!("Processing token: {} ({})", symbol, address);
+    // Store trending tokens with timestamp
+    let timestamp = bson::DateTime::now();
+    let tokens = trending_response.data.tokens.clone();
+    for mut token in tokens {
+        token.timestamp = Some(timestamp);
+        if let Err(e) = trending_collection.insert_one(token).await {
+            error!("Failed to store trending token: {}", e);
+            continue;
+        }
+    }
+
+    info!("Stored {} trending tokens", trending_response.data.tokens.len());
+
+    // Process each trending token
+    for token in trending_response.data.tokens {
+        info!("Processing token: {} ({})", token.symbol, token.address);
         
-        match analytics_service.fetch_and_store_token_info(&symbol, &address).await {
-            Ok(analytics) => {
+        // Convert token data to TokenAnalyticsData
+        let token_data = TokenAnalyticsData {
+            id: Uuid::new().to_string(),
+            token_address: token.address.clone(),
+            token_name: token.name.clone(),
+            token_symbol: token.symbol.clone(),
+            price: token.price,
+            volume_24h: Some(token.volume_24h_usd),
+            market_cap: Some(token.marketcap),
+            total_supply: None, // Not available in trending token data
+            timestamp: token.timestamp.unwrap_or_else(bson::DateTime::now),
+            created_at: Some(bson::DateTime::now()),
+        };
+        
+        match token_service.store_token_data(token_data).await {
+            Ok(_) => {
                 info!(
                     "Successfully captured data for {}: price=${:.4}, volume=${:.2}",
-                    symbol,
-                    analytics.price,
-                    analytics.volume_24h.unwrap_or_default()
+                    token.symbol,
+                    token.price,
+                    token.volume_24h_usd
                 );
             }
             Err(e) => {
-                error!("Failed to capture data for {}: {}", symbol, e);
-                // Continue with next token instead of stopping
+                error!("Failed to capture data for {}: {}", token.symbol, e);
                 continue;
             }
         }

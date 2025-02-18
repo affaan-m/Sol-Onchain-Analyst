@@ -1,5 +1,6 @@
 use super::{BIRDEYE_API_BASE};
 use crate::models::token_info::{TokenInfo, TokenExtensions};
+use crate::models::trending_token::TrendingTokenResponse;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -80,6 +81,7 @@ pub trait BirdeyeApi: Send + Sync {
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse>;
     async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>>;
     async fn get_onchain_metrics(&self, address: &str) -> Result<OnchainMetrics>;
+    async fn get_trending_tokens_full(&self) -> Result<TrendingTokenResponse>;
 }
 
 pub struct BirdeyeClient {
@@ -227,6 +229,12 @@ impl BirdeyeApi for BirdeyeClient {
             ))
         }
     }
+
+    async fn get_trending_tokens_full(&self) -> Result<TrendingTokenResponse> {
+        let endpoint = "/defi/token_trending";
+        let response = self.get(endpoint).await?.json().await?;
+        Ok(response)
+    }
 }
 
 // Mock BirdeyeApi for testing
@@ -295,5 +303,9 @@ impl BirdeyeApi for MockBirdeyeApi {
             active_wallets_24h: 0,
             whale_transactions_24h: 0,
         })
+    }
+
+    async fn get_trending_tokens_full(&self) -> Result<TrendingTokenResponse> {
+        Err(anyhow!("Mock not implemented"))
     }
 }

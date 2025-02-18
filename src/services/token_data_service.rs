@@ -3,7 +3,7 @@ use bson::DateTime;
 use futures::TryStreamExt;
 use mongodb::{
     bson::{self, doc},
-    Client, Collection,
+    Client, Collection, Database,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -12,28 +12,41 @@ use chrono::{DateTime as ChronoDateTime, Utc};
 
 use crate::{
     birdeye::{api::{BirdeyeApi, BirdeyeClient}},
-    config::mongodb::TokenAnalyticsData,
+    config::mongodb::{TokenAnalyticsData, MongoDbPool},
     error::AgentResult,
 };
 
 const COLLECTION_NAME: &str = "token_analytics";
 
 pub struct TokenDataService {
-    mongo_client: Client,
+    database: Database,
     birdeye_client: Arc<dyn BirdeyeApi>,
     collection: Collection<TokenAnalyticsData>,
 }
 
 impl TokenDataService {
     pub async fn new(mongo_uri: String, birdeye_api_key: String) -> Result<Self> {
-        let mongo_client = Client::with_uri_str(&mongo_uri).await?;
-        let database = mongo_client.database("cainam");
+        let client = Client::with_uri_str(&mongo_uri).await?;
+        let database = client.database("cainam");
         let collection = database.collection(COLLECTION_NAME);
         
         let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key)) as Arc<dyn BirdeyeApi>;
 
         Ok(Self {
-            mongo_client,
+            database,
+            birdeye_client,
+            collection,
+        })
+    }
+
+    pub async fn new_with_pool(pool: Arc<MongoDbPool>, birdeye_api_key: String) -> Result<Self> {
+        let database = pool.database("");
+        let collection = database.collection(COLLECTION_NAME);
+        
+        let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key)) as Arc<dyn BirdeyeApi>;
+
+        Ok(Self {
+            database,
             birdeye_client,
             collection,
         })

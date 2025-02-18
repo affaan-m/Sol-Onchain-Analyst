@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub mod market_signal;
 pub mod token_analytics;
 pub mod token_info;
+pub mod trending_token;
 // pub mod market_config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
