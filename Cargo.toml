@@ -29,10 +29,6 @@ name = "run_agent"
 path = "scripts/run_agent.rs"
 
 [[bin]]
-name = "capture_market_data"
-path = "scripts/capture_market_data.rs"
-
-[[bin]]
 name = "capture_trending_tokens"
 path = "scripts/capture_trending_tokens.rs"
 
