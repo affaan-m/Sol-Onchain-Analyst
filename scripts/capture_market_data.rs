@@ -9,7 +9,6 @@ use std::env;
 use tokio;
 use tracing::{info, error, Level};
 use dotenvy::dotenv;
-use anyhow::Result;
 
 const MARKET_TOKENS_ENV: &str = "MARKET_TOKENS";
 
