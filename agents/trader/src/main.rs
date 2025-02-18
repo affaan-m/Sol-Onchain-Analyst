@@ -2,8 +2,6 @@ use rig_core::{
     agent::{Agent, AgentSystem},
     message_bus::MessageBus,
 };
-use rig_postgres::PostgresVectorStore;
-use sqlx::postgres::PgPoolOptions;
 use rig_solana_trader::{
     agents::{DataIngestionAgent, DecisionAgent, ExecutionAgent, PredictionAgent, TwitterAgent},
     personality::StoicPersonality,
@@ -16,7 +14,6 @@ mod data_ingestion;
 mod prediction;
 mod decision;
 mod execution;
-mod feedback;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

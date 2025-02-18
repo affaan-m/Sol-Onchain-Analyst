@@ -13,20 +13,8 @@ name = "cainam-core"
 path = "src/main.rs"
 
 [[bin]]
-name = "agent_trader"
-path = "agents/trader/src/main.rs"
-
-[[bin]]
 name = "setup_mongodb"
 path = "scripts/setup_mongodb.rs"
-
-[[bin]]
-name = "init_vector_store"
-path = "scripts/init_vector_store.rs"
-
-[[bin]]
-name = "run_agent"
-path = "scripts/run_agent.rs"
 
 [[bin]]
 name = "capture_trending_tokens"

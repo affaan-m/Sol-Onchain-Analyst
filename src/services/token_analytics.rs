@@ -7,11 +7,11 @@ use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
-use crate::birdeye::api::{TokenMarketResponse, TrendingToken, OnchainMetrics};
+use crate::birdeye::api::TokenMarketResponse;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use bson::{doc, DateTime};
 use futures::StreamExt;
-use mongodb::options::{FindOneOptions, FindOptions};
+use mongodb::options::FindOneOptions;
 use mongodb::Collection;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -493,12 +493,6 @@ impl TokenAnalyticsService {
             }
         };
 
-        let options = FindOptions::builder()
-            .sort(doc! { "timestamp": -1 })
-            .skip(Some(offset as u64))
-            .limit(Some(limit))
-            .build();
-
         let mut cursor = self
             .collection
             .find(filter)
@@ -513,39 +507,56 @@ impl TokenAnalyticsService {
         Ok(results)
     }
 
-    pub async fn get_latest_token_analytics(
-        &self,
-        address: &str,
-    ) -> AgentResult<Option<TokenAnalytics>> {
-        let filter = doc! { "token_address": address };
+    // Helper method for retrying API calls
+    async fn fetch_with_retry<T, F, Fut>(&self, f: F, retries: u32) -> Result<T, anyhow::Error>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<T, anyhow::Error>>,
+    {
+        let mut attempts = 0;
+        let mut last_error = None;
 
-        let analytics = self
-            .collection
-            .find_one(filter)
-            .await
-            .map_err(AgentError::Database)?;
+        while attempts < retries {
+            match f().await {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    attempts += 1;
+                    last_error = Some(e);
+                    if attempts < retries {
+                        tokio::time::sleep(std::time::Duration::from_millis(500 * 2u64.pow(attempts))).await;
+                    }
+                }
+            }
+        }
 
-        Ok(analytics)
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error during retry")))
     }
 
-    pub fn calculate_volume_change(
-        &self,
-        current: &BigDecimal,
-        prev: &TokenAnalytics,
-    ) -> Option<BigDecimal> {
-        prev.volume_24h.as_ref().map(|prev_vol| {
-            let zero = BigDecimal::from(0);
-            let prev_value = if prev_vol == &zero {
-                BigDecimal::from(1)
-            } else {
-                prev_vol.clone()
-            };
-            (current - prev_vol) / prev_value
-        })
+    // Helper method for validation
+    fn validate_token_data(&self, token_info: &TokenInfo) -> AgentResult<()> {
+        if token_info.price <= 0.0 {
+            return Err(AgentError::validation("Token price must be positive"));
+        }
+        if token_info.volume_24h < 0.0 {
+            return Err(AgentError::validation("Token volume cannot be negative"));
+        }
+        Ok(())
     }
-}
 
-impl TokenAnalyticsService {
+    // Helper method for signal validation
+    fn validate_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
+        let zero = BigDecimal::from(0);
+        let one = BigDecimal::from(1);
+
+        if signal.confidence < zero || signal.confidence > one {
+            return Err(AgentError::validation("Signal confidence must be between 0 and 1"));
+        }
+        if signal.risk_score < zero || signal.risk_score > one {
+            return Err(AgentError::validation("Risk score must be between 0 and 1"));
+        }
+        Ok(())
+    }
+
     fn log_signal(&self, signal: &MarketSignal, analytics: &TokenAnalytics) {
         let signal_log = MarketSignalLog {
             id: Uuid::new_v4(),
@@ -580,7 +591,7 @@ impl TokenAnalyticsService {
             + (volume_change * self.market_config.volume_weight.clone())
     }
 
-    pub async fn process_market_signal(&self, signal: MarketSignal) -> AgentResult<()> {
+    async fn process_market_signal(&self, signal: MarketSignal) -> AgentResult<()> {
         let _logger = RequestLogger::new("token_analytics", "process_market_signal");
 
         let signal_log = MarketSignalLog {
@@ -610,58 +621,9 @@ impl TokenAnalyticsService {
         log_market_signal(&signal_log);
         Ok(())
     }
-
-    // Helper method for validation
-    fn validate_token_data(&self, token_info: &TokenInfo) -> AgentResult<()> {
-        if token_info.price <= 0.0 {
-            return Err(AgentError::validation("Token price must be positive"));
-        }
-        if token_info.volume_24h < 0.0 {
-            return Err(AgentError::validation("Token volume cannot be negative"));
-        }
-        Ok(())
-    }
-
-    // Helper method for signal validation
-    fn validate_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
-        let zero = BigDecimal::from(0);
-        let one = BigDecimal::from(1);
-
-        if signal.confidence < zero || signal.confidence > one {
-            return Err(AgentError::validation("Signal confidence must be between 0 and 1"));
-        }
-        if signal.risk_score < zero || signal.risk_score > one {
-            return Err(AgentError::validation("Risk score must be between 0 and 1"));
-        }
-        Ok(())
-    }
-
-    // Helper method for retrying API calls
-    async fn fetch_with_retry<T, F, Fut>(&self, f: F, retries: u32) -> Result<T, anyhow::Error>
-    where
-        F: Fn() -> Fut,
-        Fut: std::future::Future<Output = Result<T, anyhow::Error>>,
-    {
-        let mut attempts = 0;
-        let mut last_error = None;
-
-        while attempts < retries {
-            match f().await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    attempts += 1;
-                    last_error = Some(e);
-                    if attempts < retries {
-                        tokio::time::sleep(std::time::Duration::from_millis(500 * 2u64.pow(attempts))).await;
-                    }
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error during retry")))
-    }
 }
 
+// Move From implementation outside of TokenAnalyticsService impl block
 impl From<MarketSignal> for MarketSignalLog {
     fn from(signal: MarketSignal) -> Self {
         Self {
