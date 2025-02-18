@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
     // Initialize MongoDB connection
     let config = MongoConfig {
         uri: mongodb_uri,
-        database: mongodb_database,
+        database: mongodb_database.clone(),
         app_name: Some("trending-tokens-capture".to_string()),
         pool_config: MongoPoolConfig::default(),
     };
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     info!("Initialized Birdeye client");
 
     // Get database and create collection
-    let db = db_pool.database("");
+    let db = db_pool.database(&mongodb_database);
     let trending_collection = db.collection::<TrendingToken>("trending_tokens");
     
     // Create compound index on address and timestamp

@@ -34,13 +34,13 @@ async fn main() -> Result<()> {
     // Initialize MongoDB connection
     let config = MongoConfig {
         uri: mongodb_uri,
-        database: mongodb_database,
+        database: mongodb_database.clone(),
         app_name: Some("mongodb-setup".to_string()),
         pool_config: MongoPoolConfig::default(),
     };
 
     let db_pool = MongoDbPool::create_pool(config).await?;
-    let db = db_pool.database("");
+    let db = db_pool.database(&mongodb_database);
     info!("Successfully connected to MongoDB");
 
     // Setup trending_tokens collection
@@ -226,10 +226,8 @@ async fn main() -> Result<()> {
     // Setup market_signals collection
     info!("Setting up market_signals collection...");
     let signals_options = doc! {
-        "timeseries": {
             "timeField": "timestamp",
             "granularity": "minutes"
-        }
     };
     
     match db.run_command(doc! {
@@ -269,10 +267,8 @@ async fn main() -> Result<()> {
     // Setup trading_positions collection
     info!("Setting up trading_positions collection...");
     let positions_options = doc! {
-        "timeseries": {
             "timeField": "entry_time",
             "granularity": "minutes"
-        }
     };
     
     match db.run_command(doc! {
