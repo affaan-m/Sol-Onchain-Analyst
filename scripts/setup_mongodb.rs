@@ -1,133 +1,255 @@
-use cainam_core::config::mongodb::MongoConfig;
-use mongodb::{
-    bson::Document,
-    options::{ClientOptions, IndexOptions},
-    Client, IndexModel,
-};
-use std::error::Error;
+#![recursion_limit = "256"]
+
+use cainam_core::config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
+use mongodb::bson::doc;
+use std::env;
+use tracing::{info, Level};
+use dotenvy::dotenv;
+use anyhow::{Result, Context};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    // Load environment variables first
-    dotenvy::dotenv().ok();
+async fn main() -> Result<()> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
+    
+    info!("Starting MongoDB setup...");
 
-    // Initialize MongoDB client using configuration
-    let config = MongoConfig::from_env();
-    let mut client_options = ClientOptions::parse(&config.uri).await?;
-    client_options.server_api = Some(
-        mongodb::options::ServerApi::builder()
-            .version(mongodb::options::ServerApiVersion::V1)
-            .build(),
-    );
-    let client = Client::with_options(client_options)?;
-    let db = client.database(&config.database);
+    // Load environment variables
+    dotenv().ok();
+    
+    // Get MongoDB connection details
+    let mongodb_uri = env::var("MONGODB_URI")
+        .context("MONGODB_URI must be set")?;
+    let mongodb_database = env::var("MONGODB_DATABASE")
+        .context("MONGODB_DATABASE must be set")?;
+    
+    info!("Connecting to MongoDB at: {}", mongodb_uri);
 
-    println!("Connected to MongoDB successfully");
-
-    // Create collections if they don't exist
-    println!("Creating collections...");
-    let collections = db.list_collection_names().await?;
-
-    if !collections.contains(&"token_analytics".to_string()) {
-        db.create_collection("token_analytics").await?;
-        println!("Created token_analytics collection");
-    } else {
-        println!("Collection token_analytics already exists");
-    }
-
-    if !collections.contains(&"market_signals".to_string()) {
-        db.create_collection("market_signals").await?;
-        println!("Created market_signals collection");
-    } else {
-        println!("Collection market_signals already exists");
-    }
-
-    // Get collections
-    let token_analytics = db.collection::<Document>("token_analytics");
-    let market_signals = db.collection::<Document>("market_signals");
-
-    // Create indexes for token_analytics collection
-    println!("Creating indexes for token_analytics collection...");
-
-    // Compound index on token_address and timestamp
-    let compound_index_options = IndexOptions::builder().build();
-    let compound_index = IndexModel::builder()
-        .keys(mongodb::bson::doc! {
-            "token_address": 1,
-            "timestamp": 1
-        })
-        .options(compound_index_options)
-        .build();
-
-    match token_analytics.create_index(compound_index).await {
-        Ok(_) => println!("Created compound index for token_analytics"),
-        Err(e) if e.to_string().contains("already exists") => {
-            println!("Compound index already exists for token_analytics");
-        }
-        Err(e) => return Err(e.into()),
-    }
-
-    // Create vector search index for embeddings
-    let vector_search_command = mongodb::bson::doc! {
-        "createSearchIndexes": "token_analytics",
-        "indexes": [{
-            "name": "vector_index",
-            "definition": {
-                "mappings": {
-                    "dynamic": true,
-                    "fields": {
-                        "id": {
-                            "type": "string"
-                        },
-                        "token_address": {
-                            "type": "string"
-                        },
-                        "token_name": {
-                            "type": "string"
-                        },
-                        "token_symbol": {
-                            "type": "string"
-                        },
-                        "embedding": {
-                            "type": "knnVector",
-                            "dimensions": 1536,
-                            "similarity": "cosine"
-                        }
-                    }
-                }
-            }
-        }]
+    // Initialize MongoDB connection
+    let config = MongoConfig {
+        uri: mongodb_uri,
+        database: mongodb_database,
+        app_name: Some("mongodb-setup".to_string()),
+        pool_config: MongoPoolConfig::default(),
     };
 
-    match db.run_command(vector_search_command).await {
-        Ok(_) => println!("Created vector search index for token_analytics collection"),
-        Err(e) if e.to_string().contains("already defined") => {
-            println!("Vector search index already exists for token_analytics collection");
-        }
-        Err(e) => return Err(e.into()),
+    let db_pool = MongoDbPool::create_pool(config).await?;
+    let db = db_pool.database("");
+    info!("Successfully connected to MongoDB");
+
+    // Setup trending_tokens collection
+    info!("Setting up trending_tokens collection...");
+    let trending_options = doc! {
+            "timeField": "timestamp",
+            "granularity": "minutes"
+    };
+    
+    match db.run_command(doc! {
+        "create": "trending_tokens",
+        "timeseries": trending_options
+    }).await {
+        Ok(_) => info!("Created trending_tokens collection"),
+        Err(e) => info!("trending_tokens collection may already exist: {}", e),
     }
 
-    // Create indexes for market_signals collection
-    println!("Creating indexes for market_signals collection...");
-
-    let market_index_options = IndexOptions::builder().build();
-    let market_index = IndexModel::builder()
-        .keys(mongodb::bson::doc! {
-            "asset_address": 1,
-            "timestamp": 1
-        })
-        .options(market_index_options)
-        .build();
-
-    match market_signals.create_index(market_index).await {
-        Ok(_) => println!("Created index for market_signals"),
-        Err(e) if e.to_string().contains("already exists") => {
-            println!("Index already exists for market_signals");
+    // Create search index for trending_tokens
+    info!("Setting up search index for trending_tokens...");
+    let trending_search_index = doc! {
+        "mappings": {
+            "dynamic": true,
+            "fields": {
+                "address": { "type": "string", "searchable": true },
+                "decimals": { "type": "number" },
+                "liquidity": { "type": "sortableNumberBetaV1" },
+                "logo_uri": { "type": "string" },
+                "name": { "type": "string", "searchable": true },
+                "symbol": { "type": "token" },
+                "volume_24h_usd": { "type": "sortableNumberBetaV1" },
+                "volume_24h_change_percent": { "type": "number" },
+                "fdv": { "type": "sortableNumberBetaV1" },
+                "marketcap": { "type": "sortableNumberBetaV1" },
+                "rank": { "type": "numberFacet" },
+                "price": { "type": "sortableNumberBetaV1" },
+                "price_24h_change_percent": { "type": "number" },
+                "timestamp": { "type": "sortableDateBetaV1" }
+            }
         }
-        Err(e) => return Err(e.into()),
+    };
+
+    match db.run_command(doc! {
+        "createSearchIndex": "trending_tokens",
+        "definition": trending_search_index
+    }).await {
+        Ok(_) => info!("Created search index for trending_tokens"),
+        Err(e) => info!("Search index may already exist: {}", e),
     }
 
-    println!("MongoDB setup completed successfully!");
+    // Setup token_analytics collection
+    info!("Setting up token_analytics collection...");
+    let analytics_options = doc! {
+            "timeField": "timestamp",
+            "granularity": "minutes"
+    };
+    
+    match db.run_command(doc! {
+        "create": "token_analytics",
+        "timeseries": analytics_options
+    }).await {
+        Ok(_) => info!("Created token_analytics collection"),
+        Err(e) => info!("token_analytics collection may already exist: {}", e),
+    }
 
+    // Create search index for token_analytics
+    info!("Setting up search index for token_analytics...");
+    let analytics_search_index = doc! {
+        "mappings": {
+            "dynamic": true,
+            "fields": {
+                "token_address": { "type": "string", "searchable": true },
+                "token_name": { "type": "string", "searchable": true },
+                "token_symbol": { "type": "token" },
+                "decimals": { "type": "number" },
+                "logo_uri": { "type": "string" },
+                "price": { "type": "sortableNumberBetaV1" },
+                "price_change_24h": { "type": "number" },
+                "price_change_7d": { "type": "number" },
+                "volume_24h": { "type": "sortableNumberBetaV1" },
+                "volume_change_24h": { "type": "number" },
+                "volume_by_price_24h": { "type": "sortableNumberBetaV1" },
+                "market_cap": { "type": "sortableNumberBetaV1" },
+                "fully_diluted_market_cap": { "type": "sortableNumberBetaV1" },
+                "circulating_supply": { "type": "sortableNumberBetaV1" },
+                "total_supply": { "type": "sortableNumberBetaV1" },
+                "liquidity": { "type": "sortableNumberBetaV1" },
+                "liquidity_change_24h": { "type": "number" },
+                "trades_24h": { "type": "numberFacet" },
+                "average_trade_size": { "type": "sortableNumberBetaV1" },
+                "holder_count": { "type": "numberFacet" },
+                "active_wallets_24h": { "type": "numberFacet" },
+                "whale_transactions_24h": { "type": "numberFacet" },
+                "rsi_14": { "type": "sortableNumberBetaV1" },
+                "macd": { "type": "sortableNumberBetaV1" },
+                "macd_signal": { "type": "sortableNumberBetaV1" },
+                "bollinger_upper": { "type": "sortableNumberBetaV1" },
+                "bollinger_lower": { "type": "sortableNumberBetaV1" },
+                "social_score": { "type": "sortableNumberBetaV1" },
+                "social_volume": { "type": "numberFacet" },
+                "social_sentiment": { "type": "sortableNumberBetaV1" },
+                "dev_activity": { "type": "numberFacet" },
+                "timestamp": { "type": "sortableDateBetaV1" },
+                "created_at": { "type": "date" },
+                "last_trade_time": { "type": "date" },
+                "metadata": { "type": "document" },
+                "embedding": {
+                    "type": "knnVector",
+                    "dimensions": 1536,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    };
+
+    match db.run_command(doc! {
+        "createSearchIndex": "token_analytics",
+        "definition": analytics_search_index
+    }).await {
+        Ok(_) => info!("Created search index for token_analytics"),
+        Err(e) => info!("Search index may already exist: {}", e),
+    }
+
+    // Setup market_signals collection
+    info!("Setting up market_signals collection...");
+    let signals_options = doc! {
+        "timeseries": {
+            "timeField": "timestamp",
+            "granularity": "minutes"
+        }
+    };
+    
+    match db.run_command(doc! {
+        "create": "market_signals",
+        "timeseries": signals_options
+    }).await {
+        Ok(_) => info!("Created market_signals collection"),
+        Err(e) => info!("market_signals collection may already exist: {}", e),
+    }
+
+    // Create search index for market_signals
+    info!("Setting up search index for market_signals...");
+    let signals_search_index = doc! {
+        "mappings": {
+            "dynamic": true,
+            "fields": {
+                "token_address": { "type": "string", "searchable": true },
+                "signal_type": { "type": "stringFacet" },
+                "confidence": { "type": "sortableNumberBetaV1" },
+                "risk_score": { "type": "sortableNumberBetaV1" },
+                "price": { "type": "sortableNumberBetaV1" },
+                "volume_change": { "type": "sortableNumberBetaV1" },
+                "timestamp": { "type": "sortableDateBetaV1" },
+                "metadata": { "type": "document" }
+            }
+        }
+    };
+
+    match db.run_command(doc! {
+        "createSearchIndex": "market_signals",
+        "definition": signals_search_index
+    }).await {
+        Ok(_) => info!("Created search index for market_signals"),
+        Err(e) => info!("Search index may already exist: {}", e),
+    }
+
+    // Setup trading_positions collection
+    info!("Setting up trading_positions collection...");
+    let positions_options = doc! {
+        "timeseries": {
+            "timeField": "entry_time",
+            "granularity": "minutes"
+        }
+    };
+    
+    match db.run_command(doc! {
+        "create": "trading_positions",
+        "timeseries": positions_options
+    }).await {
+        Ok(_) => info!("Created trading_positions collection"),
+        Err(e) => info!("trading_positions collection may already exist: {}", e),
+    }
+
+    // Create search index for trading_positions
+    info!("Setting up search index for trading_positions...");
+    let positions_search_index = doc! {
+        "mappings": {
+            "dynamic": true,
+            "fields": {
+                "token_address": { "type": "string", "searchable": true },
+                "entry_price": { "type": "sortableNumberBetaV1" },
+                "current_price": { "type": "sortableNumberBetaV1" },
+                "position_size": { "type": "sortableNumberBetaV1" },
+                "position_type": { "type": "stringFacet" },
+                "entry_time": { "type": "sortableDateBetaV1" },
+                "last_update": { "type": "date" },
+                "pnl": { "type": "sortableNumberBetaV1" },
+                "status": { "type": "stringFacet" }
+            }
+        }
+    };
+
+    match db.run_command(doc! {
+        "createSearchIndex": "trading_positions",
+        "definition": positions_search_index
+    }).await {
+        Ok(_) => info!("Created search index for trading_positions"),
+        Err(e) => info!("Search index may already exist: {}", e),
+    }
+
+    info!("MongoDB setup completed successfully!");
     Ok(())
 }

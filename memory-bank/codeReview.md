@@ -69,7 +69,7 @@ let search_params = SearchParams::new()
 
 ## Review Checklist
 
-### MongoDB Integration
+### MongoDB
 
 - [ ] Proper connection pool configuration
 - [ ] Error handling with context
