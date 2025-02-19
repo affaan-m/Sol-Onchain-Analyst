@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use cainam_core::config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
 use dotenvy::dotenv;
 use mongodb::bson::doc;
-use std::env;
 use tracing::{info, Level};
 
 #[tokio::main]
@@ -238,8 +237,11 @@ async fn main() -> Result<()> {
     // Setup market_signals collection
     info!("Setting up market_signals collection...");
     let signals_options = doc! {
+        "timeseries": {
             "timeField": "timestamp",
-            "granularity": "minutes"
+            "granularity": "minutes",
+            "metaField": "metadata"
+        }
     };
 
     match db
@@ -285,8 +287,11 @@ async fn main() -> Result<()> {
     // Setup trading_positions collection
     info!("Setting up trading_positions collection...");
     let positions_options = doc! {
+        "timeseries": {
             "timeField": "entry_time",
-            "granularity": "minutes"
+            "granularity": "minutes",
+            "metaField": "metadata"
+        }
     };
 
     match db
