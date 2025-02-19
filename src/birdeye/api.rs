@@ -1,5 +1,5 @@
-use super::{BIRDEYE_API_BASE};
-use crate::models::token_info::{TokenInfo, TokenExtensions};
+use super::BIRDEYE_API_BASE;
+use crate::models::token_info::{TokenExtensions, TokenInfo};
 use crate::models::trending_token::TrendingTokenResponse;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -147,7 +147,9 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get token info: {}",
-                response.message.unwrap_or_else(|| "Unknown error".to_string())
+                response
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
     }
@@ -177,7 +179,9 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get token info by address: {}",
-                response.message.unwrap_or_else(|| "Unknown error".to_string())
+                response
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
     }
@@ -197,13 +201,18 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get market data: {}",
-                response.message.unwrap_or_else(|| "Unknown error".to_string())
+                response
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
     }
 
     async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>> {
-        let endpoint = format!("/defi/v3/search?sort_by=volume_24h_usd&sort_type=desc&limit={}&verify_token=true", limit);
+        let endpoint = format!(
+            "/defi/v3/search?sort_by=volume_24h_usd&sort_type=desc&limit={}&verify_token=true",
+            limit
+        );
         let response: ApiResponse<Vec<TrendingToken>> = self.get(&endpoint).await?.json().await?;
 
         if response.success {
@@ -211,7 +220,9 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get trending tokens: {}",
-                response.message.unwrap_or_else(|| "Unknown error".to_string())
+                response
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
     }
@@ -225,7 +236,9 @@ impl BirdeyeApi for BirdeyeClient {
         } else {
             Err(anyhow!(
                 "Failed to get onchain metrics: {}",
-                response.message.unwrap_or_else(|| "Unknown error".to_string())
+                response
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string())
             ))
         }
     }
@@ -286,7 +299,9 @@ impl BirdeyeApi for MockBirdeyeApi {
     }
 
     async fn get_token_info_by_address(&self, _address: &str) -> Result<TokenInfo> {
-        self.token_info_by_address.clone().ok_or(anyhow!("Mock not set"))
+        self.token_info_by_address
+            .clone()
+            .ok_or(anyhow!("Mock not set"))
     }
 
     async fn get_market_data(&self, _address: &str) -> Result<TokenMarketResponse> {

@@ -1,13 +1,13 @@
+use crate::birdeye::api::TokenMarketResponse;
 use crate::birdeye::BirdeyeApi;
-use crate::models::token_info::TokenInfo;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
 use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
+use crate::models::token_info::TokenInfo;
 use crate::utils::f64_to_decimal;
-use crate::birdeye::api::TokenMarketResponse;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use bson::{doc, DateTime};
 use futures::StreamExt;
@@ -80,20 +80,32 @@ impl TokenAnalyticsService {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
         // Fetch basic token info from Birdeye using address with retry logic
-        let token_info = match self.fetch_with_retry(|| self.birdeye.get_token_info_by_address(address), 3).await {
+        let token_info = match self
+            .fetch_with_retry(|| self.birdeye.get_token_info_by_address(address), 3)
+            .await
+        {
             Ok(info) => info,
             Err(e) => {
-                let err = AgentError::BirdeyeApi(format!("Failed to fetch token info after retries: {}", e));
+                let err = AgentError::BirdeyeApi(format!(
+                    "Failed to fetch token info after retries: {}",
+                    e
+                ));
                 logger.error(&err.to_string());
                 return Err(err);
             }
         };
 
         // Fetch market data with retry logic
-        let market_data = match self.fetch_with_retry(|| self.birdeye.get_market_data(address), 3).await {
+        let market_data = match self
+            .fetch_with_retry(|| self.birdeye.get_market_data(address), 3)
+            .await
+        {
             Ok(data) => data,
             Err(e) => {
-                let err = AgentError::BirdeyeApi(format!("Failed to fetch market data after retries: {}", e));
+                let err = AgentError::BirdeyeApi(format!(
+                    "Failed to fetch market data after retries: {}",
+                    e
+                ));
                 logger.error(&err.to_string());
                 return Err(err);
             }
@@ -153,35 +165,45 @@ impl TokenAnalyticsService {
         };
 
         // Calculate technical indicators
-        let price_history = match self.get_token_history(address, 
-            DateTime::from(std::time::SystemTime::now() - std::time::Duration::from_secs(14 * 24 * 60 * 60)), 
-            DateTime::now(), 
-            100, 0).await {
+        let price_history = match self
+            .get_token_history(
+                address,
+                DateTime::from(
+                    std::time::SystemTime::now()
+                        - std::time::Duration::from_secs(14 * 24 * 60 * 60),
+                ),
+                DateTime::now(),
+                100,
+                0,
+            )
+            .await
+        {
             Ok(history) => history,
             Err(_) => vec![],
         };
 
-        let (rsi, macd, macd_signal, bollinger_upper, bollinger_lower) = 
+        let (rsi, macd, macd_signal, bollinger_upper, bollinger_lower) =
             if !price_history.is_empty() {
-                let prices: Vec<f64> = price_history.iter()
+                let prices: Vec<f64> = price_history
+                    .iter()
                     .map(|h| h.price.to_f64().unwrap_or_default())
                     .collect();
-                
+
                 // Calculate RSI (14 periods)
                 let rsi = self.calculate_rsi(&prices, 14);
-                
+
                 // Calculate MACD (12, 26, 9)
                 let (macd, signal) = self.calculate_macd(&prices, 12, 26, 9);
-                
+
                 // Calculate Bollinger Bands (20 periods, 2 standard deviations)
                 let (upper, lower) = self.calculate_bollinger_bands(&prices, 20, 2.0);
-                
+
                 (
                     Some(f64_to_decimal(rsi)),
                     Some(f64_to_decimal(macd)),
                     Some(f64_to_decimal(signal)),
                     Some(f64_to_decimal(upper)),
-                    Some(f64_to_decimal(lower))
+                    Some(f64_to_decimal(lower)),
                 )
             } else {
                 (None, None, None, None, None)
@@ -195,64 +217,68 @@ impl TokenAnalyticsService {
             token_symbol: symbol.to_string(),
             decimals: info.decimals,
             logo_uri: info.logo_uri,
-            
+
             // Price metrics
             price: f64_to_decimal(info.price),
             price_change_24h: info.price_change_24h.map(f64_to_decimal),
             price_change_7d: None, // Need to calculate from historical data
-            
+
             // Volume metrics
             volume_24h: Some(f64_to_decimal(info.volume_24h)),
             volume_change_24h: info.volume_change_24h.map(f64_to_decimal),
             volume_by_price_24h: Some(f64_to_decimal(info.volume_24h * info.price)),
-            
+
             // Market metrics
             market_cap: info.market_cap.map(f64_to_decimal),
             fully_diluted_market_cap: Some(f64_to_decimal(market_data.fdv)),
             circulating_supply: Some(f64_to_decimal(market_data.supply)),
             total_supply: Some(f64_to_decimal(market_data.total_supply)),
-            
+
             // Liquidity metrics
             liquidity: Some(f64_to_decimal(info.liquidity)),
             liquidity_change_24h: None, // Need historical data
-            
+
             // Trading metrics
             trades_24h: info.trade_24h,
-            average_trade_size: info.trade_24h.map(|trades| 
-                f64_to_decimal(info.volume_24h / trades as f64)
-            ),
-            
+            average_trade_size: info
+                .trade_24h
+                .map(|trades| f64_to_decimal(info.volume_24h / trades as f64)),
+
             // Holder metrics
             holder_count: onchain_metrics.as_ref().map(|m| m.unique_holders as i32),
-            active_wallets_24h: onchain_metrics.as_ref().map(|m| m.active_wallets_24h as i32),
-            whale_transactions_24h: onchain_metrics.as_ref().map(|m| m.whale_transactions_24h as i32),
-            
+            active_wallets_24h: onchain_metrics
+                .as_ref()
+                .map(|m| m.active_wallets_24h as i32),
+            whale_transactions_24h: onchain_metrics
+                .as_ref()
+                .map(|m| m.whale_transactions_24h as i32),
+
             // Technical indicators
             rsi_14: rsi,
             macd,
             macd_signal,
             bollinger_upper,
             bollinger_lower,
-            
+
             // Social metrics - Not available from Birdeye
             social_score: None,
             social_volume: None,
             social_sentiment: None,
             dev_activity: None,
-            
+
             // Timestamps and metadata
             timestamp: DateTime::now(),
             created_at: None,
             last_trade_time: Some(info.timestamp),
-            
+
             // Extensions and metadata
             metadata: Some(doc! {
                 "source": "birdeye",
                 "version": "1.0"
             }),
-            
+
             // Vector embedding will be added in a separate process
-            embedding: None
+            embedding: None,
         })
     }
 
@@ -265,7 +291,7 @@ impl TokenAnalyticsService {
         let mut losses = Vec::new();
 
         for i in 1..prices.len() {
-            let diff = prices[i] - prices[i-1];
+            let diff = prices[i] - prices[i - 1];
             if diff >= 0.0 {
                 gains.push(diff);
                 losses.push(0.0);
@@ -286,7 +312,13 @@ impl TokenAnalyticsService {
         100.0 - (100.0 / (1.0 + rs))
     }
 
-    fn calculate_macd(&self, prices: &[f64], fast_period: usize, slow_period: usize, signal_period: usize) -> (f64, f64) {
+    fn calculate_macd(
+        &self,
+        prices: &[f64],
+        fast_period: usize,
+        slow_period: usize,
+        signal_period: usize,
+    ) -> (f64, f64) {
         if prices.len() < slow_period {
             return (0.0, 0.0);
         }
@@ -294,9 +326,9 @@ impl TokenAnalyticsService {
         let fast_ema = self.calculate_ema(prices, fast_period);
         let slow_ema = self.calculate_ema(prices, slow_period);
         let macd_line = fast_ema - slow_ema;
-        
+
         let signal_line = self.calculate_ema(&vec![macd_line], signal_period);
-        
+
         (macd_line, signal_line)
     }
 
@@ -304,37 +336,44 @@ impl TokenAnalyticsService {
         if prices.is_empty() {
             return 0.0;
         }
-        
+
         let multiplier = 2.0 / (period as f64 + 1.0);
         let mut ema = prices[0];
-        
+
         for price in prices.iter().skip(1) {
             ema = (price - ema) * multiplier + ema;
         }
-        
+
         ema
     }
 
-    fn calculate_bollinger_bands(&self, prices: &[f64], period: usize, num_std_dev: f64) -> (f64, f64) {
+    fn calculate_bollinger_bands(
+        &self,
+        prices: &[f64],
+        period: usize,
+        num_std_dev: f64,
+    ) -> (f64, f64) {
         if prices.len() < period {
-            return (prices[prices.len()-1], prices[prices.len()-1]);
+            return (prices[prices.len() - 1], prices[prices.len() - 1]);
         }
 
         let sma = prices.iter().take(period).sum::<f64>() / period as f64;
-        
-        let variance = prices.iter()
+
+        let variance = prices
+            .iter()
             .take(period)
             .map(|price| {
                 let diff = price - sma;
                 diff * diff
             })
-            .sum::<f64>() / period as f64;
-        
+            .sum::<f64>()
+            / period as f64;
+
         let std_dev = variance.sqrt();
-        
+
         let upper_band = sma + (std_dev * num_std_dev);
         let lower_band = sma - (std_dev * num_std_dev);
-        
+
         (upper_band, lower_band)
     }
 
@@ -523,7 +562,10 @@ impl TokenAnalyticsService {
                     attempts += 1;
                     last_error = Some(e);
                     if attempts < retries {
-                        tokio::time::sleep(std::time::Duration::from_millis(500 * 2u64.pow(attempts))).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            500 * 2u64.pow(attempts),
+                        ))
+                        .await;
                     }
                 }
             }
@@ -549,7 +591,9 @@ impl TokenAnalyticsService {
         let one = BigDecimal::from(1);
 
         if signal.confidence < zero || signal.confidence > one {
-            return Err(AgentError::validation("Signal confidence must be between 0 and 1"));
+            return Err(AgentError::validation(
+                "Signal confidence must be between 0 and 1",
+            ));
         }
         if signal.risk_score < zero || signal.risk_score > one {
             return Err(AgentError::validation("Risk score must be between 0 and 1"));

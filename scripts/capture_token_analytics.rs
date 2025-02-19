@@ -1,17 +1,16 @@
+use anyhow::{Context, Result};
 use cainam_core::{
-    config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     birdeye::api::BirdeyeClient,
+    config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::trending_token::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
 };
+use dotenvy::dotenv;
+use futures::StreamExt;
 use mongodb::bson::doc;
 use std::sync::Arc;
-use std::env;
 use tokio;
-use tracing::{info, error, Level};
-use dotenvy::dotenv;
-use anyhow::{Result, Context};
-use futures::StreamExt;
+use tracing::{error, info, Level};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,18 +22,16 @@ async fn main() -> Result<()> {
         .with_file(true)
         .with_line_number(true)
         .init();
-    
+
     info!("Starting token analytics capture...");
 
     // Load environment variables
     dotenv().ok();
-    
+
     // Get MongoDB connection details
-    let mongodb_uri = env::var("MONGODB_URI")
-        .context("MONGODB_URI must be set")?;
-    let mongodb_database = env::var("MONGODB_DATABASE")
-        .context("MONGODB_DATABASE must be set")?;
-    
+    let mongodb_uri = dotenvy::var("MONGODB_URI").context("MONGODB_URI must be set")?;
+    let mongodb_database = dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
+
     info!("Connecting to MongoDB at: {}", mongodb_uri);
 
     // Initialize MongoDB connection
@@ -49,18 +46,14 @@ async fn main() -> Result<()> {
     info!("Successfully connected to MongoDB");
 
     // Initialize Birdeye client
-    let birdeye_api_key = env::var("BIRDEYE_API_KEY")
-        .context("BIRDEYE_API_KEY must be set")?;
-    
+    let birdeye_api_key = dotenvy::var("BIRDEYE_API_KEY").context("BIRDEYE_API_KEY must be set")?;
+
     let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key.clone()));
     info!("Initialized Birdeye client");
 
     // Initialize TokenAnalyticsService
-    let analytics_service = TokenAnalyticsService::new(
-        db_pool.clone(),
-        birdeye_client.clone(),
-        None
-    ).await?;
+    let analytics_service =
+        TokenAnalyticsService::new(db_pool.clone(), birdeye_client.clone(), None).await?;
     info!("Initialized TokenAnalyticsService");
 
     // Get database and collections
@@ -73,9 +66,7 @@ async fn main() -> Result<()> {
         "$orderby": { "timestamp": -1 }
     };
 
-    let mut cursor = trending_collection
-        .find(query)
-        .await?;
+    let mut cursor = trending_collection.find(query).await?;
     let mut processed = 0;
     let mut errors = 0;
 
@@ -84,12 +75,15 @@ async fn main() -> Result<()> {
         match token_result {
             Ok(token) => {
                 info!("Processing analytics for token: {}", token.symbol);
-                
-                match analytics_service.fetch_and_store_token_info(&token.symbol, &token.address).await {
+
+                match analytics_service
+                    .fetch_and_store_token_info(&token.symbol, &token.address)
+                    .await
+                {
                     Ok(_) => {
                         processed += 1;
                         info!("Successfully stored analytics for {}", token.symbol);
-                    },
+                    }
                     Err(e) => {
                         errors += 1;
                         error!("Failed to process token {}: {}", token.symbol, e);
@@ -98,7 +92,7 @@ async fn main() -> Result<()> {
 
                 // Add a small delay to respect rate limits
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            },
+            }
             Err(e) => {
                 error!("Error fetching trending token: {}", e);
                 errors += 1;
@@ -109,6 +103,6 @@ async fn main() -> Result<()> {
     info!("Token analytics capture completed:");
     info!("Successfully processed: {}", processed);
     info!("Errors: {}", errors);
-    
+
     Ok(())
-} 
+}

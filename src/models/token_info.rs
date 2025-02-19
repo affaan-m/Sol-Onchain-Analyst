@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use bson::DateTime;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenInfo {
@@ -34,4 +34,4 @@ pub struct TokenExtensions {
     pub description: Option<String>,
     pub discord: Option<String>,
     pub medium: Option<String>,
-} 
+}

@@ -1,8 +1,8 @@
+use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use crate::config::mongodb::MongoDbPool;
 use crate::config::mongodb::{MongoConfig, MongoPoolConfig};
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
-use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use anyhow::Result;
 use bson::DateTime;
 use chrono::{Duration, TimeZone, Utc};
@@ -28,12 +28,9 @@ pub struct AnalystAgent {
 impl AnalystAgent {
     pub async fn new(db_pool: Arc<MongoDbPool>, birdeye_api_key: String) -> Result<Self> {
         let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key));
-        let analytics_service = Arc::new(TokenAnalyticsService::new(
-            db_pool.clone(),
-            birdeye_client,
-            None,
-        ).await?);
-        
+        let analytics_service =
+            Arc::new(TokenAnalyticsService::new(db_pool.clone(), birdeye_client, None).await?);
+
         Ok(Self {
             analytics_service,
             db: db_pool,
@@ -42,7 +39,7 @@ impl AnalystAgent {
 
     pub async fn analyze_token(&self, symbol: &str, address: &str) -> Result<Option<MarketSignal>> {
         info!("Starting analysis for token: {} ({})", symbol, address);
-        
+
         // First fetch and store current token info
         let analytics = self
             .analytics_service
@@ -65,7 +62,10 @@ impl AnalystAgent {
             .await
             .map_err(|e| Error::Data(e.to_string()))?;
 
-        info!("Retrieved {} historical data points for analysis", history.len());
+        info!(
+            "Retrieved {} historical data points for analysis",
+            history.len()
+        );
 
         // Get previous analytics for comparison
         let previous = self
@@ -76,7 +76,7 @@ impl AnalystAgent {
 
         if let Some(prev_analytics) = previous {
             info!("Generating market signals based on analysis");
-            
+
             // Generate market signals based on the analysis
             return self
                 .analytics_service

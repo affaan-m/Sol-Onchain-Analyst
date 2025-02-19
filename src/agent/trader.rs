@@ -1,8 +1,8 @@
 // use crate::models::trade::Trade;
 use crate::{
-    config::AgentConfig,
     birdeye::api::BirdeyeClient,
     config::mongodb::MongoDbPool,
+    config::AgentConfig,
     config::MarketConfig,
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
@@ -97,8 +97,9 @@ impl TradingAgent {
         let market_config = MarketConfig::new_from_env()?;
 
         // Initialize analytics service
-        let analytics_service =
-            Arc::new(TokenAnalyticsService::new(db.clone(), birdeye.clone(), Some(market_config)).await?);
+        let analytics_service = Arc::new(
+            TokenAnalyticsService::new(db.clone(), birdeye.clone(), Some(market_config)).await?,
+        );
 
         Ok(Self {
             agent,

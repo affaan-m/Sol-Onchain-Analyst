@@ -1,11 +1,11 @@
 #![recursion_limit = "256"]
 
+use anyhow::{Context, Result};
 use cainam_core::config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
+use dotenvy::dotenv;
 use mongodb::bson::doc;
 use std::env;
 use tracing::{info, Level};
-use dotenvy::dotenv;
-use anyhow::{Result, Context};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,18 +17,18 @@ async fn main() -> Result<()> {
         .with_file(true)
         .with_line_number(true)
         .init();
-    
+
     info!("Starting MongoDB setup...");
 
     // Load environment variables
     dotenv().ok();
-    
+
     // Get MongoDB connection details
-    let mongodb_uri = env::var("MONGODB_URI")
+    let mongodb_uri = dotenvy::var("MONGODB_URI")
         .context("MONGODB_URI must be set")?;
-    let mongodb_database = env::var("MONGODB_DATABASE")
+    let mongodb_database = dotenvy::var("MONGODB_DATABASE")
         .context("MONGODB_DATABASE must be set")?;
-    
+
     info!("Connecting to MongoDB at: {}", mongodb_uri);
 
     // Initialize MongoDB connection
@@ -49,11 +49,14 @@ async fn main() -> Result<()> {
             "timeField": "timestamp",
             "granularity": "minutes"
     };
-    
-    match db.run_command(doc! {
-        "create": "trending_tokens",
-        "timeseries": trending_options
-    }).await {
+
+    match db
+        .run_command(doc! {
+            "create": "trending_tokens",
+            "timeseries": trending_options
+        })
+        .await
+    {
         Ok(_) => info!("Created trending_tokens collection"),
         Err(e) => info!("trending_tokens collection may already exist: {}", e),
     }
@@ -82,10 +85,13 @@ async fn main() -> Result<()> {
         }
     };
 
-    match db.run_command(doc! {
-        "createSearchIndex": "trending_tokens",
-        "definition": trending_search_index
-    }).await {
+    match db
+        .run_command(doc! {
+            "createSearchIndex": "trending_tokens",
+            "definition": trending_search_index
+        })
+        .await
+    {
         Ok(_) => info!("Created search index for trending_tokens"),
         Err(e) => info!("Search index may already exist: {}", e),
     }
@@ -96,11 +102,14 @@ async fn main() -> Result<()> {
             "timeField": "timestamp",
             "granularity": "minutes"
     };
-    
-    match db.run_command(doc! {
-        "create": "token_analytics",
-        "timeseries": analytics_options
-    }).await {
+
+    match db
+        .run_command(doc! {
+            "create": "token_analytics",
+            "timeseries": analytics_options
+        })
+        .await
+    {
         Ok(_) => info!("Created token_analytics collection"),
         Err(e) => info!("token_analytics collection may already exist: {}", e),
     }
@@ -116,95 +125,95 @@ async fn main() -> Result<()> {
                 "token_symbol": { "type": "token" },
                 "decimals": { "type": "number" },
                 "logo_uri": { "type": "string" },
-                
+
                 // Price metrics (stored as Decimal128)
-                "price": { 
+                "price": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "price", "type": "decimal128" }
                 },
                 "price_change_24h": { "type": "sortableNumberBetaV1" },
                 "price_change_7d": { "type": "sortableNumberBetaV1" },
-                
+
                 // Volume metrics (stored as Decimal128)
-                "volume_24h": { 
+                "volume_24h": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "volume_24h", "type": "decimal128" }
                 },
                 "volume_change_24h": { "type": "sortableNumberBetaV1" },
-                "volume_by_price_24h": { 
+                "volume_by_price_24h": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "volume_by_price_24h", "type": "decimal128" }
                 },
-                
+
                 // Market metrics (stored as Decimal128)
-                "market_cap": { 
+                "market_cap": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "market_cap", "type": "decimal128" }
                 },
-                "fully_diluted_market_cap": { 
+                "fully_diluted_market_cap": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "fully_diluted_market_cap", "type": "decimal128" }
                 },
-                "circulating_supply": { 
+                "circulating_supply": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "circulating_supply", "type": "decimal128" }
                 },
-                "total_supply": { 
+                "total_supply": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "total_supply", "type": "decimal128" }
                 },
-                
+
                 // Trading metrics
                 "trades_24h": { "type": "numberFacet" },
-                "average_trade_size": { 
+                "average_trade_size": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "average_trade_size", "type": "decimal128" }
                 },
-                
+
                 // Holder metrics
                 "holder_count": { "type": "numberFacet" },
                 "active_wallets_24h": { "type": "numberFacet" },
                 "whale_transactions_24h": { "type": "numberFacet" },
-                
+
                 // Technical indicators (stored as Decimal128)
-                "rsi_14": { 
+                "rsi_14": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "rsi_14", "type": "decimal128" }
                 },
-                "macd": { 
+                "macd": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "macd", "type": "decimal128" }
                 },
-                "macd_signal": { 
+                "macd_signal": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "macd_signal", "type": "decimal128" }
                 },
-                "bollinger_upper": { 
+                "bollinger_upper": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "bollinger_upper", "type": "decimal128" }
                 },
-                "bollinger_lower": { 
+                "bollinger_lower": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "bollinger_lower", "type": "decimal128" }
                 },
-                
+
                 // Social metrics
-                "social_score": { 
+                "social_score": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "social_score", "type": "decimal128" }
                 },
                 "social_volume": { "type": "numberFacet" },
-                "social_sentiment": { 
+                "social_sentiment": {
                     "type": "sortableNumberBetaV1",
                     "path": { "value": "social_sentiment", "type": "decimal128" }
                 },
                 "dev_activity": { "type": "numberFacet" },
-                
+
                 // Timestamps
                 "timestamp": { "type": "sortableDateBetaV1" },
                 "created_at": { "type": "date" },
                 "last_trade_time": { "type": "date" },
-                
+
                 // Vector search
                 "embedding": {
                     "type": "knnVector",
@@ -215,10 +224,13 @@ async fn main() -> Result<()> {
         }
     };
 
-    match db.run_command(doc! {
-        "createSearchIndex": "token_analytics",
-        "definition": analytics_search_index
-    }).await {
+    match db
+        .run_command(doc! {
+            "createSearchIndex": "token_analytics",
+            "definition": analytics_search_index
+        })
+        .await
+    {
         Ok(_) => info!("Created search index for token_analytics"),
         Err(e) => info!("Search index may already exist: {}", e),
     }
@@ -229,11 +241,14 @@ async fn main() -> Result<()> {
             "timeField": "timestamp",
             "granularity": "minutes"
     };
-    
-    match db.run_command(doc! {
-        "create": "market_signals",
-        "timeseries": signals_options
-    }).await {
+
+    match db
+        .run_command(doc! {
+            "create": "market_signals",
+            "timeseries": signals_options
+        })
+        .await
+    {
         Ok(_) => info!("Created market_signals collection"),
         Err(e) => info!("market_signals collection may already exist: {}", e),
     }
@@ -256,10 +271,13 @@ async fn main() -> Result<()> {
         }
     };
 
-    match db.run_command(doc! {
-        "createSearchIndex": "market_signals",
-        "definition": signals_search_index
-    }).await {
+    match db
+        .run_command(doc! {
+            "createSearchIndex": "market_signals",
+            "definition": signals_search_index
+        })
+        .await
+    {
         Ok(_) => info!("Created search index for market_signals"),
         Err(e) => info!("Search index may already exist: {}", e),
     }
@@ -270,11 +288,14 @@ async fn main() -> Result<()> {
             "timeField": "entry_time",
             "granularity": "minutes"
     };
-    
-    match db.run_command(doc! {
-        "create": "trading_positions",
-        "timeseries": positions_options
-    }).await {
+
+    match db
+        .run_command(doc! {
+            "create": "trading_positions",
+            "timeseries": positions_options
+        })
+        .await
+    {
         Ok(_) => info!("Created trading_positions collection"),
         Err(e) => info!("trading_positions collection may already exist: {}", e),
     }
@@ -298,10 +319,13 @@ async fn main() -> Result<()> {
         }
     };
 
-    match db.run_command(doc! {
-        "createSearchIndex": "trading_positions",
-        "definition": positions_search_index
-    }).await {
+    match db
+        .run_command(doc! {
+            "createSearchIndex": "trading_positions",
+            "definition": positions_search_index
+        })
+        .await
+    {
         Ok(_) => info!("Created search index for trading_positions"),
         Err(e) => info!("Search index may already exist: {}", e),
     }

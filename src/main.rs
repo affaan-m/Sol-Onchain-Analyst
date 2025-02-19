@@ -50,8 +50,7 @@ async fn handle_user_input(
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
-                let parts: Vec<String> =
-                    input.split_whitespace().map(String::from).collect();
+                let parts: Vec<String> = input.split_whitespace().map(String::from).collect();
 
                 if parts.is_empty() {
                     continue;

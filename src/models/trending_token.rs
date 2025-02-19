@@ -1,5 +1,5 @@
+use bson::{oid::ObjectId, DateTime};
 use serde::{Deserialize, Serialize};
-use bson::{DateTime, oid::ObjectId};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrendingTokenResponse {
@@ -44,4 +44,4 @@ impl TrendingToken {
     pub fn collection_name() -> &'static str {
         "trending_tokens"
     }
-} 
+}

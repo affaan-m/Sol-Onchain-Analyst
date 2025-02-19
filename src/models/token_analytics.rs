@@ -9,68 +9,68 @@ use serde::{Deserialize, Serialize};
 pub struct TokenAnalytics {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
-    
+
     // Base token data
-    pub token_address: String,  // type: "string"
-    pub token_name: String,    // type: "string"
-    pub token_symbol: String,  // type: "string"
-    pub decimals: u8,         // type: "number"
+    pub token_address: String,    // type: "string"
+    pub token_name: String,       // type: "string"
+    pub token_symbol: String,     // type: "string"
+    pub decimals: u8,             // type: "number"
     pub logo_uri: Option<String>, // type: "string"
-    
+
     // Price metrics
-    pub price: BigDecimal,     // type: "number"
-    pub price_change_24h: Option<BigDecimal>,  // type: "number"
-    pub price_change_7d: Option<BigDecimal>,   // type: "number"
-    
+    pub price: BigDecimal,                    // type: "number"
+    pub price_change_24h: Option<BigDecimal>, // type: "number"
+    pub price_change_7d: Option<BigDecimal>,  // type: "number"
+
     // Volume metrics
-    pub volume_24h: Option<BigDecimal>,  // type: "number"
-    pub volume_change_24h: Option<BigDecimal>,  // type: "number"
+    pub volume_24h: Option<BigDecimal>,          // type: "number"
+    pub volume_change_24h: Option<BigDecimal>,   // type: "number"
     pub volume_by_price_24h: Option<BigDecimal>, // type: "number"
-    
+
     // Market metrics
-    pub market_cap: Option<BigDecimal>,  // type: "number"
+    pub market_cap: Option<BigDecimal>, // type: "number"
     pub fully_diluted_market_cap: Option<BigDecimal>, // type: "number"
-    pub circulating_supply: Option<BigDecimal>,  // type: "number"
-    pub total_supply: Option<BigDecimal>,  // type: "number"
-    
+    pub circulating_supply: Option<BigDecimal>, // type: "number"
+    pub total_supply: Option<BigDecimal>, // type: "number"
+
     // Liquidity metrics
-    pub liquidity: Option<BigDecimal>,  // type: "number"
+    pub liquidity: Option<BigDecimal>,            // type: "number"
     pub liquidity_change_24h: Option<BigDecimal>, // type: "number"
-    
+
     // Trading metrics
-    pub trades_24h: Option<i64>,  // type: "number"
+    pub trades_24h: Option<i64>,                // type: "number"
     pub average_trade_size: Option<BigDecimal>, // type: "number"
-    
+
     // Holder metrics
-    pub holder_count: Option<i32>,  // type: "number"
-    pub active_wallets_24h: Option<i32>, // type: "number"
+    pub holder_count: Option<i32>,           // type: "number"
+    pub active_wallets_24h: Option<i32>,     // type: "number"
     pub whale_transactions_24h: Option<i32>, // type: "number"
-    
+
     // Technical indicators
-    pub rsi_14: Option<BigDecimal>, // type: "number"
-    pub macd: Option<BigDecimal>,   // type: "number"
-    pub macd_signal: Option<BigDecimal>, // type: "number"
+    pub rsi_14: Option<BigDecimal>,          // type: "number"
+    pub macd: Option<BigDecimal>,            // type: "number"
+    pub macd_signal: Option<BigDecimal>,     // type: "number"
     pub bollinger_upper: Option<BigDecimal>, // type: "number"
     pub bollinger_lower: Option<BigDecimal>, // type: "number"
-    
+
     // Social metrics
-    pub social_score: Option<BigDecimal>, // type: "number"
-    pub social_volume: Option<i32>,      // type: "number"
+    pub social_score: Option<BigDecimal>,     // type: "number"
+    pub social_volume: Option<i32>,           // type: "number"
     pub social_sentiment: Option<BigDecimal>, // type: "number"
-    pub dev_activity: Option<i32>,       // type: "number"
-    
+    pub dev_activity: Option<i32>,            // type: "number"
+
     // Timestamps and metadata
-    pub timestamp: DateTime,    // type: "date"
-    pub created_at: Option<DateTime>,  // type: "date"
+    pub timestamp: DateTime,               // type: "date"
+    pub created_at: Option<DateTime>,      // type: "date"
     pub last_trade_time: Option<DateTime>, // type: "date"
-    
+
     // Extensions and metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Document>,  // type: "document"
-    
+    pub metadata: Option<Document>, // type: "document"
+
     // Vector embedding for similarity search
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub embedding: Option<Vec<f32>>  // type: "knnVector", dimensions: 1536
+    pub embedding: Option<Vec<f32>>, // type: "knnVector", dimensions: 1536
 }
 
 // MongoDB Atlas Search Vector Index Definition (for reference):

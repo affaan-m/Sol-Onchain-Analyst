@@ -1,18 +1,18 @@
 use anyhow::Result;
 use bson::DateTime;
+use chrono::{DateTime as ChronoDateTime, Utc};
 use futures::TryStreamExt;
+use mongodb::options::FindOptions;
 use mongodb::{
     bson::{self, doc},
     Client, Collection, Database,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
-use mongodb::options::FindOptions;
-use chrono::{DateTime as ChronoDateTime, Utc};
 
 use crate::{
-    birdeye::{api::{BirdeyeApi, BirdeyeClient}},
-    config::mongodb::{TokenAnalyticsData, MongoDbPool},
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    config::mongodb::{MongoDbPool, TokenAnalyticsData},
     error::AgentResult,
 };
 
@@ -29,7 +29,7 @@ impl TokenDataService {
         let client = Client::with_uri_str(&mongo_uri).await?;
         let database = client.database("cainam");
         let collection = database.collection(COLLECTION_NAME);
-        
+
         let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key)) as Arc<dyn BirdeyeApi>;
 
         Ok(Self {
@@ -42,7 +42,7 @@ impl TokenDataService {
     pub async fn new_with_pool(pool: Arc<MongoDbPool>, birdeye_api_key: String) -> Result<Self> {
         let database = pool.database("");
         let collection = database.collection(COLLECTION_NAME);
-        
+
         let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key)) as Arc<dyn BirdeyeApi>;
 
         Ok(Self {
@@ -52,7 +52,10 @@ impl TokenDataService {
         })
     }
 
-    pub async fn get_latest_token_data(&self, token_address: &str) -> Result<Option<TokenAnalyticsData>> {
+    pub async fn get_latest_token_data(
+        &self,
+        token_address: &str,
+    ) -> Result<Option<TokenAnalyticsData>> {
         let filter = doc! { "token_address": token_address };
         let options = FindOptions::builder()
             .sort(doc! { "timestamp": -1 })
@@ -86,7 +89,10 @@ impl TokenDataService {
         Ok(())
     }
 
-    pub async fn get_token_data(&self, filter: bson::Document) -> AgentResult<Option<TokenAnalyticsData>> {
+    pub async fn get_token_data(
+        &self,
+        filter: bson::Document,
+    ) -> AgentResult<Option<TokenAnalyticsData>> {
         let mut cursor = self.collection.find(filter).await?;
         Ok(cursor.try_next().await?)
     }
@@ -110,4 +116,4 @@ impl TokenDataService {
         }
         Ok(results)
     }
-} 
+}
