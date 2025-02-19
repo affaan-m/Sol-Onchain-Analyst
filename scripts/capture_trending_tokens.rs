@@ -65,16 +65,28 @@ async fn main() -> Result<()> {
     trending_collection.create_index(index).await?;
 
     info!("Fetching trending tokens from Birdeye...");
-    let trending_response = birdeye_client.get_trending_tokens_full().await?;
+    let trending_tokens = birdeye_client.get_trending_tokens().await?;
     let current_timestamp = DateTime::now();
 
     let mut tokens_stored = 0;
-    for token in trending_response.data.tokens {
+    for token in trending_tokens {
         // Add timestamp and id to token before storing
         let token_with_meta = TrendingToken {
             id: Some(ObjectId::new()),
             timestamp: Some(current_timestamp),
-            ..token
+            address: token.address,
+            decimals: token.decimals,
+            liquidity: token.liquidity,
+            logo_uri: token.logo_uri,
+            name: token.name,
+            symbol: token.symbol,
+            volume_24h_usd: token.volume_24h_usd,
+            rank: token.rank,
+            price: token.price,
+            volume_24h_change_percent: None,
+            fdv: None,
+            marketcap: None,
+            price_24h_change_percent: None,
         };
 
         match trending_collection.insert_one(token_with_meta).await {

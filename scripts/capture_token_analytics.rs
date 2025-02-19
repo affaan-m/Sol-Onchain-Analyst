@@ -1,18 +1,16 @@
 use anyhow::{Context, Result};
 use cainam_core::{
-    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    birdeye::api:: BirdeyeClient,
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::trending_token::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
 };
 use dotenvy::dotenv;
-use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::{doc, oid::ObjectId, DateTime};
-use mongodb::IndexModel;
+use futures::TryStreamExt;
+use mongodb::bson::doc;
 use std::sync::Arc;
 use tokio;
 use tracing::{error, info, Level};
-use mongodb::options::FindOptions;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,10 +61,7 @@ async fn main() -> Result<()> {
     let trending_collection = db.collection::<TrendingToken>("trending_tokens");
 
     // Get the most recent trending tokens with sorting by timestamp
-    let filter = doc! {
-        "$query": {},
-        "$orderby": { "timestamp": -1 }
-    };
+    let filter = doc! {};
     let mut cursor = trending_collection.find(filter).await?;
     let mut processed = 0;
     let mut errors = 0;

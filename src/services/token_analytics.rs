@@ -79,22 +79,6 @@ impl TokenAnalyticsService {
     ) -> AgentResult<TokenAnalytics> {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
-        // Fetch basic token info from Birdeye using address with retry logic
-        let token_info = match self
-            .fetch_with_retry(|| self.birdeye.get_token_info_by_address(address), 3)
-            .await
-        {
-            Ok(info) => info,
-            Err(e) => {
-                let err = AgentError::BirdeyeApi(format!(
-                    "Failed to fetch token info after retries: {}",
-                    e
-                ));
-                logger.error(&err.to_string());
-                return Err(err);
-            }
-        };
-
         // Fetch market data with retry logic
         let market_data = match self
             .fetch_with_retry(|| self.birdeye.get_market_data(address), 3)
@@ -112,13 +96,22 @@ impl TokenAnalyticsService {
         };
 
         // Validate token data
-        self.validate_token_data(&token_info)?;
+        if market_data.price <= 0.0 {
+            let err = AgentError::validation("Token price must be positive");
+            logger.error(&err.to_string());
+            return Err(err);
+        }
+        if market_data.v24h < 0.0 {
+            let err = AgentError::validation("Token volume cannot be negative");
+            logger.error(&err.to_string());
+            return Err(err);
+        }
 
         // Log market metrics
         let metrics = MarketMetrics {
             symbol: symbol.to_string(),
-            price: token_info.price,
-            volume_24h: Some(token_info.volume_24h),
+            price: market_data.price,
+            volume_24h: Some(market_data.v24h),
             signal_type: None,
             confidence: None,
         };
@@ -126,7 +119,7 @@ impl TokenAnalyticsService {
 
         // Convert to TokenAnalytics
         let analytics = match self
-            .convert_to_analytics(address, symbol, token_info, market_data)
+            .convert_to_analytics(address, symbol, market_data)
             .await
         {
             Ok(analytics) => analytics,
@@ -155,15 +148,8 @@ impl TokenAnalyticsService {
         &self,
         address: &str,
         symbol: &str,
-        info: TokenInfo,
         market_data: TokenMarketResponse,
     ) -> AgentResult<TokenAnalytics> {
-        // Get on-chain metrics
-        let onchain_metrics = match self.birdeye.get_onchain_metrics(address).await {
-            Ok(metrics) => Some(metrics),
-            Err(_) => None,
-        };
-
         // Calculate technical indicators
         let price_history = match self
             .get_token_history(
@@ -173,8 +159,6 @@ impl TokenAnalyticsService {
                         - std::time::Duration::from_secs(14 * 24 * 60 * 60),
                 ),
                 DateTime::now(),
-                100,
-                0,
             )
             .await
         {
@@ -213,45 +197,45 @@ impl TokenAnalyticsService {
             id: None,
             // Base token data
             token_address: address.to_string(),
-            token_name: info.name,
+            token_name: market_data.name,
             token_symbol: symbol.to_string(),
-            decimals: info.decimals,
-            logo_uri: info.logo_uri,
+            decimals: market_data.decimals as u8,
+            logo_uri: Some(market_data.logo_uri),
 
             // Price metrics
-            price: f64_to_decimal(info.price),
-            price_change_24h: info.price_change_24h.map(f64_to_decimal),
-            price_change_7d: None, // Need to calculate from historical data
+            price: f64_to_decimal(market_data.price),
+            price_change_24h: Some(f64_to_decimal(market_data.price_change_24h_percent)),
+            price_change_7d: Some(f64_to_decimal(
+                (market_data.price - market_data.history24h_price) / market_data.history24h_price * 100.0,
+            )),
 
             // Volume metrics
-            volume_24h: Some(f64_to_decimal(info.volume_24h)),
-            volume_change_24h: info.volume_change_24h.map(f64_to_decimal),
-            volume_by_price_24h: Some(f64_to_decimal(info.volume_24h * info.price)),
+            volume_24h: Some(f64_to_decimal(market_data.v24h)),
+            volume_change_24h: Some(f64_to_decimal(market_data.v24h_change_percent)),
+            volume_by_price_24h: Some(f64_to_decimal(market_data.v24h_usd)),
 
             // Market metrics
-            market_cap: info.market_cap.map(f64_to_decimal),
+            market_cap: Some(f64_to_decimal(market_data.real_mc)),
             fully_diluted_market_cap: Some(f64_to_decimal(market_data.fdv)),
-            circulating_supply: Some(f64_to_decimal(market_data.supply)),
+            circulating_supply: Some(f64_to_decimal(market_data.circulating_supply)),
             total_supply: Some(f64_to_decimal(market_data.total_supply)),
 
             // Liquidity metrics
-            liquidity: Some(f64_to_decimal(info.liquidity)),
-            liquidity_change_24h: None, // Need historical data
+            liquidity: Some(f64_to_decimal(market_data.liquidity)),
+            liquidity_change_24h: Some(f64_to_decimal(
+                (market_data.liquidity - market_data.liquidity) / market_data.liquidity * 100.0 // TODO: Use historical liquidity data when available
+            )),
 
             // Trading metrics
-            trades_24h: info.trade_24h,
-            average_trade_size: info
-                .trade_24h
-                .map(|trades| f64_to_decimal(info.volume_24h / trades as f64)),
+            trades_24h: Some(market_data.trade24h),
+            average_trade_size: Some(f64_to_decimal(
+                market_data.v24h_usd / market_data.trade24h as f64
+            )),
 
             // Holder metrics
-            holder_count: onchain_metrics.as_ref().map(|m| m.unique_holders as i32),
-            active_wallets_24h: onchain_metrics
-                .as_ref()
-                .map(|m| m.active_wallets_24h as i32),
-            whale_transactions_24h: onchain_metrics
-                .as_ref()
-                .map(|m| m.whale_transactions_24h as i32),
+            holder_count: Some(market_data.holder as i32),
+            active_wallets_24h: Some(market_data.unique_wallet24h as i32),
+            whale_transactions_24h: None,
 
             // Technical indicators
             rsi_14: rsi,
@@ -269,12 +253,31 @@ impl TokenAnalyticsService {
             // Timestamps and metadata
             timestamp: DateTime::now(),
             created_at: None,
-            last_trade_time: Some(info.timestamp),
+            last_trade_time: Some(DateTime::from_millis(market_data.last_trade_unix_time * 1000)),
 
             // Extensions and metadata
             metadata: Some(doc! {
                 "source": "birdeye",
-                "version": "1.0"
+                "version": "1.0",
+                "extensions": {
+                    "coingecko_id": market_data.extensions.coingecko_id,
+                    "serum_v3_usdc": market_data.extensions.serum_v3_usdc,
+                    "serum_v3_usdt": market_data.extensions.serum_v3_usdt,
+                    "website": market_data.extensions.website,
+                    "telegram": market_data.extensions.telegram,
+                    "twitter": market_data.extensions.twitter,
+                    "description": market_data.extensions.description,
+                    "discord": market_data.extensions.discord,
+                    "medium": market_data.extensions.medium
+                },
+                "market_stats": {
+                    "buy_volume_24h": market_data.v_buy24h_usd,
+                    "sell_volume_24h": market_data.v_sell24h_usd,
+                    "buy_count_24h": market_data.buy24h,
+                    "sell_count_24h": market_data.sell24h,
+                    "unique_traders_24h": market_data.unique_wallet24h,
+                    "number_markets": market_data.number_markets
+                }
             }),
 
             // Vector embedding will be added in a separate process
@@ -521,8 +524,6 @@ impl TokenAnalyticsService {
         address: &str,
         start_time: DateTime,
         end_time: DateTime,
-        limit: i64,
-        offset: i64,
     ) -> AgentResult<Vec<TokenAnalytics>> {
         let filter = doc! {
             "token_address": address,
@@ -532,9 +533,14 @@ impl TokenAnalyticsService {
             }
         };
 
+        let options = mongodb::options::FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .build();
+
         let mut cursor = self
             .collection
             .find(filter)
+            .with_options(options)
             .await
             .map_err(AgentError::Database)?;
 

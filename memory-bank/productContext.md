@@ -1,68 +1,55 @@
-# Product Context
+# Project Brief
 
-## Overview
-Cainam Core is a decentralized AI trading agent platform built on Solana, designed to capture, analyze, and act on market data for cryptocurrency tokens.
+## Project Overview
 
-## Core Problems Solved
-1. Market Data Collection
-   - Automated capture of trending tokens
-   - Comprehensive token analytics collection
-   - Historical data preservation
+Cainam Core is a Rust-based autonomous trading system for the Solana blockchain, focusing on market data collection, analysis, and automated trading execution.
 
-2. Market Analysis
-   - Technical indicator calculation
-   - Market signal generation
-   - Risk assessment
+## Core Requirements
 
-3. Trading Automation
-   - Signal-based trading decisions
-   - Portfolio optimization
-   - Risk management
+### 1. Market Data Collection
 
-## User Experience Goals
-1. Data Reliability
-   - Accurate market data capture
-   - Consistent analytics processing
-   - Reliable historical records
+- Capture trending tokens from Birdeye API
+- Collect detailed token analytics
+- Store historical market data
+- Implement efficient data indexing
 
-2. System Performance
-   - Efficient data processing
-   - Responsive analytics
-   - Scalable architecture
+### 2. Market Analysis
 
-3. Trading Effectiveness
-   - Timely market signals
-   - Accurate trading decisions
-   - Risk-aware execution
+- Calculate technical indicators
+- Generate trading signals
+- Assess market conditions
+- Evaluate trading opportunities
 
-## Key Features
-1. Market Data Pipeline
-   - Trending token discovery
-   - Detailed analytics collection
-   - Technical indicator calculation
+### 3. Trading Automation
 
-2. Analytics Engine
-   - Market signal generation
-   - Risk scoring
-   - Performance metrics
+- Execute trades based on signals
+- Manage portfolio positions
+- Implement risk management
+- Track trading performance
 
-3. Trading System
-   - Automated trade execution
-   - Position management
-   - Portfolio balancing
+## Technical Goals
 
-## Success Metrics
-1. Data Quality
-   - Data completeness
-   - Analytics accuracy
-   - Signal reliability
+- Reliable data collection pipeline
+- Efficient MongoDB integration
+- Scalable architecture
+- Robust error handling
+- Comprehensive logging
+- Performance optimization
 
-2. System Performance
-   - Processing latency
-   - API efficiency
-   - Database performance
+## Project Scope
 
-3. Trading Results
-   - Signal accuracy
-   - Trading profitability
-   - Risk management effectiveness
+- Market data collection and storage
+- Technical analysis implementation
+- Trading signal generation
+- Automated trade execution
+- Performance monitoring
+- Risk management system
+
+## Success Criteria
+
+- Accurate market data capture
+- Reliable signal generation
+- Efficient trade execution
+- Scalable data storage
+- Robust error handling
+- Comprehensive monitoring

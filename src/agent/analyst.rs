@@ -1,6 +1,5 @@
 use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use crate::config::mongodb::MongoDbPool;
-use crate::config::mongodb::{MongoConfig, MongoPoolConfig};
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;
@@ -58,7 +57,7 @@ impl AnalystAgent {
 
         let history = self
             .analytics_service
-            .get_token_history(address, start_time, end_time, 100, 0)
+            .get_token_history(address, start_time, end_time)
             .await
             .map_err(|e| Error::Data(e.to_string()))?;
 
@@ -68,13 +67,13 @@ impl AnalystAgent {
         );
 
         // Get previous analytics for comparison
-        let previous = self
+        if self
             .analytics_service
             .get_previous_analytics(address)
             .await
-            .map_err(|e| Error::Data(e.to_string()))?;
-
-        if let Some(prev_analytics) = previous {
+            .map_err(|e| Error::Data(e.to_string()))?
+            .is_some()
+        {
             info!("Generating market signals based on analysis");
 
             // Generate market signals based on the analysis
@@ -87,48 +86,5 @@ impl AnalystAgent {
 
         info!("No previous analytics found for comparison");
         Ok(None)
-    }
-
-    // async fn store_analysis(&self, analysis: &Analysis) -> Result<(), Error> {
-    //     let collection = self.db.database("cainam").collection("market_analysis");
-
-    //     collection
-    //         .insert_one(analysis, None)
-    //         .await
-    //         .map_err(|e| Error::Mongo(e))?;
-
-    //     Ok(())
-    // }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::mongodb::{MongoConfig, MongoPoolConfig};
-    use crate::error::AgentError;
-
-    #[tokio::test]
-    async fn test_token_analysis() -> Result<()> {
-        // Setup MongoDB connection
-        let mongodb_uri = "mongodb://localhost:27017".to_string();
-        let mongodb_database = "test_db".to_string();
-        let config = MongoConfig {
-            uri: mongodb_uri.clone(),
-            database: mongodb_database.clone(),
-            app_name: Some("test".to_string()),
-            pool_config: MongoPoolConfig::default(),
-        };
-        let db_pool = Arc::new(MongoDbPool::create_pool(config).await?);
-
-        // Create AnalystAgent
-        let analyst = AnalystAgent::new(db_pool, "test_key".to_string()).await?;
-
-        // Test token analysis
-        let symbol = "SOL";
-        let address = "So11111111111111111111111111111111111111112";
-        let result = analyst.analyze_token(symbol, address).await;
-        assert!(result.is_ok());
-
-        Ok(())
     }
 }

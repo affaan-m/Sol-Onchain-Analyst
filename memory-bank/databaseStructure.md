@@ -1,223 +1,318 @@
-# MongoDB Database Structure
+# MongoDB Database Structure for CAINAM (Revised)
 
 ## Database: `cainam`
 
-### Market Data Collections
+This document outlines the collections within the `cainam` database, their purposes, schemas, indexes, and relationships. It also notes the relevant API endpoints for data ingestion.
 
-#### 1. `trending_tokens`
+### 1. Market Data Collections
 
-**Purpose:** Stores trending token data from Birdeye API
-**API Endpoint:** `https://public-api.birdeye.so/defi/token_trending`
-**Update Frequency:** Every 5 minutes
-**Schema and Field Types:**
+#### 1.1. `trending_tokens`
 
-```json
-{
-    "_id": { "type": "objectId" },
-    "address": { "type": "string", "searchable": true },
-    "decimals": { "type": "number" },
-    "liquidity": { "type": "sortableNumberBetaV1" },
-    "logo_uri": { "type": "string" },
-    "name": { "type": "string", "searchable": true },
-    "symbol": { "type": "token" },
-    "volume_24h_usd": { "type": "sortableNumberBetaV1" },
-    "volume_24h_change_percent": { "type": "number" },
-    "fdv": { "type": "sortableNumberBetaV1" },
-    "marketcap": { "type": "sortableNumberBetaV1" },
-    "rank": { "type": "numberFacet" },
-    "price": { "type": "sortableNumberBetaV1" },
-    "price_24h_change_percent": { "type": "number" },
-    "timestamp": { "type": "sortableDateBetaV1" }
-}
-```
+* **Purpose:** Stores trending token data from the Birdeye API. This is the initial point of discovery for potentially interesting tokens.
+* **API Endpoint:** `https://public-api.birdeye.so/defi/token_trending`
+* **Update Frequency:** Every 5 minutes.
+* **Schema:**
 
-**Indexes:**
+    ```json
+    {
+        "_id": objectId,
+        "address": string,          // Token contract address
+        "decimals": number,         // Token decimals
+        "liquidity": number,        // Current liquidity in USD
+        "logo_uri": string,         // Token logo URL
+        "name": string,             // Token name
+        "symbol": string,           // Token symbol
+        "volume_24h_usd": number,   // 24h volume in USD
+        "volume_24h_change_percent": number,  // 24h volume change %
+        "fdv": number,              // Fully diluted valuation
+        "marketcap": number,        // Current market cap
+        "rank": number,             // Trending rank
+        "price": number,            // Current price
+        "price_24h_change_percent": number,   // 24h price change %
+        "timestamp": date       // When this data was captured
+    }
+    ```
 
-- Compound: `{ address: 1, timestamp: -1 }` (Primary for querying historical data)
-- Single: `{ timestamp: -1 }` (For recent trending queries)
+* **Indexes:**
+  * Compound: `{ address: 1, timestamp: -1 }` (For querying historical data for a specific token)
+  * Single: `{ timestamp: -1 }` (For querying the most recent trending tokens)
+* **Relationship:** Feeds into `token_analytics`.
 
-#### 2. `token_analytics`
+#### 1.2. `token_analytics`
 
-**Purpose:** Stores detailed token analytics and metrics
-**API Endpoint:** `https://public-api.birdeye.so/defi/token_overview?address={token_address}`
-**Update Frequency:** Every 15 minutes for active tokens
-**Schema and Field Types:**
+* **Purpose:** Stores comprehensive token analytics, combining data from Birdeye with calculated metrics and AI-generated insights.
+* **API Endpoints:**
+  * `https://public-api.birdeye.so/defi/token_overview?address={token_address}` (Token Overview)
+  * `https://public-api.birdeye.so/defi/v3/token/market-data?address={token_address}` (Market Data)
+  * `https://public-api.birdeye.so/defi/v3/token/trade-data/multiple?list_address={address1},{address2},...` (Trade Data - for multiple tokens, batched)
+* **Update Frequency:** Every 15 minutes for actively tracked tokens.
+* **Schema:**
 
-```json
-{
-    "_id": { "type": "objectId" },
-    "token_address": { "type": "string", "searchable": true },
-    "token_name": { "type": "string", "searchable": true },
-    "token_symbol": { "type": "token" },
-    "decimals": { "type": "number" },
-    "logo_uri": { "type": "string" },
-    
-    // Price metrics
-    "price": { "type": "sortableNumberBetaV1" },
-    "price_change_24h": { "type": "number" },
-    "price_change_7d": { "type": "number" },
-    
-    // Volume metrics
-    "volume_24h": { "type": "sortableNumberBetaV1" },
-    "volume_change_24h": { "type": "number" },
-    "volume_by_price_24h": { "type": "sortableNumberBetaV1" },
-    
-    // Market metrics
-    "market_cap": { "type": "sortableNumberBetaV1" },
-    "fully_diluted_market_cap": { "type": "sortableNumberBetaV1" },
-    "circulating_supply": { "type": "sortableNumberBetaV1" },
-    "total_supply": { "type": "sortableNumberBetaV1" },
-    
-    // Liquidity metrics
-    "liquidity": { "type": "sortableNumberBetaV1" },
-    "liquidity_change_24h": { "type": "number" },
-    
-    // Trading metrics
-    "trades_24h": { "type": "numberFacet" },
-    "average_trade_size": { "type": "sortableNumberBetaV1" },
-    
-    // Holder metrics
-    "holder_count": { "type": "numberFacet" },
-    "active_wallets_24h": { "type": "numberFacet" },
-    "whale_transactions_24h": { "type": "numberFacet" },
-    
-    // Technical indicators
-    "rsi_14": { "type": "sortableNumberBetaV1" },
-    "macd": { "type": "sortableNumberBetaV1" },
-    "macd_signal": { "type": "sortableNumberBetaV1" },
-    "bollinger_upper": { "type": "sortableNumberBetaV1" },
-    "bollinger_lower": { "type": "sortableNumberBetaV1" },
-    
-    // Social metrics
-    "social_score": { "type": "sortableNumberBetaV1" },
-    "social_volume": { "type": "numberFacet" },
-    "social_sentiment": { "type": "sortableNumberBetaV1" },
-    "dev_activity": { "type": "numberFacet" },
-    
-    // Timestamps
-    "timestamp": { "type": "sortableDateBetaV1" },
-    "created_at": { "type": "date" },
-    "last_trade_time": { "type": "date" },
-    
-    // Metadata and extensions
-    "metadata": { "type": "document" },
-    "embedding": { "type": "knnVector", "dimensions": 1536, "similarity": "cosine" }
-}
-```
+    ```json
+    {
+        "_id": objectId,
+        "token_address": string,
+        "symbol": string,
+        "name": string,
+        "decimals": number,
+        "logo_uri": string,
 
-**Indexes:**
+        //-- Price Data (from Birdeye and calculated)
+        "price": number,
+        "price_change_24h": number,
+        "price_change_7d": number,  // Calculated from historical data
+        "price_high_24h": number,    // From OHLCV data or calculated
+        "price_low_24h": number,     // From OHLCV data or calculated
 
-- Compound: `{ token_address: 1, timestamp: -1 }` (Primary for token history)
-- Compound: `{ timestamp: -1, volume_24h: -1 }` (For high volume analysis)
-- Vector: `{ embedding: "vector", dimensions: 1536 }` (For similarity search)
+        //-- Volume Data (from Birdeye)
+        "volume_24h": number,
+        "volume_change_24h": number,
+        "volume_by_price_24h": document, // Could be a nested document with price ranges and volumes
 
-### Future Collections (To Be Implemented)
+        //-- Market Cap and Supply (from Birdeye)
+        "market_cap": number,
+        "fully_diluted_market_cap": number,
+        "circulating_supply": number,
+        "total_supply": number,
 
-#### 3. `market_signals`
+        //-- Liquidity (from Birdeye)
+        "liquidity": number,
+        "liquidity_change_24h": number, // Calculated
 
-**Purpose:** Store trading signals generated from analytics
-**Schema and Field Types:**
+        //-- Trading Metrics (from Birdeye and calculated)
+        "trades_24h": number,
+        "average_trade_size": number, // Calculated (volume_24h / trades_24h)
+        "buy_volume_24h": number,      // From Birdeye trade data
+        "sell_volume_24h": number,     // From Birdeye trade data
 
-```json
-{
-    "_id": { "type": "objectId" },
-    "token_address": { "type": "string", "searchable": true },
-    "signal_type": { "type": "stringFacet" },
-    "confidence": { "type": "sortableNumberBetaV1" },
-    "risk_score": { "type": "sortableNumberBetaV1" },
-    "price": { "type": "sortableNumberBetaV1" },
-    "volume_change": { "type": "sortableNumberBetaV1" },
-    "timestamp": { "type": "sortableDateBetaV1" },
-    "metadata": { "type": "document" }
-}
-```
+        //-- Holder Metrics (from Birdeye, potentially supplemented by other sources)
+        "holder_count": number,
+        "active_wallets_24h": number, // Requires additional on-chain analysis
+        "whale_transactions_24h": number, // Requires additional on-chain analysis, defining "whale" threshold
 
-#### 4. `trading_positions`
+        //-- Technical Indicators (Calculated)
+        "rsi_14": number,
+        "sma_20": number,
+        "ema_50": number,
+        "bollinger_bands": document, // { upper: number, middle: number, lower: number }
+        "macd": document,          // { macd: number, signal: number, histogram: number }
 
-**Purpose:** Track active and historical trading positions
-**Schema and Field Types:**
+        //-- Sentiment Analysis (from Analyst Agent)
+        "social_sentiment": document, // { overall_score: number, twitter_score: number, telegram_score: number, ... }
+        "news_sentiment": number,
 
-```json
-{
-    "_id": { "type": "objectId" },
-    "token_address": { "type": "string", "searchable": true },
-    "entry_price": { "type": "sortableNumberBetaV1" },
-    "current_price": { "type": "sortableNumberBetaV1" },
-    "position_size": { "type": "sortableNumberBetaV1" },
-    "position_type": { "type": "stringFacet" },
-    "entry_time": { "type": "sortableDateBetaV1" },
-    "last_update": { "type": "date" },
-    "pnl": { "type": "sortableNumberBetaV1" },
-    "status": { "type": "stringFacet" }
-}
-```
+        //-- On-Chain Analysis (from Analyst Agent, potentially using Birdeye's wallet APIs)
+        "whale_activity_index": number, // (0-1, based on whale transaction volume and count)
+        "network_growth": number,      // New addresses interacting with the token
+        "concentration_ratio": number,  // Percentage of supply held by top N addresses
 
-## Field Type Usage Guidelines
+        //-- Risk Metrics (from Risk Manager Agent)
+        "volatility_30d": number,     // Annualized volatility
+        "value_at_risk_95": number,  // 95% VaR
+        "expected_shortfall_95": number, // 95% Expected Shortfall
 
-1. **sortableNumberBetaV1**: Used for numeric fields that need sorting and range queries
-   - Prices, volumes, market caps, liquidity values
-   - Technical indicators
-   - Performance metrics
+        "timestamp": date
+    }
+    ```
 
-2. **numberFacet**: Used for numeric fields that need faceting/aggregation
-   - Counts (trades, holders, transactions)
-   - Ranks
-   - Activity metrics
+* **Indexes:**
+  * Compound: `{ token_address: 1, timestamp: -1 }`
+  * Single: `{ timestamp: -1 }`
+  * Single: `{ "social_sentiment.overall_score": 1 }`
+  * Single: `{ "whale_activity_index": 1 }`
+  * Single: `{ "rsi_14": 1 }`
+* **Relationship:** Fed by `trending_tokens` and Birdeye API calls. Generates data for `market_signals`.
 
-3. **sortableDateBetaV1**: Used for date fields that need sorting and range queries
-   - Primary timestamps
-   - Entry times
-   - Update times
+### 2. Trading and Strategy Collections
 
-4. **date**: Used for simple date fields without sorting requirements
-   - Creation dates
-   - Last update timestamps
+#### 2.1. `market_signals`
 
-5. **stringFacet**: Used for categorical string fields
-   - Status values
-   - Signal types
-   - Position types
+* **Purpose:** Stores trading signals generated by the Analyst Agent.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** Continuously.
+* **Schema:**
 
-6. **token**: Used for token symbols and other tokenized text
-   - Cryptocurrency symbols
-   - Standardized identifiers
+    ```json
+    {
+        "_id": objectId,
+        "asset_address": string,
+        "signal_type": string, // "PriceSpike", "VolumeSurge", "SentimentChange", "WhaleActivity", "TechnicalIndicatorCrossover", "NewsEvent"
+        "direction": string,   // "BUY", "SELL", "HOLD"
+        "confidence": number,
+        "risk_score": number,
+        "price": number,
+        "timestamp": date,
+        "metadata": document  // e.g., { rsi_value: 75, moving_average_crossover: "20_50_bullish", news_headline: "...", news_url: "..." }
+    }
+    ```
 
-7. **string**: Used for general text fields
-   - Names
-   - Addresses
-   - URLs
+* **Indexes:**
+  * Compound: `{ asset_address: 1, timestamp: -1 }`
+  * Single: `{ timestamp: -1 }`
+  * Single: `{ signal_type: 1 }`
+  * Single: `{ confidence: 1 }`
+* **Relationship:** Fed by `token_analytics`. May trigger actions in `trading_positions`.
 
-8. **document**: Used for nested/complex data
-   - Metadata
-   - Extended properties
+#### 2.2. `trading_positions`
 
-9. **knnVector**: Used for vector similarity search
-   - Embeddings for semantic search
-   - Feature vectors
+* **Purpose:** Tracks active and historical trading positions.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:**  Real-time.
+* **Schema:**
 
-## Relationships
+    ```json
+    {
+        "_id": objectId,
+        "token_address": string,
+        "entry_price": number,
+        "current_price": number,
+        "position_size": number, // Quantity of tokens
+        "position_type": string, // "LONG", "SHORT"
+        "entry_time": date,
+        "last_update": date,
+        "pnl": number,
+        "status": string, // "ACTIVE", "CLOSED"
+        "exit_price": number,
+        "exit_time": date,
+        "stop_loss": number,      // Stop-loss price (if set)
+        "take_profit": number,    // Take-profit price (if set)
+        "leverage": number,       // Leverage used (if applicable)
+        "liquidation_price": number // Liquidation price (if applicable)
+    }
+    ```
 
-- `trending_tokens` → `token_analytics`: Trending tokens trigger detailed analytics collection
-- `token_analytics` → `market_signals`: Analytics data generates trading signals
-- `market_signals` → `trading_positions`: Signals may lead to new trading positions
+* **Indexes:**
+  * Compound: `{ token_address: 1, entry_time: -1 }`
+  * Single: `{ status: 1 }`
+  * Single: `{ last_update: -1 }`
+* **Relationship:** Triggered by `market_signals`.
 
-## Notes
+#### 2.3. `trade_history`
 
-1. All monetary values use `sortableNumberBetaV1` for efficient sorting and range queries
-2. Timestamps use `sortableDateBetaV1` for time-series operations
-3. Categorical fields use `stringFacet` or `numberFacet` for aggregations
-4. Search-critical fields are marked as `searchable: true`
-5. Vector search uses `knnVector` with cosine similarity
+* **Purpose:** Records *all* executed trades (audit trail).
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** Real-time.
+* **Schema:**
 
-## API Rate Limits
+    ```json
+    {
+        "_id": objectId,
+        "trader_address": string,
+        "token_address": string,
+        "trade_type": string,  // "BUY", "SELL"
+        "quantity": number,
+        "price": number,
+        "timestamp": date,
+        "status": string, // "FILLED", "PARTIALLY_FILLED", "CANCELLED", "REJECTED"
+        "transaction_hash": string,
+        "slippage": number,
+        "fees": number,
+        "order_type": string, // "MARKET", "LIMIT", "STOP_LOSS", "TAKE_PROFIT"
+        "dex": string         // e.g., "Orca", "Raydium", "Jupiter"
+    }
+    ```
 
-- Birdeye API: 500ms minimum delay between requests
-- Recommended batch size: 100 tokens per analytics update
-- Keep-alive connections for MongoDB
+* **Indexes:**
+  * Compound: `{ trader_address: 1, timestamp: -1 }`
+  * Single: `{ token_address: 1, timestamp: -1 }`
+  * Single: `{ status: 1 }`
+* **Relationship:** Created by Trader Agent.
 
-## Monitoring Considerations
+### 3. Risk Management and Portfolio Collections
 
-1. Collection sizes and growth rates
-2. Index usage and performance
-3. Query patterns and optimization
-4. Backup strategy and retention policy
+#### 3.1. `risk_models`
+
+* **Purpose:** Stores risk model parameters and outputs.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** Periodic.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "model_type": string, // "VaR", "ExpectedShortfall", "Volatility", "CorrelationMatrix"
+        "asset_address": string, // "ALL" for portfolio-level, or a specific token address
+        "parameters": document, // { confidence_level: 0.95, lookback_period: 30, ... }
+        "output": number,      // e.g., VaR value, volatility, correlation coefficient
+        "timestamp": date
+    }
+    ```
+
+* **Indexes:**
+  * Compound: `{ model_type: 1, asset_address: 1, timestamp: -1 }`
+  * Single: `{ timestamp: -1 }`
+
+#### 3.2. `portfolio_allocations`
+
+* **Purpose:** Stores target and actual portfolio allocations.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:**  Whenever rebalancing occurs.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "wallet_address": string,
+        "token_address": string,
+        "target_allocation": number, // Percentage
+        "actual_allocation": number,
+        "timestamp": date
+    }
+    ```
+
+* **Indexes:**
+  * Compound: `{ wallet_address: 1, token_address: 1, timestamp: -1 }`
+  * Single: `{ timestamp: -1 }`
+
+### 4. Vector Embeddings
+
+#### 4.1. `vectors`
+
+* **Purpose:** Stores vector embeddings for similarity search.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** As needed.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "entity_type": string, // "token", "news_article", "tweet", "trading_strategy"
+        "entity_id": string,   // Token address, URL, strategy ID, etc.
+        "vector": [number],    // Array of numbers (embedding)
+        "metadata": document,  // { timestamp: date, source: string, ... }
+         "weights": {
+              "vector": number,
+              "metadata.timestamp": number
+          },
+          "name": string,
+          "background": boolean
+    }
+    ```
+
+* **Indexes:**
+  * `{ "vector": "2dsphere", "metadata.timestamp": -1 }` (For geospatial and time-based similarity search)
+  * `"weights": { "vector": 1, "metadata.timestamp": 1 }, "name": "vector_search_idx", "background": true`
+
+### 5. Compliance Data (Optional)
+
+#### 5.1. `compliance_records`
+
+* **Purpose:** Stores compliance check records.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** Real-time.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "transaction_hash": string,
+        "check_type": string, // "KYC", "AML", "SanctionsList", "Jurisdiction"
+        "result": string,    // "PASS", "FAIL", "PENDING"
+        "timestamp": date,
+        "details": document   // { reason: "...", flagged_address: "...", ... }
+    }
+    ```
+
+* **Indexes:**
+  * `{ transaction_hash: 1, timestamp: -1 }`
+  * `{ check_type: 1, result: 1 }`
