@@ -1,16 +1,18 @@
 use anyhow::{Context, Result};
 use cainam_core::{
-    birdeye::api::BirdeyeClient,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::trending_token::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
 };
 use dotenvy::dotenv;
-use futures::StreamExt;
-use mongodb::bson::doc;
+use futures::{StreamExt, TryStreamExt};
+use mongodb::bson::{doc, oid::ObjectId, DateTime};
+use mongodb::IndexModel;
 use std::sync::Arc;
 use tokio;
 use tracing::{error, info, Level};
+use mongodb::options::FindOptions;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -61,43 +63,34 @@ async fn main() -> Result<()> {
     let trending_collection = db.collection::<TrendingToken>("trending_tokens");
 
     // Get the most recent trending tokens with sorting by timestamp
-    let query = doc! {
+    let filter = doc! {
         "$query": {},
         "$orderby": { "timestamp": -1 }
     };
-
-    let mut cursor = trending_collection.find(query).await?;
+    let mut cursor = trending_collection.find(filter).await?;
     let mut processed = 0;
     let mut errors = 0;
 
     // Process each trending token
-    while let Some(token_result) = cursor.next().await {
-        match token_result {
-            Ok(token) => {
-                info!("Processing analytics for token: {}", token.symbol);
+    while let Some(token_result) = cursor.try_next().await? {
+        info!("Processing analytics for token: {}", token_result.symbol);
 
-                match analytics_service
-                    .fetch_and_store_token_info(&token.symbol, &token.address)
-                    .await
-                {
-                    Ok(_) => {
-                        processed += 1;
-                        info!("Successfully stored analytics for {}", token.symbol);
-                    }
-                    Err(e) => {
-                        errors += 1;
-                        error!("Failed to process token {}: {}", token.symbol, e);
-                    }
-                }
-
-                // Add a small delay to respect rate limits
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        match analytics_service
+            .fetch_and_store_token_info(&token_result.symbol, &token_result.address)
+            .await
+        {
+            Ok(_) => {
+                processed += 1;
+                info!("Successfully stored analytics for {}", token_result.symbol);
             }
             Err(e) => {
-                error!("Error fetching trending token: {}", e);
                 errors += 1;
+                error!("Failed to process token {}: {}", token_result.symbol, e);
             }
         }
+
+        // Add a small delay to respect rate limits
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
     info!("Token analytics capture completed:");

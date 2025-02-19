@@ -82,38 +82,31 @@ async fn main() -> Result<()> {
 
     // Create search index for trending_tokens
     info!("Setting up search index for trending_tokens...");
-    let trending_search_index = doc! {
-        "mappings": {
-            "dynamic": true,
-            "fields": {
-                "address": { "type": "string", "searchable": true },
-                "decimals": { "type": "number" },
-                "liquidity": { "type": "sortableNumberBetaV1" },
-                "logo_uri": { "type": "string" },
-                "name": { "type": "string", "searchable": true },
-                "symbol": { "type": "token" },
-                "volume_24h_usd": { "type": "sortableNumberBetaV1" },
-                "volume_24h_change_percent": { "type": "number" },
-                "fdv": { "type": "sortableNumberBetaV1" },
-                "marketcap": { "type": "sortableNumberBetaV1" },
-                "rank": { "type": "numberFacet" },
-                "price": { "type": "sortableNumberBetaV1" },
-                "price_24h_change_percent": { "type": "number" },
-                "timestamp": { "type": "sortableDateBetaV1" }
-            }
-        }
-    };
-
     match db
         .run_command(doc! {
-            "createIndexes": "trending_tokens",
+            "createSearchIndexes": "trending_tokens",
             "indexes": [{
-                "key": { "address": "text", "name": "text", "symbol": "text" },
-                "name": "default_search",
-                "weights": {
-                    "address": 10,
-                    "name": 10,
-                    "symbol": 5
+                "name": "trending_tokens_index",
+                "definition": {
+                    "mappings": {
+                        "dynamic": true,
+                        "fields": {
+                            "address": { "type": "string" },
+                            "decimals": { "type": "number" },
+                            "liquidity": { "type": "number" },
+                            "logo_uri": { "type": "string" },
+                            "name": { "type": "string" },
+                            "symbol": { "type": "string" },
+                            "volume_24h_usd": { "type": "number" },
+                            "volume_24h_change_percent": { "type": "number" },
+                            "fdv": { "type": "number" },
+                            "marketcap": { "type": "number" },
+                            "rank": { "type": "number" },
+                            "price": { "type": "number" },
+                            "price_24h_change_percent": { "type": "number" },
+                            "timestamp": { "type": "date" }
+                        }
+                    }
                 }
             }]
         })
@@ -152,36 +145,33 @@ async fn main() -> Result<()> {
 
     // Create search index for token_analytics
     info!("Setting up search index for token_analytics...");
-    let analytics_search_index = doc! {
-        "mappings": {
-            "dynamic": true,
-            "fields": {
-                "token_address": { "type": "string", "searchable": true },
-                "token_name": { "type": "string", "searchable": true },
-                "token_symbol": { "type": "token" },
-                "token_time": { "type": "sortableDateBetaV1" },
-                "token_liquidity": { "type": "sortableNumberBetaV1" },
-                "token_volume_24h_usd": { "type": "sortableNumberBetaV1" },
-                "token_volume_24h_change_percent": { "type": "number" },
-                "token_fdv": { "type": "sortableNumberBetaV1" },
-                "token_marketcap": { "type": "sortableNumberBetaV1" },
-                "token_rank": { "type": "numberFacet" },
-                "token_price": { "type": "sortableNumberBetaV1" },
-                "token_price_24h_change_percent": { "type": "number" }
-            }
-        }
-    };
-
     match db
         .run_command(doc! {
-            "createIndexes": "token_analytics",
+            "createSearchIndexes": "token_analytics",
             "indexes": [{
-                "key": { "token_address": "text", "token_name": "text", "token_symbol": "text" },
-                "name": "default_search",
-                "weights": {
-                    "token_address": 10,
-                    "token_name": 10,
-                    "token_symbol": 5
+                "name": "token_analytics_index",
+                "definition": {
+                    "mappings": {
+                        "dynamic": true,
+                        "fields": {
+                            "token_address": { "type": "string"},
+                            "token_name": { "type": "string"},
+                            "token_symbol": { "type": "string"},
+                            "timestamp": { "type": "date" },
+                            "liquidity": { "type": "number" },
+                            "volume_24h": { "type": "number" },
+                            "volume_change_24h": { "type": "number" },
+                            "market_cap": { "type": "number" },
+                            "fully_diluted_market_cap": { "type": "number" },
+                            "price": { "type": "number" },
+                            "price_change_24h": { "type": "number" },
+                            "rsi_14": { "type": "number" },
+                            "macd": { "type": "number" },
+                            "macd_signal": { "type": "number" },
+                            "bollinger_upper": { "type": "number" },
+                            "bollinger_lower": { "type": "number" }
+                        }
+                    }
                 }
             }]
         })
@@ -207,13 +197,23 @@ async fn main() -> Result<()> {
     info!("Setting up search index for market_signals...");
     match db
         .run_command(doc! {
-            "createIndexes": "market_signals",
+            "createSearchIndexes": "market_signals",
             "indexes": [{
-                "key": { "token_address": "text", "signal_type": "text" },
-                "name": "default_search",
-                "weights": {
-                    "token_address": 10,
-                    "signal_type": 5
+                "name": "market_signals_index",
+                "definition": {
+                    "mappings": {
+                        "dynamic": true,
+                        "fields": {
+                            "token_address": { "type": "string"},
+                            "signal_type": { "type": "string"},
+                            "timestamp": { "type": "date" },
+                            "price": { "type": "number" },
+                            "price_change_24h": { "type": "number" },
+                            "volume_change_24h": { "type": "number" },
+                            "confidence": { "type": "number" },
+                            "risk_score": { "type": "number" }
+                        }
+                    }
                 }
             }]
         })
@@ -239,14 +239,23 @@ async fn main() -> Result<()> {
     info!("Setting up search index for trading_positions...");
     match db
         .run_command(doc! {
-            "createIndexes": "trading_positions",
+            "createSearchIndexes": "trading_positions",
             "indexes": [{
-                "key": { "token_address": "text", "position_type": "text", "status": "text" },
-                "name": "default_search",
-                "weights": {
-                    "token_address": 10,
-                    "position_type": 5,
-                    "status": 5
+                "name": "trading_positions_index",
+                "definition": {
+                    "mappings": {
+                        "dynamic": true,
+                        "fields": {
+                            "token_address": { "type": "string"},
+                            "position_type": { "type": "string"},
+                            "status": { "type": "string"},
+                            "timestamp": { "type": "date" },
+                            "entry_price": { "type": "number" },
+                            "current_price": { "type": "number" },
+                            "size": { "type": "number" },
+                            "pnl": { "type": "number" }
+                        }
+                    }
                 }
             }]
         })
