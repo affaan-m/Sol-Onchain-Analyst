@@ -42,22 +42,42 @@ async fn main() -> Result<()> {
     let db = db_pool.database(&mongodb_database);
     info!("Successfully connected to MongoDB");
 
+    // Drop existing time series collections
+    info!("Dropping existing time series collections...");
+    match db.run_command(doc! { "drop": "trending_tokens" }).await {
+        Ok(_) => info!("Dropped trending_tokens collection"),
+        Err(e) => info!("Error dropping trending_tokens: {}", e),
+    }
+    match db.run_command(doc! { "drop": "token_analytics" }).await {
+        Ok(_) => info!("Dropped token_analytics collection"),
+        Err(e) => info!("Error dropping token_analytics: {}", e),
+    }
+
     // Setup trending_tokens collection
     info!("Setting up trending_tokens collection...");
-    let trending_options = doc! {
-            "timeField": "timestamp",
-            "granularity": "minutes"
-    };
-
     match db
         .run_command(doc! {
-            "create": "trending_tokens",
-            "timeseries": trending_options
+            "create": "trending_tokens"
         })
         .await
     {
         Ok(_) => info!("Created trending_tokens collection"),
         Err(e) => info!("trending_tokens collection may already exist: {}", e),
+    }
+
+    // Create compound index for time-based queries
+    match db
+        .run_command(doc! {
+            "createIndexes": "trending_tokens",
+            "indexes": [{
+                "key": { "timestamp": -1 },
+                "name": "timestamp_desc"
+            }]
+        })
+        .await
+    {
+        Ok(_) => info!("Created timestamp index for trending_tokens"),
+        Err(e) => info!("Index may already exist: {}", e),
     }
 
     // Create search index for trending_tokens
@@ -86,8 +106,16 @@ async fn main() -> Result<()> {
 
     match db
         .run_command(doc! {
-            "createSearchIndex": "trending_tokens",
-            "definition": trending_search_index
+            "createIndexes": "trending_tokens",
+            "indexes": [{
+                "key": { "address": "text", "name": "text", "symbol": "text" },
+                "name": "default_search",
+                "weights": {
+                    "address": 10,
+                    "name": 10,
+                    "symbol": 5
+                }
+            }]
         })
         .await
     {
@@ -97,20 +125,29 @@ async fn main() -> Result<()> {
 
     // Setup token_analytics collection
     info!("Setting up token_analytics collection...");
-    let analytics_options = doc! {
-            "timeField": "timestamp",
-            "granularity": "minutes"
-    };
-
     match db
         .run_command(doc! {
-            "create": "token_analytics",
-            "timeseries": analytics_options
+            "create": "token_analytics"
         })
         .await
     {
         Ok(_) => info!("Created token_analytics collection"),
         Err(e) => info!("token_analytics collection may already exist: {}", e),
+    }
+
+    // Create compound index for time-based queries
+    match db
+        .run_command(doc! {
+            "createIndexes": "token_analytics",
+            "indexes": [{
+                "key": { "token_address": 1, "timestamp": -1 },
+                "name": "token_time_desc"
+            }]
+        })
+        .await
+    {
+        Ok(_) => info!("Created token_time index for token_analytics"),
+        Err(e) => info!("Index may already exist: {}", e),
     }
 
     // Create search index for token_analytics
@@ -122,111 +159,31 @@ async fn main() -> Result<()> {
                 "token_address": { "type": "string", "searchable": true },
                 "token_name": { "type": "string", "searchable": true },
                 "token_symbol": { "type": "token" },
-                "decimals": { "type": "number" },
-                "logo_uri": { "type": "string" },
-
-                // Price metrics (stored as Decimal128)
-                "price": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "price", "type": "decimal128" }
-                },
-                "price_change_24h": { "type": "sortableNumberBetaV1" },
-                "price_change_7d": { "type": "sortableNumberBetaV1" },
-
-                // Volume metrics (stored as Decimal128)
-                "volume_24h": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "volume_24h", "type": "decimal128" }
-                },
-                "volume_change_24h": { "type": "sortableNumberBetaV1" },
-                "volume_by_price_24h": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "volume_by_price_24h", "type": "decimal128" }
-                },
-
-                // Market metrics (stored as Decimal128)
-                "market_cap": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "market_cap", "type": "decimal128" }
-                },
-                "fully_diluted_market_cap": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "fully_diluted_market_cap", "type": "decimal128" }
-                },
-                "circulating_supply": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "circulating_supply", "type": "decimal128" }
-                },
-                "total_supply": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "total_supply", "type": "decimal128" }
-                },
-
-                // Trading metrics
-                "trades_24h": { "type": "numberFacet" },
-                "average_trade_size": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "average_trade_size", "type": "decimal128" }
-                },
-
-                // Holder metrics
-                "holder_count": { "type": "numberFacet" },
-                "active_wallets_24h": { "type": "numberFacet" },
-                "whale_transactions_24h": { "type": "numberFacet" },
-
-                // Technical indicators (stored as Decimal128)
-                "rsi_14": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "rsi_14", "type": "decimal128" }
-                },
-                "macd": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "macd", "type": "decimal128" }
-                },
-                "macd_signal": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "macd_signal", "type": "decimal128" }
-                },
-                "bollinger_upper": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "bollinger_upper", "type": "decimal128" }
-                },
-                "bollinger_lower": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "bollinger_lower", "type": "decimal128" }
-                },
-
-                // Social metrics
-                "social_score": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "social_score", "type": "decimal128" }
-                },
-                "social_volume": { "type": "numberFacet" },
-                "social_sentiment": {
-                    "type": "sortableNumberBetaV1",
-                    "path": { "value": "social_sentiment", "type": "decimal128" }
-                },
-                "dev_activity": { "type": "numberFacet" },
-
-                // Timestamps
-                "timestamp": { "type": "sortableDateBetaV1" },
-                "created_at": { "type": "date" },
-                "last_trade_time": { "type": "date" },
-
-                // Vector search
-                "embedding": {
-                    "type": "knnVector",
-                    "dimensions": 1536,
-                    "similarity": "cosine"
-                }
+                "token_time": { "type": "sortableDateBetaV1" },
+                "token_liquidity": { "type": "sortableNumberBetaV1" },
+                "token_volume_24h_usd": { "type": "sortableNumberBetaV1" },
+                "token_volume_24h_change_percent": { "type": "number" },
+                "token_fdv": { "type": "sortableNumberBetaV1" },
+                "token_marketcap": { "type": "sortableNumberBetaV1" },
+                "token_rank": { "type": "numberFacet" },
+                "token_price": { "type": "sortableNumberBetaV1" },
+                "token_price_24h_change_percent": { "type": "number" }
             }
         }
     };
 
     match db
         .run_command(doc! {
-            "createSearchIndex": "token_analytics",
-            "definition": analytics_search_index
+            "createIndexes": "token_analytics",
+            "indexes": [{
+                "key": { "token_address": "text", "token_name": "text", "token_symbol": "text" },
+                "name": "default_search",
+                "weights": {
+                    "token_address": 10,
+                    "token_name": 10,
+                    "token_symbol": 5
+                }
+            }]
         })
         .await
     {
@@ -236,18 +193,9 @@ async fn main() -> Result<()> {
 
     // Setup market_signals collection
     info!("Setting up market_signals collection...");
-    let signals_options = doc! {
-        "timeseries": {
-            "timeField": "timestamp",
-            "granularity": "minutes",
-            "metaField": "metadata"
-        }
-    };
-
     match db
         .run_command(doc! {
-            "create": "market_signals",
-            "timeseries": signals_options
+            "create": "market_signals"
         })
         .await
     {
@@ -257,26 +205,17 @@ async fn main() -> Result<()> {
 
     // Create search index for market_signals
     info!("Setting up search index for market_signals...");
-    let signals_search_index = doc! {
-        "mappings": {
-            "dynamic": true,
-            "fields": {
-                "token_address": { "type": "string", "searchable": true },
-                "signal_type": { "type": "stringFacet" },
-                "confidence": { "type": "sortableNumberBetaV1" },
-                "risk_score": { "type": "sortableNumberBetaV1" },
-                "price": { "type": "sortableNumberBetaV1" },
-                "volume_change": { "type": "sortableNumberBetaV1" },
-                "timestamp": { "type": "sortableDateBetaV1" },
-                "metadata": { "type": "document" }
-            }
-        }
-    };
-
     match db
         .run_command(doc! {
-            "createSearchIndex": "market_signals",
-            "definition": signals_search_index
+            "createIndexes": "market_signals",
+            "indexes": [{
+                "key": { "token_address": "text", "signal_type": "text" },
+                "name": "default_search",
+                "weights": {
+                    "token_address": 10,
+                    "signal_type": 5
+                }
+            }]
         })
         .await
     {
@@ -286,18 +225,9 @@ async fn main() -> Result<()> {
 
     // Setup trading_positions collection
     info!("Setting up trading_positions collection...");
-    let positions_options = doc! {
-        "timeseries": {
-            "timeField": "entry_time",
-            "granularity": "minutes",
-            "metaField": "metadata"
-        }
-    };
-
     match db
         .run_command(doc! {
-            "create": "trading_positions",
-            "timeseries": positions_options
+            "create": "trading_positions"
         })
         .await
     {
@@ -307,27 +237,18 @@ async fn main() -> Result<()> {
 
     // Create search index for trading_positions
     info!("Setting up search index for trading_positions...");
-    let positions_search_index = doc! {
-        "mappings": {
-            "dynamic": true,
-            "fields": {
-                "token_address": { "type": "string", "searchable": true },
-                "entry_price": { "type": "sortableNumberBetaV1" },
-                "current_price": { "type": "sortableNumberBetaV1" },
-                "position_size": { "type": "sortableNumberBetaV1" },
-                "position_type": { "type": "stringFacet" },
-                "entry_time": { "type": "sortableDateBetaV1" },
-                "last_update": { "type": "date" },
-                "pnl": { "type": "sortableNumberBetaV1" },
-                "status": { "type": "stringFacet" }
-            }
-        }
-    };
-
     match db
         .run_command(doc! {
-            "createSearchIndex": "trading_positions",
-            "definition": positions_search_index
+            "createIndexes": "trading_positions",
+            "indexes": [{
+                "key": { "token_address": "text", "position_type": "text", "status": "text" },
+                "name": "default_search",
+                "weights": {
+                    "token_address": 10,
+                    "position_type": 5,
+                    "status": 5
+                }
+            }]
         })
         .await
     {
