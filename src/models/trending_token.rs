@@ -32,8 +32,3 @@ pub struct TrendingToken {
     pub price_24h_change_percent: Option<f64>,
 }
 
-impl TrendingToken {
-    pub fn collection_name() -> &'static str {
-        "trending_tokens"
-    }
-}

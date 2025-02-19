@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use cainam_core::{
-    birdeye::api:: BirdeyeClient,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::trending_token::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
@@ -47,7 +47,6 @@ async fn main() -> Result<()> {
 
     // Initialize Birdeye client
     let birdeye_api_key = dotenvy::var("BIRDEYE_API_KEY").context("BIRDEYE_API_KEY must be set")?;
-
     let birdeye_client = Arc::new(BirdeyeClient::new(birdeye_api_key.clone()));
     info!("Initialized Birdeye client");
 
@@ -60,27 +59,45 @@ async fn main() -> Result<()> {
     let db = db_pool.database(&mongodb_database);
     let trending_collection = db.collection::<TrendingToken>("trending_tokens");
 
-    // Get the most recent trending tokens with sorting by timestamp
+    // Get tokens from the trending_tokens collection
+    info!("Fetching tokens from trending_tokens collection...");
     let filter = doc! {};
     let mut cursor = trending_collection.find(filter).await?;
     let mut processed = 0;
     let mut errors = 0;
 
-    // Process each trending token
-    while let Some(token_result) = cursor.try_next().await? {
-        info!("Processing analytics for token: {}", token_result.symbol);
+    // Process each token
+    while let Some(token) = cursor.try_next().await? {
+        info!("Processing analytics for token: {} ({})", token.symbol, token.address);
 
-        match analytics_service
-            .fetch_and_store_token_info(&token_result.symbol, &token_result.address)
-            .await
-        {
-            Ok(_) => {
-                processed += 1;
-                info!("Successfully stored analytics for {}", token_result.symbol);
+        // First get basic token overview
+        match birdeye_client.get_token_overview(&token.address).await {
+            Ok(overview) => {
+                info!(
+                    "Got token overview for {}: price=${:.4}, mcap=${:.2}",
+                    token.symbol,
+                    overview.price,
+                    overview.market_cap.unwrap_or_default()
+                );
+
+                // If overview looks good, fetch and store detailed analytics
+                match analytics_service
+                    .fetch_and_store_token_info(&token.symbol, &token.address)
+                    .await
+                {
+                    Ok(_) => {
+                        processed += 1;
+                        info!("Successfully stored analytics for {}", token.symbol);
+                    }
+                    Err(e) => {
+                        errors += 1;
+                        error!("Failed to store analytics for {}: {}", token.symbol, e);
+                    }
+                }
             }
             Err(e) => {
                 errors += 1;
-                error!("Failed to process token {}: {}", token_result.symbol, e);
+                error!("Failed to get overview for {}: {}", token.symbol, e);
             }
         }
 

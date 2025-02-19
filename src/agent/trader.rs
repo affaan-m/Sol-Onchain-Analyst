@@ -2,8 +2,7 @@
 use crate::{
     birdeye::api::BirdeyeClient,
     config::mongodb::MongoDbPool,
-    config::AgentConfig,
-    config::MarketConfig,
+    config::{AgentConfig, MarketConfig},
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
     services::TokenAnalyticsService,

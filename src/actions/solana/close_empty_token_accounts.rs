@@ -1,7 +1,9 @@
 use crate::{primitives::USDC, SolanaAgentKit};
+use anyhow::{anyhow, Context, Result};
 use solana_client::rpc_request::TokenAccountsFilter;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey, transaction::Transaction};
 use spl_token::instruction::close_account;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +38,10 @@ pub struct CloseEmptyTokenAccountsData {
 
 impl CloseEmptyTokenAccountsData {
     pub fn new(signature: String, closed_size: usize) -> Self {
-        CloseEmptyTokenAccountsData { signature, closed_size }
+        CloseEmptyTokenAccountsData {
+            signature,
+            closed_size,
+        }
     }
 }
 
@@ -51,7 +56,7 @@ impl CloseEmptyTokenAccountsData {
 /// Transaction signature and total number of accounts closed or an error if the account doesn't exist.
 pub async fn close_empty_token_accounts(
     agent: &SolanaAgentKit,
-) -> Result<CloseEmptyTokenAccountsData, Box<dyn std::error::Error>> {
+) -> Result<CloseEmptyTokenAccountsData> {
     let max_instructions = 40_u32;
     let mut transaction: Vec<Instruction> = vec![];
     let mut closed_size = 0;
@@ -64,7 +69,7 @@ pub async fn close_empty_token_accounts(
                 &agent.wallet.address,
                 TokenAccountsFilter::ProgramId(token_program.to_owned()),
             )
-            .expect("get_token_accounts_by_owner");
+            .context("Failed to get token accounts by owner")?;
 
         closed_size += accounts.len();
 
@@ -74,21 +79,24 @@ pub async fn close_empty_token_accounts(
             }
 
             if let solana_account_decoder::UiAccountData::Json(d) = &account.account.data {
-                if let Ok(parsed) = serde_json::from_value::<Parsed>(d.parsed.clone()) {
-                    if parsed.info.token_amount.amount.parse::<u32>().unwrap_or_default() == 0_u32
-                        && parsed.info.mint != USDC
-                    {
-                        let account_pubkey = Pubkey::from_str_const(&account.pubkey);
-                        if let Ok(instruct) = close_account(
-                            &token_program,
-                            &account_pubkey,
-                            &agent.wallet.address,
-                            &agent.wallet.address,
-                            &[&agent.wallet.address],
-                        ) {
-                            transaction.push(instruct);
-                        }
-                    }
+                let parsed = serde_json::from_value::<Parsed>(d.parsed.clone())
+                    .context("Failed to parse token account data")?;
+
+                if parsed.info.token_amount.amount.parse::<u32>().unwrap_or(0) == 0_u32
+                    && parsed.info.mint != USDC
+                {
+                    let account_pubkey = Pubkey::from_str(&account.pubkey)
+                        .context("Failed to parse account pubkey")?;
+
+                    let instruct = close_account(
+                        &token_program,
+                        &account_pubkey,
+                        &agent.wallet.address,
+                        &agent.wallet.address,
+                        &[&agent.wallet.address],
+                    )
+                    .context("Failed to create close_account instruction")?;
+                    transaction.push(instruct);
                 }
             }
         }
@@ -98,8 +106,10 @@ pub async fn close_empty_token_accounts(
         return Ok(CloseEmptyTokenAccountsData::default());
     }
 
-    // Create and send transaction
-    let recent_blockhash = agent.connection.get_latest_blockhash()?;
+    let recent_blockhash = agent
+        .connection
+        .get_latest_blockhash()
+        .context("Failed to get latest blockhash")?;
     let transaction = Transaction::new_signed_with_payer(
         &transaction,
         Some(&agent.wallet.address),
@@ -107,7 +117,10 @@ pub async fn close_empty_token_accounts(
         recent_blockhash,
     );
 
-    let signature = agent.connection.send_and_confirm_transaction(&transaction)?;
+    let signature = agent
+        .connection
+        .send_and_confirm_transaction(&transaction)
+        .context("Failed to send and confirm transaction")?;
     let data = CloseEmptyTokenAccountsData::new(signature.to_string(), closed_size);
     Ok(data)
 }

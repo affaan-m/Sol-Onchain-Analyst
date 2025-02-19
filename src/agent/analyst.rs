@@ -1,5 +1,6 @@
 use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use crate::config::mongodb::MongoDbPool;
+use crate::config::birdeye_config::BirdeyeConfig;
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;
@@ -17,6 +18,8 @@ pub enum Error {
     Analysis(String),
     #[error("Data error: {0}")]
     Data(String),
+    #[error("Anyhow error: {0}")]
+    Anyhow(#[from] anyhow::Error),
 }
 
 pub struct AnalystAgent {
@@ -43,8 +46,7 @@ impl AnalystAgent {
         let analytics = self
             .analytics_service
             .fetch_and_store_token_info(symbol, address)
-            .await
-            .map_err(|e| Error::Analysis(e.to_string()))?;
+            .await?;
 
         // Get historical data for analysis
         let now = DateTime::now();
@@ -58,8 +60,7 @@ impl AnalystAgent {
         let history = self
             .analytics_service
             .get_token_history(address, start_time, end_time)
-            .await
-            .map_err(|e| Error::Data(e.to_string()))?;
+            .await?;
 
         info!(
             "Retrieved {} historical data points for analysis",
@@ -70,8 +71,7 @@ impl AnalystAgent {
         if self
             .analytics_service
             .get_previous_analytics(address)
-            .await
-            .map_err(|e| Error::Data(e.to_string()))?
+            .await?
             .is_some()
         {
             info!("Generating market signals based on analysis");

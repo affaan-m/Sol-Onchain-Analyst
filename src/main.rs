@@ -45,7 +45,7 @@ async fn handle_user_input(
         }
 
         print!("> ");
-        io::stdout().flush().unwrap_or_default();
+        io::stdout().flush().expect("Failed to flush stdout");
 
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
@@ -202,17 +202,18 @@ async fn main() -> Result<()> {
 
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
-    println!("loadi env file...");
+    println!("Loading env file...");
 
     // Initialize MongoDB connection pool using rig-mongodb
     let db_pool = init_mongodb().await?;
-    println!("init pool...");
+    println!("Initialized MongoDB connection pool");
 
     // TODO: zTgx hardcoded
     // Initialize Solana agent
-    let rpc_url = "https://api.devnet.solana.com";
-    let keypair = Keypair::new();
-    let solana_agent = SolanaAgentKit::new(rpc_url, keypair);
+    let rpc_url = std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
+    let private_key = std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not found in environment");
+    let keypair = Keypair::from_base58_string(&private_key);
+    let solana_agent = SolanaAgentKit::new(&rpc_url, keypair);
 
     // Load configuration from environment
     let config = AgentConfig::new_from_env()?;

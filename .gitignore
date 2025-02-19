@@ -21,7 +21,7 @@ characters/
 # Goose
 .goose/
 
-/docs/examples/
+docs/examples/*
 .repomix-output.txt
 
 # Cargo

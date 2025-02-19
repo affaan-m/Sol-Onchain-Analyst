@@ -42,16 +42,17 @@ async fn main() -> Result<()> {
     };
 
     let db_pool = MongoDbPool::create_pool(config).await?;
-    info!("Successfully connected to MongoDB");
+        info!("Successfully connected to MongoDB");
+    let db = db_pool.database(&mongodb_database);
+        info!("Database: {}", db.name());
 
     // Initialize Birdeye client
     let birdeye_api_key = dotenvy::var("BIRDEYE_API_KEY").context("BIRDEYE_API_KEY must be set")?;
 
     let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key));
     info!("Initialized Birdeye client");
-
-    // Get database and create collection
-    let db = db_pool.database(&mongodb_database);
+    
+    // Get trending tokens collection
     let trending_collection = db.collection::<TrendingToken>("trending_tokens");
 
     // Create compound index on address and timestamp

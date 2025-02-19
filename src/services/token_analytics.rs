@@ -1,7 +1,7 @@
 use crate::birdeye::api::TokenMarketResponse;
 use crate::birdeye::BirdeyeApi;
 use crate::config::mongodb::MongoDbPool;
-use crate::config::MarketConfig;
+use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
 use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
@@ -469,6 +469,7 @@ impl TokenAnalyticsService {
         )
         .confidence(confidence)
         .risk_score(f64_to_decimal(0.5))
+        .sentiment_score(f64_to_decimal(0.5))
         .price_change_24h(price_change)
         .volume_change_24h(volume_change.clone().unwrap_or_else(|| BigDecimal::from(0)))
         .volume_change(volume_change.unwrap_or_else(|| BigDecimal::from(0)))

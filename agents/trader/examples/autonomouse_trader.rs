@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
 
     // Initialize OpenAI client and agent
     let openai_client = openai::Client::from_env();
-    let agent = openai_client.agent("gpt-4").build();
+    let agent = openai_client.agent("gpt-4o").build();
 
     // Load wallet
     let wallet = if let Ok(private_key) = env::var("SOLANA_PRIVATE_KEY") {
