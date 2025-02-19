@@ -20,3 +20,9 @@ characters/
 
 # Goose
 .goose/
+
+/docs/examples/
+.repomix-output.txt
+
+# Cargo
+Cargo.lock
