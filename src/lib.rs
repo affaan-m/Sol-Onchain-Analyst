@@ -12,9 +12,8 @@ pub mod utils;
 // Re-export commonly used types
 pub use crate::config::{
     AgentConfig,
-    BirdeyeConfig,
-    MarketConfig,
-    get_log_level,
+    birdeye_config::BirdeyeConfig,
+    market_config::MarketConfig,
     get_openai_model,
     mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
 };
