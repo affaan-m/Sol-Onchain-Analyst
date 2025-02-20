@@ -2,6 +2,7 @@ use crate::birdeye::BirdeyeApi;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
+use crate::logging::market_metrics::MarketSignalLog;
 use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
@@ -12,10 +13,20 @@ use bson::{doc, DateTime};
 use futures::StreamExt;
 use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
 use std::sync::Arc;
+use tracing::{debug, info};
 use uuid::Uuid;
 use chrono::{Utc, Duration as ChronoDuration};
-use tracing::{debug, info};
 use serde_json::json;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TokenAnalyticsError {
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Birdeye API error: {0}")]
+    BirdeyeApi(String),
+    #[error("Validation error: {0}")]
+    Validation(String),
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -635,6 +646,7 @@ impl TokenAnalyticsService {
         }
     }
 }
+
 
 // Move From implementation outside of TokenAnalyticsService impl block
 impl From<MarketSignal> for MarketSignalLog {

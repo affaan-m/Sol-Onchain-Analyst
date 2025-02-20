@@ -1,18 +1,16 @@
-use crate::services::token_analytics::{MarketMetrics, MarketSignalLog};
-use anyhow::Result;
-use chrono::{DateTime, Utc};
+use market_metrics::MarketSignalLog;
+use performance_metrics::PerformanceMetrics;
 use serde::Serialize;
 use std::time::Instant;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
+use crate::services::token_analytics::MarketMetrics;
+use anyhow::Result;
+use std::time::Instant;
+use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize)]
-pub struct PerformanceMetrics {
-    pub operation: String,
-    pub duration_ms: u64,
-    pub success: bool,
-    pub timestamp: DateTime<Utc>,
-}
+pub mod market_metrics;
+pub mod performance_metrics;
 
 #[derive(Debug, Serialize)]
 pub struct RequestLog {
