@@ -9,7 +9,6 @@ use dotenvy::dotenv;
 use futures::TryStreamExt;
 use mongodb::bson::doc;
 use std::sync::Arc;
-use tokio;
 use tracing::{error, info, Level};
 
 #[tokio::main]

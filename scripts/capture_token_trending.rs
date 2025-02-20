@@ -8,7 +8,6 @@ use dotenvy::dotenv;
 use mongodb::bson::{doc, oid::ObjectId, DateTime};
 use mongodb::IndexModel;
 use std::sync::Arc;
-use tokio;
 use tracing::{info, Level};
 
 #[tokio::main]
