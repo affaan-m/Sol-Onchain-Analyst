@@ -45,6 +45,8 @@ Directory structure:
     │   │   ├── portfolio_optimizer.rs
     │   │   ├── risk_manager.rs
     │   │   └── trader.rs
+    │   ├── bin/
+    │   │   └── cainam.rs
     │   ├── birdeye/
     │   │   ├── api.rs
     │   │   └── mod.rs
@@ -78,10 +80,13 @@ Directory structure:
     │   │   ├── mod.rs
     │   │   └── sync.rs
     │   ├── logging/
-    │   │   └── mod.rs
+    │   │   ├── market_metrics.rs
+    │   │   ├── mod.rs
+    │   │   └── performance_metrics.rs
     │   ├── market_data/
     │   │   └── birdeye.rs
     │   ├── models/
+    │   │   ├── market_data.rs
     │   │   ├── market_signal.rs
     │   │   ├── mod.rs
     │   │   ├── token_analytics.rs
@@ -90,6 +95,7 @@ Directory structure:
     │   ├── personality/
     │   │   └── mod.rs
     │   ├── prompts/
+    │   │   ├── analytics_system.txt
     │   │   └── system.txt
     │   ├── providers/
     │   │   ├── birdeye.rs
@@ -99,6 +105,7 @@ Directory structure:
     │   ├── services/
     │   │   ├── mod.rs
     │   │   ├── token_analytics.rs
+    │   │   ├── token_analytics_llm.rs
     │   │   ├── token_data.rs
     │   │   └── token_data_service.rs
     │   ├── strategy/
@@ -274,6 +281,49 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Email: <matt@cainamventures.com>
 - Repository: <https://github.com/cainamventures/cainam-core>
 
+## CLI Usage
+
+The `cainam` CLI tool provides several commands for interacting with the platform:
+
+### Get Trending Tokens
+
+```bash
+cargo run --bin cainam trending
+```
+
+This command displays a list of trending tokens with their current prices, 24h changes, volumes, and market caps.
+
+### Get Token Overview
+
+```bash
+cargo run --bin cainam token <TOKEN_ADDRESS>
+```
+
+Shows detailed information about a specific token, including:
+- Current price and market cap
+- 24h volume and price change
+- Number of holders and active wallets
+
+### Analyze Market Signals
+
+```bash
+cargo run --bin cainam signals <TOKEN_ADDRESS>
+```
+
+Analyzes market signals for a specific token, displaying:
+- Signal type (if any)
+- Confidence score
+- Risk assessment
+- Price and volume changes
+
+### Monitor Tokens
+
+```bash
+cargo run --bin cainam monitor <TOKEN_ADDRESS1,TOKEN_ADDRESS2,...> [--interval <SECONDS>]
+```
+
+Continuously monitors specified tokens for market signals. The interval defaults to 300 seconds (5 minutes).
+
 
 ================================================
 File: Cargo.toml
@@ -287,6 +337,10 @@ repository = "https://github.com/cainamventures/cainam-core"
 readme = "README.md"
 keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
+
+[[bin]]
+name = "cainam"
+path = "src/bin/cainam.rs"
 
 [[bin]]
 name = "cainam-core"
@@ -359,6 +413,8 @@ dotenvy = "0.15.7"
 serde_json = "1.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
+clap = { version = "4.4", features = ["derive"] }
+
 
 ================================================
 File: .env.example
@@ -366,49 +422,86 @@ File: .env.example
 ####################################
 #### Core Configurations ####
 ####################################
-OPENAI_MODEL=gpt-4o
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=
+OPENAI_MODEL="gpt-4o-mini"
+OPENAI_API_KEY=""
+
+####################################
+#### MongoDB Configuration ####
+####################################
+MONGODB_URI=
+MONGODB_DATABASE=cainam
+MONGODB_APP_NAME=cainam-core
+
+# Optional vector store settings
+MONGODB_VECTOR_COLLECTION=vectors
+MONGODB_VECTOR_INDEX_NAME=vector_index
+
+# Connection pool settings
+MONGODB_MIN_POOL_SIZE=5
+MONGODB_MAX_POOL_SIZE=10
+MONGODB_CONNECT_TIMEOUT_MS=30000
+
+# Optional development settings
+MONGODB_TEST_DATABASE=cainam_test
 
 ####################################
 #### Birdeye Configurations ####
 ####################################
-BIRDEYE_API_KEY=your_birdeye_api_key
+BIRDEYE_API_KEY=
 BIRDEYE_WALLET_ADDR=
+BIRDEYE_API_URL="https://public-api.birdeye.so"
+
+####################################
+#### Jupiter Configurations ####
+####################################
+JUPITER_API_KEY=
+JUPITER_SLIPPAGE=
 
 ####################################
 #### Solana Configurations ####
 ####################################
-SOLANA_PUBLIC_KEY= 
-# Either set SOLANA_PRIVATE_KEY or use local keypair at ~/.config/solana/id.json
-#SOLANA_PRIVATE_KEY=your_base58_private_key
+SOLANA_PUBLIC_KEY=
+SOLANA_PRIVATE_KEY=
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
+####################################
+#### Spinai Configurations ####
+####################################
+SPINAI_API_KEY=
+
+####################################
+#### Github Configurations ####
+####################################
+GITHUB_TOKEN=
 
 ####################################
 #### Trading Configurations ####
 ####################################
-MAX_POSITION_SIZE_SOL=1.0
-MIN_POSITION_SIZE_SOL=0.1
+MAX_POSITION_SIZE_SOL=0.2
+MIN_POSITION_SIZE_SOL=0.01
 MAX_TOKENS_PER_WALLET=5
-MIN_CONFIDENCE_THRESHOLD=0.8
-MIN_LIQUIDITY_USD=100000
-MAX_SLIPPAGE=0.01  # 1%
-INITIAL_PORTFOLIO_VALUE=10.0  # SOL
-MAX_DRAWDOWN=0.2  # 20%
+MIN_CONFIDENCE_THRESHOLD=0.7
+MIN_LIQUIDITY_USD=20
+MAX_SLIPPAGE=.3
+INITIAL_PORTFOLIO_VALUE=100000
+MAX_DRAWDOWN=0.2
+DATA_SYNC_INTERVAL_SECONDS=60
+
+# Market Tokens Configuration
+MARKET_TOKENS=
 
 # Risk Management
-STOP_LOSS_PERCENTAGE=0.05  # 5%
-TAKE_PROFIT_PERCENTAGE=0.15  # 15%
+STOP_LOSS_PERCENTAGE=0.05
+TAKE_PROFIT_PERCENTAGE=0.15
+
+RUST_BACKTRACE=full
 
 ####################################
 #### Future ####
 ####################################
 
 # Web Search API Configuration
-# TAVILY_API_KEY=
-
-# Postgres Database
-# DATABASE_URL=
+TAVILY_API_KEY=
 
 ######################################
 #### Crypto Analytics ####
@@ -416,6 +509,7 @@ TAKE_PROFIT_PERCENTAGE=0.15  # 15%
 
 # CoinMarketCap
 COINMARKETCAP_API_KEY=
+
 # CoinGecko
 COINGECKO_API_KEY=
 
@@ -440,23 +534,11 @@ DISCORD_API_TOKEN=
 TELEGRAM_BOT_TOKEN=
 
 ####################################
-#### Database Configuration ####
+#### Postgresql Configuration ####
 ####################################
-MONGODB_URI=mongodb://localhost:32769
-MONGODB_DATABASE=cainam
-MONGODB_APP_NAME=cainam-core
+#POSTGRES_URL=
+#DATABASE_URL=
 
-# Optional vector store settings
-MONGODB_VECTOR_COLLECTION=vectors
-MONGODB_VECTOR_INDEX_NAME=vector_index
-
-# Connection pool settings
-MONGODB_MIN_POOL_SIZE=5
-MONGODB_MAX_POOL_SIZE=10
-MONGODB_CONNECT_TIMEOUT_MS=20000
-
-# Optional development settings
-MONGODB_TEST_DATABASE=cainam_test
 
 ================================================
 File: memory-bank/activeContext.md
@@ -469,9 +551,14 @@ File: memory-bank/activeContext.md
 - Two-phase data collection process:
   1. Trending token capture from Birdeye API
   2. Detailed token analytics collection for trending tokens
+- API response handling optimization and struct alignment
 
 ## Recent Changes
 
+- Updated TokenOverviewResponse struct to match Birdeye API:
+  - Added new fields: decimals, fdv, extensions, supply metrics
+  - Improved field naming and serialization
+  - Enhanced type safety and documentation
 - Split market data capture into two separate scripts:
   1. `capture_token_trending.rs`: Fetches trending tokens and stores in MongoDB
   2. `capture_token_analytics.rs`: Processes trending tokens to get detailed analytics
@@ -833,61 +920,41 @@ This document outlines the collections within the `cainam` database, their purpo
         "decimals": number,
         "logo_uri": string,
 
-        //-- Price Data (from Birdeye and calculated)
+        //-- Price and Market Data (from Birdeye)
         "price": number,
         "price_change_24h": number,
-        "price_change_7d": number,  // Calculated from historical data
-        "price_high_24h": number,    // From OHLCV data or calculated
-        "price_low_24h": number,     // From OHLCV data or calculated
-
-        //-- Volume Data (from Birdeye)
+        "price_change_7d": number,
         "volume_24h": number,
         "volume_change_24h": number,
-        "volume_by_price_24h": document, // Could be a nested document with price ranges and volumes
-
-        //-- Market Cap and Supply (from Birdeye)
         "market_cap": number,
-        "fully_diluted_market_cap": number,
+        "fully_diluted_valuation": number,  // Updated from Birdeye fdv field
         "circulating_supply": number,
         "total_supply": number,
 
-        //-- Liquidity (from Birdeye)
+        //-- Extended Market Data (from Birdeye)
         "liquidity": number,
-        "liquidity_change_24h": number, // Calculated
+        "liquidity_change_24h": number,
+        "number_markets": number,           // New field from Birdeye
+        "last_trade_unix_time": number,     // New field from Birdeye
+        "last_trade_human_time": string,    // New field from Birdeye
+        "extensions": document,             // New field from Birdeye for additional metadata
 
-        //-- Trading Metrics (from Birdeye and calculated)
+        //-- Trading Metrics
         "trades_24h": number,
-        "average_trade_size": number, // Calculated (volume_24h / trades_24h)
-        "buy_volume_24h": number,      // From Birdeye trade data
-        "sell_volume_24h": number,     // From Birdeye trade data
-
-        //-- Holder Metrics (from Birdeye, potentially supplemented by other sources)
-        "holder_count": number,
-        "active_wallets_24h": number, // Requires additional on-chain analysis
-        "whale_transactions_24h": number, // Requires additional on-chain analysis, defining "whale" threshold
+        "average_trade_size": number,
+        "buy_volume_24h": number,
+        "sell_volume_24h": number,
 
         //-- Technical Indicators (Calculated)
         "rsi_14": number,
-        "sma_20": number,
-        "ema_50": number,
-        "bollinger_bands": document, // { upper: number, middle: number, lower: number }
         "macd": document,          // { macd: number, signal: number, histogram: number }
+        "bollinger_bands": document, // { upper: number, middle: number, lower: number }
 
-        //-- Sentiment Analysis (from Analyst Agent)
-        "social_sentiment": document, // { overall_score: number, twitter_score: number, telegram_score: number, ... }
-        "news_sentiment": number,
-
-        //-- On-Chain Analysis (from Analyst Agent, potentially using Birdeye's wallet APIs)
-        "whale_activity_index": number, // (0-1, based on whale transaction volume and count)
-        "network_growth": number,      // New addresses interacting with the token
-        "concentration_ratio": number,  // Percentage of supply held by top N addresses
-
-        //-- Risk Metrics (from Risk Manager Agent)
-        "volatility_30d": number,     // Annualized volatility
-        "value_at_risk_95": number,  // 95% VaR
-        "expected_shortfall_95": number, // 95% Expected Shortfall
-
-        "timestamp": date
+        //-- Timestamps and Metadata
+        "timestamp": date,
+        "created_at": date,
+        "metadata": document,      // Additional metadata and context
+        "embedding": array         // Vector embedding for similarity search
     }
     ```
 
@@ -1835,6 +1902,12 @@ File: memory-bank/techContext.md
   - Token trending data
   - Token analytics and market data
   - Rate limited with 500ms delay between requests
+  - Response structure:
+    - Basic token info (address, symbol, name, decimals)
+    - Market metrics (price, volume, liquidity)
+    - Supply information (total, circulating)
+    - Extended metadata (fdv, holder metrics)
+    - Trading data (last trade time, market count)
 
 ### Development Tools
 
@@ -1989,7 +2062,7 @@ File: scripts/capture_token_analytics.rs
 ================================================
 use anyhow::{Context, Result};
 use cainam_core::{
-    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    birdeye::api::BirdeyeClient,
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::token_trending::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
@@ -2059,34 +2132,23 @@ async fn main() -> Result<()> {
     while let Some(token) = cursor.try_next().await? {
         info!("Processing analytics for token: {} ({})", token.symbol, token.address);
 
-        // First get basic token overview
-        match birdeye_client.get_token_overview(&token.address).await {
-            Ok(overview) => {
+        // Get token overview and store analytics
+        match analytics_service
+            .fetch_and_store_token_info(&token.symbol, &token.address)
+            .await
+        {
+            Ok(analytics) => {
+                processed += 1;
                 info!(
-                    "Got token overview for {}: price=${:.4}, mcap=${:.2}",
+                    "Successfully stored analytics for {}: price=${:.4}, mcap=${:.2}",
                     token.symbol,
-                    overview.price,
-                    overview.market_cap.unwrap_or_default()
+                    analytics.price,
+                    analytics.market_cap.unwrap_or_default()
                 );
-
-                // If overview looks good, fetch and store detailed analytics
-                match analytics_service
-                    .fetch_and_store_token_info(&token.symbol, &token.address)
-                    .await
-                {
-                    Ok(_) => {
-                        processed += 1;
-                        info!("Successfully stored analytics for {}", token.symbol);
-                    }
-                    Err(e) => {
-                        errors += 1;
-                        error!("Failed to store analytics for {}: {}", token.symbol, e);
-                    }
-                }
             }
             Err(e) => {
                 errors += 1;
-                error!("Failed to get overview for {}: {}", token.symbol, e);
+                error!("Failed to process analytics for {}: {}", token.symbol, e);
             }
         }
 
@@ -2367,22 +2429,22 @@ async fn main() -> Result<()> {
                     "mappings": {
                         "dynamic": true,
                         "fields": {
-                            "token_address": { "type": "string"},
-                            "token_name": { "type": "string"},
-                            "token_symbol": { "type": "string"},
-                            "timestamp": { "type": "date" },
-                            "liquidity": { "type": "number" },
-                            "volume_24h": { "type": "number" },
-                            "volume_change_24h": { "type": "number" },
-                            "market_cap": { "type": "number" },
+                            "bollinger_lower": { "type": "number" },
+                            "bollinger_upper": { "type": "number" },
                             "fully_diluted_market_cap": { "type": "number" },
+                            "liquidity": { "type": "number" },
+                            "macd": { "type": "number" },
+                            "macd_signal": { "type": "number" },
+                            "market_cap": { "type": "number" },
                             "price": { "type": "number" },
                             "price_change_24h": { "type": "number" },
                             "rsi_14": { "type": "number" },
-                            "macd": { "type": "number" },
-                            "macd_signal": { "type": "number" },
-                            "bollinger_upper": { "type": "number" },
-                            "bollinger_lower": { "type": "number" }
+                            "timestamp": { "type": "date" },
+                            "token_address": { "type": "string"},
+                            "token_name": { "type": "string"},
+                            "token_symbol": { "type": "string"},
+                            "volume_24h": { "type": "number" },
+                            "volume_change_24h": { "type": "number" }
                         }
                     }
                 }
@@ -2689,9 +2751,8 @@ pub mod utils;
 // Re-export commonly used types
 pub use crate::config::{
     AgentConfig,
-    BirdeyeConfig,
-    MarketConfig,
-    get_log_level,
+    birdeye_config::BirdeyeConfig,
+    market_config::MarketConfig,
     get_openai_model,
     mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
 };
@@ -2706,6 +2767,8 @@ use crate::{
     models::market_signal::{MarketSignal, SignalType},
     trading::SolanaAgentKit,
     utils::f64_to_decimal,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    services::token_analytics::TokenAnalyticsService,
 };
 use anyhow::Result;
 use bson::DateTime;
@@ -2898,7 +2961,7 @@ async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    // logging::init_logging()?;
+    logging::init_logging()?;
 
     println!("Starting Cainam Core...");
 
@@ -2910,7 +2973,6 @@ async fn main() -> Result<()> {
     let db_pool = init_mongodb().await?;
     println!("Initialized MongoDB connection pool");
 
-    // TODO: zTgx hardcoded
     // Initialize Solana agent
     let rpc_url = std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
     let private_key = std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not found in environment");
@@ -2920,42 +2982,42 @@ async fn main() -> Result<()> {
     // Load configuration from environment
     let config = AgentConfig::new_from_env()?;
 
+    // Initialize services with MongoDB pool
+    let birdeye: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
+    let token_analytics_service = Arc::new(TokenAnalyticsService::new(
+        db_pool.clone(),
+        birdeye.clone(),
+        None,
+    ).await?);
+
     // Initialize trading agent
-    let trader = Arc::new(TradingAgent::new(config.clone(), db_pool, solana_agent).await?);
+    let trader = Arc::new(TradingAgent::new(
+        config.clone(),
+        token_analytics_service,
+        db_pool.clone(),
+        solana_agent,
+    ).await?);
     let running = Arc::new(AtomicBool::new(true));
 
-    // Initialize services with MongoDB pool
-    // let token_analytics_service = TokenAnalyticsService::new(
-    //     db_pool.clone(),
-    //     birdeye.clone(),
-    //     birdeye_extended.clone(),
-    //     Some(market_config.clone()),
-    // ).await?;
-
-    // let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
-
-    // // Initialize vector store
-    // let vector_store = VectorStore::new().await?;
-
-    // // Spawn the autonomous trading agent
-    // let trader_clone = trader.clone();
-    // let running_clone = running.clone();
-    // let trading_handle = tokio::spawn(async move {
-    //     info!("Starting autonomous trading...");
-    //     if let Err(e) = trader_clone.run().await {
-    //         error!("Trading agent error: {}", e);
-    //         running_clone.store(false, Ordering::SeqCst);
-    //     }
-    // });
+    // Spawn the autonomous trading agent
+    let trader_clone = trader.clone();
+    let running_clone = running.clone();
+    let trading_handle = tokio::spawn(async move {
+        info!("Starting autonomous trading...");
+        if let Err(e) = trader_clone.run().await {
+            error!("Trading agent error: {}", e);
+            running_clone.store(false, Ordering::SeqCst);
+        }
+    });
 
     // Handle user input in a separate task
     let input_handle = tokio::spawn(handle_user_input(trader.clone(), config, running.clone()));
 
     // Wait for either task to complete
     tokio::select! {
-        // _ = trading_handle => {
-        //     info!("Trading task completed");
-        // }
+        _ = trading_handle => {
+            info!("Trading task completed");
+        }
         _ = input_handle => {
             info!("User input task completed");
         }
@@ -3706,7 +3768,6 @@ File: src/agent/analyst.rs
 ================================================
 use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use crate::config::mongodb::MongoDbPool;
-use crate::config::birdeye_config::BirdeyeConfig;
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;
@@ -3954,126 +4015,52 @@ File: src/agent/trader.rs
 ================================================
 // use crate::models::trade::Trade;
 use crate::{
-    birdeye::api::BirdeyeClient,
-    config::mongodb::MongoDbPool,
-    config::{AgentConfig, MarketConfig},
+    config::AgentConfig,
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
     services::TokenAnalyticsService,
-    trading::trading_engine::TradingEngine,
-    trading::SolanaAgentKit,
     utils::f64_to_decimal,
+    trading::{SolanaAgentKit, trading_engine::TradingEngine},
+    config::mongodb::MongoDbPool,
 };
 use bigdecimal::BigDecimal;
-use rig::{
-    agent::Agent,
-    providers::openai::{Client as OpenAIClient, CompletionModel},
-};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::sleep;
 use tracing::{error, info};
-
-const MAX_RETRIES: u32 = 3;
-const RETRY_DELAY: u64 = 1000; // 1 second
+use bson;
 
 pub struct TradingAgent {
-    agent: Agent<CompletionModel>,
-    trading_engine: TradingEngine,
     analytics_service: Arc<TokenAnalyticsService>,
     config: AgentConfig,
     running: Arc<AtomicBool>,
-    db: Arc<MongoDbPool>,
-    birdeye: Arc<BirdeyeClient>,
-    birdeye_extended: Arc<BirdeyeClient>,
+    engine: TradingEngine,
+    db_pool: Arc<MongoDbPool>,
 }
 
 impl TradingAgent {
     pub async fn new(
         config: AgentConfig,
-        db: Arc<MongoDbPool>,
+        analytics_service: Arc<TokenAnalyticsService>,
+        db_pool: Arc<MongoDbPool>,
         solana_agent: SolanaAgentKit,
     ) -> AgentResult<Self> {
         info!("Initializing TradingAgent...");
 
-        // Initialize OpenAI client
-        let openai_client = OpenAIClient::new(&config.openai_api_key);
-
-        info!("Creating GPT-4 agent...");
-        let agent = openai_client
-            .agent(crate::config::get_openai_model())
-            .preamble(include_str!("../prompts/system.txt"))
-            .build();
-
-        // Initialize components
-        let trading_engine = TradingEngine::new(
+        let engine = TradingEngine::new(
             config.trade_min_confidence,
             config.trade_max_amount,
             solana_agent,
         );
 
-        // info!("Initializing Twitter client...");
-        // let mut twitter_client = TwitterClient::new(
-        //     config.twitter_email.clone(),
-        //     config.twitter_username.clone(),
-        //     config.twitter_password.clone(),
-        // );
-
-        // // Retry Twitter login with exponential backoff
-        // let mut retry_count = 0;
-        // loop {
-        //     match twitter_client.login().await {
-        //         Ok(_) => {
-        //             info!("Successfully logged in to Twitter");
-        //             break;
-        //         }
-        //         Err(e) => {
-        //             retry_count += 1;
-        //             if retry_count >= MAX_RETRIES {
-        //                 error!("Failed to login to Twitter after {} attempts", MAX_RETRIES);
-        //                 return Err(AgentError::TwitterApi(format!("Login failed: {}", e)));
-        //             }
-        //             warn!(
-        //                 "Failed to login to Twitter (attempt {}), retrying...",
-        //                 retry_count
-        //             );
-        //             sleep(Duration::from_millis(RETRY_DELAY * 2u64.pow(retry_count))).await;
-        //         }
-        //     }
-        // }
-
-        info!("Initializing Birdeye clients...");
-        let birdeye = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-        let birdeye_extended = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-
-        // Initialize market config
-        let market_config = MarketConfig::new_from_env()?;
-
-        // Initialize analytics service
-        let analytics_service = Arc::new(
-            TokenAnalyticsService::new(db.clone(), birdeye.clone(), Some(market_config)).await?,
-        );
-
         Ok(Self {
-            agent,
-            trading_engine,
             analytics_service,
             config,
             running: Arc::new(AtomicBool::new(false)),
-            db,
-            birdeye,
-            birdeye_extended,
+            engine,
+            db_pool,
         })
     }
-
-    // async fn store_trade(&self, trade: &Trade) -> Result<(), Error> {
-    //     let collection = self.db.database("cainam").collection("trades");
-    //     collection
-    //         .insert_one(trade)
-    //         .await
-    //         .map_err(|e| Error::Mongo(e))?;
-    //     Ok(())
-    // }
 
     pub async fn analyze_market(
         &self,
@@ -4132,49 +4119,54 @@ impl TradingAgent {
 
         // Convert f64 config values to BigDecimal
         let threshold = f64_to_decimal(self.config.trade_min_confidence);
-        let max_amount = f64_to_decimal(self.config.trade_max_amount);
 
         if signal.confidence >= threshold {
-            let amount = (max_amount.clone() * signal.confidence.clone()).min(max_amount.clone());
-
-            match action {
-                "BUY" | "SELL" => {
-                    info!(
-                        "Executing {} trade for {} with amount {}",
-                        action, signal.asset_address, amount
-                    );
-                    self.trading_engine
-                        .execute_trade(signal)
-                        .await
-                        .map_err(|e| {
-                            AgentError::Trading(format!("Trade execution failed: {}", e))
-                        })?;
-                }
-                _ => {}
-            }
+            info!(
+                "Signal meets confidence threshold for {}: {} (confidence: {:.2})",
+                signal.asset_address, action, signal.confidence
+            );
         }
 
         Ok(Some(action.to_string()))
     }
 
-    pub async fn execute_trade(&self, _symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
-        self.trading_engine
-            .execute_trade(signal)
+    pub async fn execute_trade(&self, symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
+        info!("Executing trade for {}", symbol);
+        self.engine.execute_trade(signal)
             .await
             .map_err(|e| AgentError::Trading(format!("Trade execution failed: {}", e)))
     }
 
     pub async fn post_trade_update(
         &self,
-        _symbol: &str,
-        _action: &str,
-        _amount: f64,
-        _signal_type: &SignalType,
+        symbol: &str,
+        action: &str,
+        amount: f64,
+        signal_type: &SignalType,
     ) -> AgentResult<()> {
-        // TODO: Implement post-trade updates
-        // - Update portfolio state
-        // - Log trade details
-        // - Send notifications
+        info!(
+            "Posting trade update - Symbol: {}, Action: {}, Amount: {}, Type: {:?}",
+            symbol, action, amount, signal_type
+        );
+
+        // Create trade update document
+        let trade_update = bson::doc! {
+            "symbol": symbol,
+            "action": action,
+            "amount": amount,
+            "signal_type": format!("{:?}", signal_type),
+            "timestamp": bson::DateTime::now(),
+        };
+
+        // Insert into trades collection
+        self.db_pool
+            .database("cainam")  // Use a constant or config value for database name
+            .collection("trades")
+            .insert_one(trade_update)
+            .await
+            .map_err(|e| AgentError::Database(e.into()))?;
+
+        info!("Trade update posted successfully");
         Ok(())
     }
 
@@ -4282,26 +4274,240 @@ impl TradingAgent {
 
 
 ================================================
+File: src/bin/cainam.rs
+================================================
+use cainam_core::{
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    config::{AgentConfig, mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig}},
+    services::{TokenAnalyticsService, token_analytics_llm::TokenAnalyticsLLM},
+};
+use clap::{Parser, Subcommand};
+use dotenvy::dotenv;
+use std::sync::Arc;
+use tokio;
+use tracing::{error, info, Level};
+use chrono;
+use anyhow::Result;
+use tracing_subscriber::FmtSubscriber;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Get trending tokens
+    Trending,
+    
+    /// Get token overview and analytics
+    Token {
+        /// Token address
+        address: String,
+    },
+    
+    /// Get market signals for a token
+    Signals {
+        /// Token address
+        address: String,
+    },
+    
+    /// Start monitoring mode for specified tokens
+    Monitor {
+        /// Token addresses (comma-separated)
+        #[arg(value_delimiter = ',')]
+        addresses: Vec<String>,
+        
+        /// Monitoring interval in seconds
+        #[arg(default_value = "300")]
+        interval: u64,
+    },
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize logging
+    let _subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .init();
+
+    // Load environment variables
+    dotenv().ok();
+
+    // Parse command line arguments
+    let cli = Cli::parse();
+
+    // Initialize services
+    let config = AgentConfig::new_from_env()?;
+    
+    // Create MongoDB configuration
+    let mongodb_uri = dotenvy::var("MONGODB_URI").expect("MONGODB_URI must be set");
+    let mongodb_database = dotenvy::var("MONGODB_DATABASE").expect("MONGODB_DATABASE must be set");
+    let mongo_config = MongoConfig {
+        uri: mongodb_uri,
+        database: mongodb_database,
+        app_name: Some("cainam-cli".to_string()),
+        pool_config: MongoPoolConfig::default(),
+    };
+    
+    let db_pool = MongoDbPool::create_pool(mongo_config).await?;
+    let birdeye: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
+    let analytics_service = Arc::new(
+        TokenAnalyticsService::new(db_pool.into(), birdeye.clone(), None).await?,
+    );
+    
+    let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
+    let analytics_llm = TokenAnalyticsLLM::new(
+        analytics_service.clone(),
+        &openai_api_key,
+    );
+
+    // Process commands
+    match cli.command {
+        Commands::Trending => {
+            info!("Fetching trending tokens...");
+            let insights = analytics_llm.get_market_insights().await?;
+            println!("\n{}", insights);
+        }
+
+        Commands::Token { address } => {
+            info!("Fetching token analytics for {}", address);
+            let overview = birdeye.get_token_overview(&address).await?;
+            let analytics = analytics_service
+                .fetch_and_store_token_info(&overview.symbol, &address)
+                .await?;
+            
+            // Get AI analysis of the token
+            let analysis = analytics_llm.analyze_query(&format!(
+                "Analyze the token {} ({}) with price ${:.8} and provide insights about its current market status.",
+                overview.name, overview.symbol, overview.price
+            )).await?;
+            
+            println!("\nToken Overview:");
+            println!("Name: {} ({})", overview.name, overview.symbol);
+            println!("Price: ${:.8}", overview.price);
+            println!("Market Cap: ${:.2}M", overview.market_cap / 1_000_000.0);
+            println!("24h Volume: ${:.2}", overview.v24h_usd);
+            println!("24h Price Change: {:.2}%", overview.price_change_24h_percent);
+            println!("Holders: {}", overview.holder);
+            println!("Active Wallets (24h): {}", overview.unique_wallet_24h);
+            println!("\nAI Analysis:\n{}", analysis);
+        }
+
+        Commands::Signals { address } => {
+            info!("Analyzing market signals for {}", address);
+            let overview = birdeye.get_token_overview(&address).await?;
+            let analytics = analytics_service
+                .fetch_and_store_token_info(&overview.symbol, &address)
+                .await?;
+            
+            // Get AI analysis of the signals
+            let signal_analysis = analytics_llm.analyze_query(&format!(
+                "Analyze the market signals and technical indicators for {} ({}) and provide trading insights.",
+                overview.name, overview.symbol
+            )).await?;
+            
+            if let Some(signal) = analytics_service.generate_market_signals(&analytics).await? {
+                println!("\nMarket Signals for {} ({}):", overview.name, overview.symbol);
+                println!("Signal Type: {:?}", signal.signal_type);
+                println!("Confidence: {:.2}", signal.confidence);
+                println!("Risk Score: {:.2}", signal.risk_score);
+                if let Some(price_change) = &signal.price_change_24h {
+                    println!("Price Change (24h): {:.2}%", price_change);
+                }
+                if let Some(volume_change) = &signal.volume_change_24h {
+                    println!("Volume Change (24h): {:.2}%", volume_change);
+                }
+                
+                // Get relevant historical analytics
+                if let Ok(relevant_data) = analytics_service.get_relevant_analytics(&format!(
+                    "Recent trading activity for {} token", overview.symbol
+                )).await {
+                    println!("\nRecent Trading Activity:");
+                    for data in relevant_data.iter().take(3) {
+                        println!("  Time: {}", data.timestamp);
+                        println!("  Price: ${:.8}", data.price);
+                        if let Some(vol) = &data.volume_24h {
+                            println!("  Volume: ${:.2}", vol);
+                        }
+                    }
+                }
+                
+                println!("\nAI Analysis:\n{}", signal_analysis);
+            } else {
+                println!("\nNo significant market signals detected.");
+            }
+        }
+
+        Commands::Monitor { addresses, interval } => {
+            info!("Starting monitoring mode...");
+            println!("\nMonitoring {} tokens every {} seconds...", addresses.len(), interval);
+            println!("Press Ctrl+C to stop.");
+
+            loop {
+                // Get trending tokens to compare with monitored tokens
+                if let Ok(trending) = analytics_service.get_trending_tokens(5).await {
+                    println!("\nTop Trending Tokens:");
+                    for token in trending {
+                        println!("  {} (${:.8})", token.token_symbol, token.price);
+                    }
+                }
+
+                for address in &addresses {
+                    match birdeye.get_token_overview(address).await {
+                        Ok(overview) => {
+                            let analytics = analytics_service
+                                .fetch_and_store_token_info(&overview.symbol, address)
+                                .await?;
+                            
+                            // Get token analytics history
+                            if let Ok(Some(token_data)) = analytics_service.get_token_analytics(address).await {
+                                if let Some(signal) = analytics_service.generate_market_signals(&analytics).await? {
+                                    println!("\n[{}] Signal for {} ({}):", 
+                                        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                                        overview.name,
+                                        overview.symbol
+                                    );
+                                    println!("Type: {:?} (Confidence: {:.2})", signal.signal_type, signal.confidence);
+                                    println!("Price: ${:.8} ({:+.2}%)", overview.price, overview.price_change_24h_percent);
+                                    
+                                    // Compare with historical data
+                                    if let Some(prev_price) = token_data.price.to_string().parse::<f64>().ok() {
+                                        let price_diff = ((overview.price - prev_price) / prev_price) * 100.0;
+                                        println!("Price Change since last check: {:.2}%", price_diff);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to fetch data for {}: {}", address, e);
+                        }
+                    }
+                }
+                
+                tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+            }
+        }
+    }
+
+    Ok(())
+} 
+
+================================================
 File: src/birdeye/api.rs
 ================================================
 use super::BIRDEYE_API_URL;
-use crate::config::BirdeyeConfig;
 use crate::models::token_info::TokenExtensions;
 use crate::models::token_trending::{TrendingToken, TrendingTokenData};
+use crate::models::market_data::{ApiResponse, TokenMarketResponse};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, error};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiResponse<T> {
-    pub success: bool,
-    pub data: T,
-    pub message: Option<String>,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -4341,193 +4547,6 @@ pub struct MultiTokenData {
     pub tokens: HashMap<String, TokenData>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TokenMarketResponse {
-    pub address: String,
-    pub decimals: i32,
-    pub symbol: String,
-    pub name: String,
-    #[serde(rename = "marketCap")]
-    pub market_cap: f64,
-    pub fdv: f64,
-    pub extensions: TokenExtensions,
-    #[serde(rename = "logoURI")]
-    pub logo_uri: String,
-    pub liquidity: f64,
-    #[serde(rename = "lastTradeUnixTime")]
-    pub last_trade_unix_time: i64,
-    #[serde(rename = "lastTradeHumanTime")]
-    pub last_trade_human_time: String,
-    pub price: f64,
-    #[serde(rename = "history30mPrice")]
-    pub history30m_price: f64,
-    #[serde(rename = "priceChange30mPercent")]
-    pub price_change_30m_percent: f64,
-    #[serde(rename = "history1hPrice")]
-    pub history1h_price: f64,
-    #[serde(rename = "priceChange1hPercent")]
-    pub price_change_1h_percent: f64,
-    #[serde(rename = "history2hPrice")]
-    pub history2h_price: f64,
-    #[serde(rename = "priceChange2hPercent")]
-    pub price_change_2h_percent: f64,
-    #[serde(rename = "history4hPrice")]
-    pub history4h_price: f64,
-    #[serde(rename = "priceChange4hPercent")]
-    pub price_change_4h_percent: f64,
-    #[serde(rename = "history6hPrice")]
-    pub history6h_price: f64,
-    #[serde(rename = "priceChange6hPercent")]
-    pub price_change_6h_percent: f64,
-    #[serde(rename = "history8hPrice")]
-    pub history8h_price: f64,
-    #[serde(rename = "priceChange8hPercent")]
-    pub price_change_8h_percent: f64,
-    #[serde(rename = "history12hPrice")]
-    pub history12h_price: f64,
-    #[serde(rename = "priceChange12hPercent")]
-    pub price_change_12h_percent: f64,
-    #[serde(rename = "history24hPrice")]
-    pub history24h_price: f64,
-    #[serde(rename = "priceChange24hPercent")]
-    pub price_change_24h_percent: f64,
-    #[serde(rename = "uniqueWallet30m")]
-    pub unique_wallet30m: i64,
-    #[serde(rename = "uniqueWalletHistory30m")]
-    pub unique_wallet_history30m: i64,
-    #[serde(rename = "uniqueWallet30mChangePercent")]
-    pub unique_wallet30m_change_percent: f64,
-    #[serde(rename = "uniqueWallet1h")]
-    pub unique_wallet1h: i64,
-    #[serde(rename = "uniqueWalletHistory1h")]
-    pub unique_wallet_history1h: i64,
-    #[serde(rename = "uniqueWallet1hChangePercent")]
-    pub unique_wallet1h_change_percent: f64,
-    #[serde(rename = "uniqueWallet2h")]
-    pub unique_wallet2h: i64,
-    #[serde(rename = "uniqueWalletHistory2h")]
-    pub unique_wallet_history2h: i64,
-    #[serde(rename = "uniqueWallet2hChangePercent")]
-    pub unique_wallet2h_change_percent: f64,
-    #[serde(rename = "uniqueWallet4h")]
-    pub unique_wallet4h: i64,
-    #[serde(rename = "uniqueWalletHistory4h")]
-    pub unique_wallet_history4h: i64,
-    #[serde(rename = "uniqueWallet4hChangePercent")]
-    pub unique_wallet4h_change_percent: f64,
-    #[serde(rename = "uniqueWallet8h")]
-    pub unique_wallet8h: i64,
-    #[serde(rename = "uniqueWalletHistory8h")]
-    pub unique_wallet_history8h: i64,
-    #[serde(rename = "uniqueWallet8hChangePercent")]
-    pub unique_wallet8h_change_percent: f64,
-    #[serde(rename = "uniqueWallet24h")]
-    pub unique_wallet24h: i64,
-    #[serde(rename = "uniqueWalletHistory24h")]
-    pub unique_wallet_history24h: i64,
-    #[serde(rename = "uniqueWallet24hChangePercent")]
-    pub unique_wallet24h_change_percent: f64,
-    pub supply: f64,
-    #[serde(rename = "totalSupply")]
-    pub total_supply: f64,
-    pub mc: f64,
-    #[serde(rename = "circulatingSupply")]
-    pub circulating_supply: f64,
-    #[serde(rename = "realMc")]
-    pub real_mc: f64,
-    pub holder: i64,
-    pub trade30m: i64,
-    #[serde(rename = "tradeHistory30m")]
-    pub trade_history30m: i64,
-    #[serde(rename = "trade30mChangePercent")]
-    pub trade30m_change_percent: f64,
-    pub sell30m: i64,
-    #[serde(rename = "sellHistory30m")]
-    pub sell_history30m: i64,
-    #[serde(rename = "sell30mChangePercent")]
-    pub sell30m_change_percent: f64,
-    pub buy30m: i64,
-    #[serde(rename = "buyHistory30m")]
-    pub buy_history30m: i64,
-    #[serde(rename = "buy30mChangePercent")]
-    pub buy30m_change_percent: f64,
-    pub v30m: f64,
-    #[serde(rename = "v30mUSD")]
-    pub v30m_usd: f64,
-    #[serde(rename = "vHistory30m")]
-    pub v_history30m: f64,
-    #[serde(rename = "vHistory30mUSD")]
-    pub v_history30m_usd: f64,
-    #[serde(rename = "v30mChangePercent")]
-    pub v30m_change_percent: f64,
-    #[serde(rename = "vBuy30m")]
-    pub v_buy30m: f64,
-    #[serde(rename = "vBuy30mUSD")]
-    pub v_buy30m_usd: f64,
-    #[serde(rename = "vBuyHistory30m")]
-    pub v_buy_history30m: f64,
-    #[serde(rename = "vBuyHistory30mUSD")]
-    pub v_buy_history30m_usd: f64,
-    #[serde(rename = "vBuy30mChangePercent")]
-    pub v_buy30m_change_percent: f64,
-    #[serde(rename = "vSell30m")]
-    pub v_sell30m: f64,
-    #[serde(rename = "vSell30mUSD")]
-    pub v_sell30m_usd: f64,
-    #[serde(rename = "vSellHistory30m")]
-    pub v_sell_history30m: f64,
-    #[serde(rename = "vSellHistory30mUSD")]
-    pub v_sell_history30m_usd: f64,
-    #[serde(rename = "vSell30mChangePercent")]
-    pub v_sell30m_change_percent: f64,
-    pub trade24h: i64,
-    #[serde(rename = "tradeHistory24h")]
-    pub trade_history24h: i64,
-    #[serde(rename = "trade24hChangePercent")]
-    pub trade24h_change_percent: f64,
-    pub sell24h: i64,
-    #[serde(rename = "sellHistory24h")]
-    pub sell_history24h: i64,
-    #[serde(rename = "sell24hChangePercent")]
-    pub sell24h_change_percent: f64,
-    pub buy24h: i64,
-    #[serde(rename = "buyHistory24h")]
-    pub buy_history24h: i64,
-    #[serde(rename = "buy24hChangePercent")]
-    pub buy24h_change_percent: f64,
-    pub v24h: f64,
-    #[serde(rename = "v24hUSD")]
-    pub v24h_usd: f64,
-    #[serde(rename = "vHistory24h")]
-    pub v_history24h: f64,
-    #[serde(rename = "vHistory24hUSD")]
-    pub v_history24h_usd: f64,
-    #[serde(rename = "v24hChangePercent")]
-    pub v24h_change_percent: f64,
-    #[serde(rename = "vBuy24h")]
-    pub v_buy24h: f64,
-    #[serde(rename = "vBuy24hUSD")]
-    pub v_buy24h_usd: f64,
-    #[serde(rename = "vBuyHistory24h")]
-    pub v_buy_history24h: f64,
-    #[serde(rename = "vBuyHistory24hUSD")]
-    pub v_buy_history24h_usd: f64,
-    #[serde(rename = "vBuy24hChangePercent")]
-    pub v_buy24h_change_percent: f64,
-    #[serde(rename = "vSell24h")]
-    pub v_sell24h: f64,
-    #[serde(rename = "vSell24hUSD")]
-    pub v_sell24h_usd: f64,
-    #[serde(rename = "vSellHistory24h")]
-    pub v_sell_history24h: f64,
-    #[serde(rename = "vSellHistory24hUSD")]
-    pub v_sell_history24h_usd: f64,
-    #[serde(rename = "vSell24hChangePercent")]
-    pub v_sell24h_change_percent: f64,
-    #[serde(rename = "numberMarkets")]
-    pub number_markets: i64,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OnchainMetrics {
@@ -4541,20 +4560,188 @@ pub struct OnchainMetrics {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TokenOverviewResponse {
     pub address: String,
+    pub decimals: u8,
     pub symbol: String,
     pub name: String,
-    #[serde(rename = "logoURI")]
-    pub logo_uri: Option<String>,
-    pub decimals: u8,
-    pub price: f64,
     #[serde(rename = "marketCap")]
-    pub market_cap: Option<f64>,
-    pub liquidity: Option<f64>,
-    #[serde(rename = "volume24h")]
-    pub volume_24h: Option<f64>,
-    #[serde(rename = "priceChange24h")]
-    pub price_change_24h: Option<f64>,
-    pub holder_count: Option<i32>,
+    pub market_cap: f64,
+    pub fdv: f64,
+    pub extensions: Option<TokenExtensions>,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: String,
+    pub liquidity: f64,
+    #[serde(rename = "lastTradeUnixTime")]
+    pub last_trade_unix_time: i64,
+    #[serde(rename = "lastTradeHumanTime")]
+    pub last_trade_human_time: String,
+    pub price: f64,
+    #[serde(rename = "history30mPrice")]
+    pub history_30m_price: f64,
+    #[serde(rename = "priceChange30mPercent")]
+    pub price_change_30m_percent: f64,
+    #[serde(rename = "history1hPrice")]
+    pub history_1h_price: f64,
+    #[serde(rename = "priceChange1hPercent")]
+    pub price_change_1h_percent: f64,
+    #[serde(rename = "history2hPrice")]
+    pub history_2h_price: f64,
+    #[serde(rename = "priceChange2hPercent")]
+    pub price_change_2h_percent: f64,
+    #[serde(rename = "history4hPrice")]
+    pub history_4h_price: f64,
+    #[serde(rename = "priceChange4hPercent")]
+    pub price_change_4h_percent: f64,
+    #[serde(rename = "history6hPrice")]
+    pub history_6h_price: f64,
+    #[serde(rename = "priceChange6hPercent")]
+    pub price_change_6h_percent: f64,
+    #[serde(rename = "history8hPrice")]
+    pub history_8h_price: f64,
+    #[serde(rename = "priceChange8hPercent")]
+    pub price_change_8h_percent: f64,
+    #[serde(rename = "history12hPrice")]
+    pub history_12h_price: f64,
+    #[serde(rename = "priceChange12hPercent")]
+    pub price_change_12h_percent: f64,
+    #[serde(rename = "history24hPrice")]
+    pub history_24h_price: f64,
+    #[serde(rename = "priceChange24hPercent")]
+    pub price_change_24h_percent: f64,
+    #[serde(rename = "uniqueWallet30m")]
+    pub unique_wallet_30m: i64,
+    #[serde(rename = "uniqueWalletHistory30m")]
+    pub unique_wallet_history_30m: i64,
+    #[serde(rename = "uniqueWallet30mChangePercent")]
+    pub unique_wallet_30m_change_percent: f64,
+    #[serde(rename = "uniqueWallet1h")]
+    pub unique_wallet_1h: i64,
+    #[serde(rename = "uniqueWalletHistory1h")]
+    pub unique_wallet_history_1h: i64,
+    #[serde(rename = "uniqueWallet1hChangePercent")]
+    pub unique_wallet_1h_change_percent: f64,
+    #[serde(rename = "uniqueWallet2h")]
+    pub unique_wallet_2h: i64,
+    #[serde(rename = "uniqueWalletHistory2h")]
+    pub unique_wallet_history_2h: i64,
+    #[serde(rename = "uniqueWallet2hChangePercent")]
+    pub unique_wallet_2h_change_percent: f64,
+    #[serde(rename = "uniqueWallet4h")]
+    pub unique_wallet_4h: i64,
+    #[serde(rename = "uniqueWalletHistory4h")]
+    pub unique_wallet_history_4h: i64,
+    #[serde(rename = "uniqueWallet4hChangePercent")]
+    pub unique_wallet_4h_change_percent: f64,
+    #[serde(rename = "uniqueWallet8h")]
+    pub unique_wallet_8h: i64,
+    #[serde(rename = "uniqueWalletHistory8h")]
+    pub unique_wallet_history_8h: i64,
+    #[serde(rename = "uniqueWallet8hChangePercent")]
+    pub unique_wallet_8h_change_percent: f64,
+    #[serde(rename = "uniqueWallet24h")]
+    pub unique_wallet_24h: i64,
+    #[serde(rename = "uniqueWalletHistory24h")]
+    pub unique_wallet_history_24h: i64,
+    #[serde(rename = "uniqueWallet24hChangePercent")]
+    pub unique_wallet_24h_change_percent: f64,
+    pub supply: f64,
+    #[serde(rename = "totalSupply")]
+    pub total_supply: f64,
+    pub mc: f64,
+    #[serde(rename = "circulatingSupply")]
+    pub circulating_supply: f64,
+    #[serde(rename = "realMc")]
+    pub real_mc: f64,
+    pub holder: i64,
+    pub trade30m: i64,
+    #[serde(rename = "tradeHistory30m")]
+    pub trade_history_30m: i64,
+    #[serde(rename = "trade30mChangePercent")]
+    pub trade_30m_change_percent: f64,
+    pub sell30m: i64,
+    #[serde(rename = "sellHistory30m")]
+    pub sell_history_30m: i64,
+    #[serde(rename = "sell30mChangePercent")]
+    pub sell_30m_change_percent: f64,
+    pub buy30m: i64,
+    #[serde(rename = "buyHistory30m")]
+    pub buy_history_30m: i64,
+    #[serde(rename = "buy30mChangePercent")]
+    pub buy_30m_change_percent: f64,
+    pub v30m: f64,
+    #[serde(rename = "v30mUSD")]
+    pub v30m_usd: f64,
+    #[serde(rename = "vHistory30m")]
+    pub v_history_30m: f64,
+    #[serde(rename = "vHistory30mUSD")]
+    pub v_history_30m_usd: f64,
+    #[serde(rename = "v30mChangePercent")]
+    pub v30m_change_percent: f64,
+    #[serde(rename = "vBuy30m")]
+    pub v_buy_30m: f64,
+    #[serde(rename = "vBuy30mUSD")]
+    pub v_buy_30m_usd: f64,
+    #[serde(rename = "vBuyHistory30m")]
+    pub v_buy_history_30m: f64,
+    #[serde(rename = "vBuyHistory30mUSD")]
+    pub v_buy_history_30m_usd: f64,
+    #[serde(rename = "vBuy30mChangePercent")]
+    pub v_buy_30m_change_percent: f64,
+    #[serde(rename = "vSell30m")]
+    pub v_sell_30m: f64,
+    #[serde(rename = "vSell30mUSD")]
+    pub v_sell_30m_usd: f64,
+    #[serde(rename = "vSellHistory30m")]
+    pub v_sell_history_30m: f64,
+    #[serde(rename = "vSellHistory30mUSD")]
+    pub v_sell_history_30m_usd: f64,
+    #[serde(rename = "vSell30mChangePercent")]
+    pub v_sell_30m_change_percent: f64,
+    pub trade24h: i64,
+    #[serde(rename = "tradeHistory24h")]
+    pub trade_history_24h: i64,
+    #[serde(rename = "trade24hChangePercent")]
+    pub trade_24h_change_percent: f64,
+    pub sell24h: i64,
+    #[serde(rename = "sellHistory24h")]
+    pub sell_history_24h: i64,
+    #[serde(rename = "sell24hChangePercent")]
+    pub sell_24h_change_percent: f64,
+    pub buy24h: i64,
+    #[serde(rename = "buyHistory24h")]
+    pub buy_history_24h: i64,
+    #[serde(rename = "buy24hChangePercent")]
+    pub buy_24h_change_percent: f64,
+    pub v24h: f64,
+    #[serde(rename = "v24hUSD")]
+    pub v24h_usd: f64,
+    #[serde(rename = "vHistory24h")]
+    pub v_history_24h: f64,
+    #[serde(rename = "vHistory24hUSD")]
+    pub v_history_24h_usd: f64,
+    #[serde(rename = "v24hChangePercent")]
+    pub v24h_change_percent: f64,
+    #[serde(rename = "vBuy24h")]
+    pub v_buy_24h: f64,
+    #[serde(rename = "vBuy24hUSD")]
+    pub v_buy_24h_usd: f64,
+    #[serde(rename = "vBuyHistory24h")]
+    pub v_buy_history_24h: f64,
+    #[serde(rename = "vBuyHistory24hUSD")]
+    pub v_buy_history_24h_usd: f64,
+    #[serde(rename = "vBuy24hChangePercent")]
+    pub v_buy_24h_change_percent: f64,
+    #[serde(rename = "vSell24h")]
+    pub v_sell_24h: f64,
+    #[serde(rename = "vSell24hUSD")]
+    pub v_sell_24h_usd: f64,
+    #[serde(rename = "vSellHistory24h")]
+    pub v_sell_history_24h: f64,
+    #[serde(rename = "vSellHistory24hUSD")]
+    pub v_sell_history_24h_usd: f64,
+    #[serde(rename = "vSell24hChangePercent")]
+    pub v_sell_24h_change_percent: f64,
+    #[serde(rename = "numberMarkets")]
+    pub number_markets: i64,
 }
 
 #[async_trait]
@@ -4639,6 +4826,10 @@ impl BirdeyeApi for BirdeyeClient {
             .context("Failed to deserialize token overview response")?;
 
         if response.success {
+            if response.data.address != address {
+                error!("Token address mismatch: requested {}, but got {}", address, response.data.address);
+                return Err(anyhow!("Token not found: {}", address));
+            }
             debug!("Successfully retrieved token overview for {}", address);
             Ok(response.data)
         } else {
@@ -4709,13 +4900,14 @@ impl BirdeyeApi for MockBirdeyeApi {
 File: src/birdeye/mod.rs
 ================================================
 pub mod api;
+
 use crate::models::token_info::TokenInfo;
-pub use api::{BirdeyeApi, TokenMarketResponse};
+pub use api::BirdeyeApi;
+pub use crate::models::market_data::TokenMarketResponse;
 use async_trait::async_trait;
 pub use crate::models::token_trending::TrendingToken;
 
 pub const BIRDEYE_API_URL: &str = "https://public-api.birdeye.so";
-const RATE_LIMIT_DELAY: u64 = 500; // 500ms between requests
 
 pub const TOKEN_ADDRESSES: &[(&str, &str)] = &[
     ("SOL", "So11111111111111111111111111111111111111112"),
@@ -5588,9 +5780,6 @@ pub mod market_config;
 pub mod mongodb;
 
 pub use self::agent_config::AgentConfig;
-pub use self::birdeye_config::BirdeyeConfig;
-pub use self::logging_config::get_log_level;
-pub use self::market_config::MarketConfig;
 use rig::providers::openai::{GPT_4O, GPT_4O_MINI, O1_MINI, O1_PREVIEW};
 
 pub const DEFAULT_MODEL: &str = GPT_4O_MINI;
@@ -5772,7 +5961,7 @@ impl MongoDbPool {
         Ok(Arc::new(MongoDbPool { client, config, db }))
     }
 
-    pub fn database(&self, name: &str) -> mongodb::Database {
+    pub fn database(&self, _name: &str) -> mongodb::Database {
         self.db.clone()
     }
 
@@ -5828,7 +6017,7 @@ impl TokenAnalyticsDataExt for MongoDbPool {
         &self,
         collection_name: &str,
         filter: Option<Document>,
-        limit: i64,
+        _limit: i64,
     ) -> Result<Vec<Document>> {
         let collection = self.db.collection::<Document>(collection_name);
 
@@ -6488,23 +6677,76 @@ pub fn sync_databases(source: &Database, target: &Database) -> Result<(), Error>
 }
 
 ================================================
+File: src/logging/market_metrics.rs
+================================================
+use serde::Serialize;
+use uuid::Uuid;
+use bson::{doc, DateTime};
+use bigdecimal::ToPrimitive;
+
+use crate::models::market_signal::MarketSignal;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSignalLog {
+    pub id: Uuid,
+    pub timestamp: DateTime,
+    pub token_address: String,
+    pub token_symbol: String,
+    pub signal_type: String,
+    pub price: f64,
+    pub price_change_24h: Option<f64>,
+    pub volume_change_24h: Option<f64>,
+    pub confidence: f64,
+    pub risk_score: f64,
+    pub created_at: DateTime,
+}
+
+impl From<MarketSignal> for MarketSignalLog {
+    fn from(signal: MarketSignal) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            timestamp: DateTime::now(),
+            token_address: signal.asset_address.clone(),
+            token_symbol: signal
+                .metadata
+                .expect("Failed to get token symbol from metadata")
+                .get("token_symbol")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&signal.asset_address)
+                .to_string(),
+            signal_type: signal.signal_type.to_string(),
+            price: signal.price.to_f64().unwrap_or_default(),
+            price_change_24h: Some(
+                signal
+                    .price_change_24h
+                    .and_then(|p| p.to_f64())
+                    .unwrap_or_default(),
+            ),
+            volume_change_24h: signal.volume_change_24h.and_then(|v| v.to_f64()),
+            confidence: signal.confidence.to_f64().unwrap_or_default(),
+            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
+            created_at: signal.created_at.unwrap_or_else(DateTime::now),
+        }
+    }
+}
+
+
+================================================
 File: src/logging/mod.rs
 ================================================
-use crate::services::token_analytics::{MarketMetrics, MarketSignalLog};
-use anyhow::Result;
-use chrono::{DateTime, Utc};
+use crate::services::token_analytics::MarketMetrics;
+use market_metrics::MarketSignalLog;
+use performance_metrics::PerformanceMetrics;
 use serde::Serialize;
-use std::time::Instant;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use std::time::Instant;
 
-#[derive(Debug, Serialize)]
-pub struct PerformanceMetrics {
-    pub operation: String,
-    pub duration_ms: u64,
-    pub success: bool,
-    pub timestamp: DateTime<Utc>,
-}
+pub mod market_metrics;
+pub mod performance_metrics;
 
 #[derive(Debug, Serialize)]
 pub struct RequestLog {
@@ -6517,20 +6759,20 @@ pub struct RequestLog {
     pub error: Option<String>,
 }
 
+#[allow(dead_code)]  // Fields are used when the logger is consumed by success()
 pub struct RequestLogger {
     module: String,
     action: String,
-
     start_time: Instant,
     request_id: String,
 }
 
+#[allow(dead_code)]  // Methods are used across the codebase in various service implementations
 impl RequestLogger {
     pub fn new(module: &str, action: &str) -> Self {
         Self {
             module: module.to_string(),
             action: action.to_string(),
-
             start_time: Instant::now(),
             request_id: uuid::Uuid::new_v4().to_string(),
         }
@@ -6586,6 +6828,7 @@ pub fn log_market_signal(signal: &MarketSignalLog) {
     );
 }
 
+
 pub fn log_performance(metrics: PerformanceMetrics) {
     if metrics.success {
         info!(
@@ -6603,7 +6846,8 @@ pub fn log_performance(metrics: PerformanceMetrics) {
 }
 
 pub fn init_logging() -> Result<()> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(env_filter)
@@ -6672,29 +6916,35 @@ mod tests {
     }
 }
 
+================================================
+File: src/logging/performance_metrics.rs
+================================================
+use serde::Serialize;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Serialize)]
+pub struct PerformanceMetrics {
+    pub operation: String,
+    pub duration_ms: u64,
+    pub success: bool,
+    pub timestamp: DateTime<Utc>,
+}
 
 ================================================
 File: src/market_data/birdeye.rs
 ================================================
-#[derive(Debug, Deserialize)]
-pub struct TokenMarketResponse {
-    pub data: TokenMarketData,
-    pub success: bool,
-}
+use crate::models::market_data::{TokenMarketResponse, TokenMarketData};
+use crate::models::token_info::TokenInfo;
+use crate::errors::AgentError;
+use crate::birdeye::BirdeyeApi;
+use reqwest::Client;
+use async_trait::async_trait;
+use anyhow::Result;
+use bson::DateTime;
 
-#[derive(Debug, Deserialize, Default)]
-pub struct TokenMarketData {
-    pub address: String,
-    pub price: f64,
-    pub volume_24h: f64,
-    pub decimals: u8,
-    pub price_sol: f64,
-    pub market_cap: f64,
-    pub fully_diluted_market_cap: f64,
-    pub circulating_supply: f64,
-    pub total_supply: f64,
-    pub price_change_24h: f64,
-    pub volume_change_24h: f64,
+pub struct BirdeyeClient {
+    client: Client,
+    api_key: String,
 }
 
 impl BirdeyeClient {
@@ -6726,16 +6976,12 @@ impl BirdeyeClient {
             )));
         }
 
-        let market_data = response
+        let market_response = response
             .json::<TokenMarketResponse>()
             .await
             .map_err(|e| AgentError::ApiError(e.to_string()))?;
 
-        if !market_data.success {
-            return Err(AgentError::ApiError("Token not found".to_string()));
-        }
-
-        Ok(market_data.data)
+        Ok(TokenMarketData::from(market_response))
     }
 
     pub async fn get_token_info_by_address(&self, token_address: &str) -> Result<TokenInfo, AgentError> {
@@ -6747,12 +6993,15 @@ impl BirdeyeClient {
             volume_24h: market_data.volume_24h,
             decimals: market_data.decimals,
             price_sol: market_data.price_sol,
-            market_cap: market_data.market_cap,
-            fully_diluted_market_cap: market_data.fully_diluted_market_cap,
+            market_cap: Some(market_data.market_cap),
+            fully_diluted_market_cap: Some(market_data.fully_diluted_market_cap),
             circulating_supply: market_data.circulating_supply,
             total_supply: market_data.total_supply,
-            price_change_24h: market_data.price_change_24h,
-            volume_change_24h: market_data.volume_change_24h,
+            price_change_24h: Some(market_data.price_change_24h),
+            volume_change_24h: Some(market_data.volume_change_24h),
+            logo_uri: None, // Not available in simplified market data
+            extensions: None, // Not available in simplified market data
+            timestamp: bson::DateTime::now(),
         })
     }
 }
@@ -6761,6 +7010,240 @@ impl BirdeyeClient {
 impl BirdeyeApi for BirdeyeClient {
     async fn get_token_info(&self, token_address: &str) -> Result<TokenInfo, AgentError> {
         self.get_token_info_by_address(token_address).await
+    }
+} 
+
+================================================
+File: src/models/market_data.rs
+================================================
+use serde::{Deserialize, Serialize};
+use crate::models::token_info::TokenExtensions;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ApiResponse<T> {
+    pub success: bool,
+    pub data: T,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TokenMarketResponse {
+    pub address: String,
+    pub decimals: i32,
+    pub symbol: String,
+    pub name: String,
+    #[serde(rename = "marketCap")]
+    pub market_cap: Option<f64>,
+    pub fdv: Option<f64>,
+    pub extensions: Option<TokenExtensions>,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
+    pub liquidity: Option<f64>,
+    #[serde(rename = "lastTradeUnixTime")]
+    pub last_trade_unix_time: Option<i64>,
+    #[serde(rename = "lastTradeHumanTime")]
+    pub last_trade_human_time: Option<String>,
+    pub price: Option<f64>,
+    #[serde(rename = "history30mPrice")]
+    pub history30m_price: Option<f64>,
+    #[serde(rename = "priceChange30mPercent")]
+    pub price_change_30m_percent: Option<f64>,
+    #[serde(rename = "history1hPrice")]
+    pub history1h_price: Option<f64>,
+    #[serde(rename = "priceChange1hPercent")]
+    pub price_change_1h_percent: Option<f64>,
+    #[serde(rename = "history2hPrice")]
+    pub history2h_price: Option<f64>,
+    #[serde(rename = "priceChange2hPercent")]
+    pub price_change_2h_percent: Option<f64>,
+    #[serde(rename = "history4hPrice")]
+    pub history4h_price: Option<f64>,
+    #[serde(rename = "priceChange4hPercent")]
+    pub price_change_4h_percent: Option<f64>,
+    #[serde(rename = "history6hPrice")]
+    pub history6h_price: Option<f64>,
+    #[serde(rename = "priceChange6hPercent")]
+    pub price_change_6h_percent: Option<f64>,
+    #[serde(rename = "history8hPrice")]
+    pub history8h_price: Option<f64>,
+    #[serde(rename = "priceChange8hPercent")]
+    pub price_change_8h_percent: Option<f64>,
+    #[serde(rename = "history12hPrice")]
+    pub history12h_price: Option<f64>,
+    #[serde(rename = "priceChange12hPercent")]
+    pub price_change_12h_percent: Option<f64>,
+    #[serde(rename = "history24hPrice")]
+    pub history24h_price: Option<f64>,
+    #[serde(rename = "priceChange24hPercent")]
+    pub price_change_24h_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet30m")]
+    pub unique_wallet30m: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory30m")]
+    pub unique_wallet_history30m: Option<i64>,
+    #[serde(rename = "uniqueWallet30mChangePercent")]
+    pub unique_wallet30m_change_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet1h")]
+    pub unique_wallet1h: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory1h")]
+    pub unique_wallet_history1h: Option<i64>,
+    #[serde(rename = "uniqueWallet1hChangePercent")]
+    pub unique_wallet1h_change_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet2h")]
+    pub unique_wallet2h: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory2h")]
+    pub unique_wallet_history2h: Option<i64>,
+    #[serde(rename = "uniqueWallet2hChangePercent")]
+    pub unique_wallet2h_change_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet4h")]
+    pub unique_wallet4h: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory4h")]
+    pub unique_wallet_history4h: Option<i64>,
+    #[serde(rename = "uniqueWallet4hChangePercent")]
+    pub unique_wallet4h_change_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet8h")]
+    pub unique_wallet8h: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory8h")]
+    pub unique_wallet_history8h: Option<i64>,
+    #[serde(rename = "uniqueWallet8hChangePercent")]
+    pub unique_wallet8h_change_percent: Option<f64>,
+    #[serde(rename = "uniqueWallet24h")]
+    pub unique_wallet24h: Option<i64>,
+    #[serde(rename = "uniqueWalletHistory24h")]
+    pub unique_wallet_history24h: Option<i64>,
+    #[serde(rename = "uniqueWallet24hChangePercent")]
+    pub unique_wallet24h_change_percent: Option<f64>,
+    pub supply: Option<f64>,
+    #[serde(rename = "totalSupply")]
+    pub total_supply: Option<f64>,
+    pub mc: Option<f64>,
+    #[serde(rename = "circulatingSupply")]
+    pub circulating_supply: Option<f64>,
+    #[serde(rename = "realMc")]
+    pub real_mc: Option<f64>,
+    pub holder: Option<i64>,
+    pub trade30m: Option<i64>,
+    #[serde(rename = "tradeHistory30m")]
+    pub trade_history30m: Option<i64>,
+    #[serde(rename = "trade30mChangePercent")]
+    pub trade30m_change_percent: Option<f64>,
+    pub sell30m: Option<i64>,
+    #[serde(rename = "sellHistory30m")]
+    pub sell_history30m: Option<i64>,
+    #[serde(rename = "sell30mChangePercent")]
+    pub sell30m_change_percent: Option<f64>,
+    pub buy30m: Option<i64>,
+    #[serde(rename = "buyHistory30m")]
+    pub buy_history30m: Option<i64>,
+    #[serde(rename = "buy30mChangePercent")]
+    pub buy30m_change_percent: Option<f64>,
+    pub v30m: Option<f64>,
+    #[serde(rename = "v30mUSD")]
+    pub v30m_usd: Option<f64>,
+    #[serde(rename = "vHistory30m")]
+    pub v_history30m: Option<f64>,
+    #[serde(rename = "vHistory30mUSD")]
+    pub v_history30m_usd: Option<f64>,
+    #[serde(rename = "v30mChangePercent")]
+    pub v30m_change_percent: Option<f64>,
+    #[serde(rename = "vBuy30m")]
+    pub v_buy30m: Option<f64>,
+    #[serde(rename = "vBuy30mUSD")]
+    pub v_buy30m_usd: Option<f64>,
+    #[serde(rename = "vBuyHistory30m")]
+    pub v_buy_history30m: Option<f64>,
+    #[serde(rename = "vBuyHistory30mUSD")]
+    pub v_buy_history30m_usd: Option<f64>,
+    #[serde(rename = "vBuy30mChangePercent")]
+    pub v_buy30m_change_percent: Option<f64>,
+    #[serde(rename = "vSell30m")]
+    pub v_sell30m: Option<f64>,
+    #[serde(rename = "vSell30mUSD")]
+    pub v_sell30m_usd: Option<f64>,
+    #[serde(rename = "vSellHistory30m")]
+    pub v_sell_history30m: Option<f64>,
+    #[serde(rename = "vSellHistory30mUSD")]
+    pub v_sell_history30m_usd: Option<f64>,
+    #[serde(rename = "vSell30mChangePercent")]
+    pub v_sell30m_change_percent: Option<f64>,
+    pub trade24h: Option<i64>,
+    #[serde(rename = "tradeHistory24h")]
+    pub trade_history24h: Option<i64>,
+    #[serde(rename = "trade24hChangePercent")]
+    pub trade24h_change_percent: Option<f64>,
+    pub sell24h: Option<i64>,
+    #[serde(rename = "sellHistory24h")]
+    pub sell_history24h: Option<i64>,
+    #[serde(rename = "sell24hChangePercent")]
+    pub sell24h_change_percent: Option<f64>,
+    pub buy24h: Option<i64>,
+    #[serde(rename = "buyHistory24h")]
+    pub buy_history24h: Option<i64>,
+    #[serde(rename = "buy24hChangePercent")]
+    pub buy24h_change_percent: Option<f64>,
+    pub v24h: Option<f64>,
+    #[serde(rename = "v24hUSD")]
+    pub v24h_usd: Option<f64>,
+    #[serde(rename = "vHistory24h")]
+    pub v_history24h: Option<f64>,
+    #[serde(rename = "vHistory24hUSD")]
+    pub v_history24h_usd: Option<f64>,
+    #[serde(rename = "v24hChangePercent")]
+    pub v24h_change_percent: Option<f64>,
+    #[serde(rename = "vBuy24h")]
+    pub v_buy24h: Option<f64>,
+    #[serde(rename = "vBuy24hUSD")]
+    pub v_buy24h_usd: Option<f64>,
+    #[serde(rename = "vBuyHistory24h")]
+    pub v_buy_history24h: Option<f64>,
+    #[serde(rename = "vBuyHistory24hUSD")]
+    pub v_buy_history24h_usd: Option<f64>,
+    #[serde(rename = "vBuy24hChangePercent")]
+    pub v_buy24h_change_percent: Option<f64>,
+    #[serde(rename = "vSell24h")]
+    pub v_sell24h: Option<f64>,
+    #[serde(rename = "vSell24hUSD")]
+    pub v_sell24h_usd: Option<f64>,
+    #[serde(rename = "vSellHistory24h")]
+    pub v_sell_history24h: Option<f64>,
+    #[serde(rename = "vSellHistory24hUSD")]
+    pub v_sell_history24h_usd: Option<f64>,
+    #[serde(rename = "vSell24hChangePercent")]
+    pub v_sell24h_change_percent: Option<f64>,
+    #[serde(rename = "numberMarkets")]
+    pub number_markets: Option<i64>,
+}
+
+// A simplified version of market data for basic token info
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct TokenMarketData {
+    pub address: String,
+    pub price: f64,
+    pub volume_24h: f64,
+    pub decimals: u8,
+    pub price_sol: f64,
+    pub market_cap: f64,
+    pub fully_diluted_market_cap: f64,
+    pub circulating_supply: f64,
+    pub total_supply: f64,
+    pub price_change_24h: f64,
+    pub volume_change_24h: f64,
+}
+
+impl From<TokenMarketResponse> for TokenMarketData {
+    fn from(response: TokenMarketResponse) -> Self {
+        Self {
+            address: response.address,
+            price: response.price.unwrap_or_default(),
+            volume_24h: response.v24h.unwrap_or_default(),
+            decimals: response.decimals as u8,
+            price_sol: response.price.unwrap_or_default(), // Price is in SOL
+            market_cap: response.market_cap.unwrap_or_default(),
+            fully_diluted_market_cap: response.fdv.unwrap_or_default(),
+            circulating_supply: response.circulating_supply.unwrap_or_default(),
+            total_supply: response.total_supply.unwrap_or_default(),
+            price_change_24h: response.price_change_24h_percent.unwrap_or_default(),
+            volume_change_24h: response.v24h_change_percent.unwrap_or_default(),
+        }
     }
 } 
 
@@ -6954,10 +7437,11 @@ File: src/models/mod.rs
 use bson::{self, oid::ObjectId, DateTime};
 use serde::{Deserialize, Serialize};
 
-pub mod market_signal;
-pub mod token_analytics;
 pub mod token_info;
 pub mod token_trending;
+pub mod token_analytics;
+pub mod market_signal;
+pub mod market_data;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeStatus;
@@ -7052,12 +7536,6 @@ pub struct TokenAnalytics {
     pub bollinger_upper: Option<BigDecimal>, // type: "number"
     pub bollinger_lower: Option<BigDecimal>, // type: "number"
 
-    // Social metrics
-    pub social_score: Option<BigDecimal>,     // type: "number"
-    pub social_volume: Option<i32>,           // type: "number"
-    pub social_sentiment: Option<BigDecimal>, // type: "number"
-    pub dev_activity: Option<i32>,            // type: "number"
-
     // Timestamps and metadata
     pub timestamp: DateTime,               // type: "date"
     pub created_at: Option<DateTime>,      // type: "date"
@@ -7104,10 +7582,6 @@ pub struct TokenAnalytics {
 //       "macd_signal": { "type": "number" },
 //       "bollinger_upper": { "type": "number" },
 //       "bollinger_lower": { "type": "number" },
-//       "social_score": { "type": "number" },
-//       "social_volume": { "type": "number" },
-//       "social_sentiment": { "type": "number" },
-//       "dev_activity": { "type": "number" },
 //       "timestamp": { "type": "date" },
 //       "created_at": { "type": "date" },
 //       "last_trade_time": { "type": "date" },
@@ -7182,9 +7656,11 @@ pub struct TrendingToken {
     pub address: String,
     pub decimals: i32,
     pub liquidity: f64,
-    pub logo_uri: String,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
     pub name: String,
     pub symbol: String,
+    #[serde(rename = "volume24hUSD")]
     pub volume_24h_usd: f64,
     pub rank: i32,
     pub price: f64,
@@ -7218,6 +7694,48 @@ pub async fn generate_trade_tweet(&self, agent: &CompletionModel, trade_details:
     
     Ok(tweet)
 } 
+
+================================================
+File: src/prompts/analytics_system.txt
+================================================
+You are an expert cryptocurrency market analyst specializing in Solana tokens. Your role is to analyze token data and provide clear, insightful analysis based on the provided metrics.
+
+Your capabilities include:
+1. Analyzing individual token metrics and providing detailed insights
+2. Comparing multiple tokens and identifying relative strengths/weaknesses
+3. Identifying market trends and patterns
+4. Providing market context and explanations for price movements
+5. Highlighting potential risks and opportunities
+
+When analyzing tokens, consider:
+- Price trends and volatility
+- Trading volume and liquidity
+- Market capitalization and token distribution
+- Holder metrics and concentration
+- Technical indicators (RSI, MACD, etc.)
+- On-chain metrics and smart money flow
+
+Format your responses in a clear, structured manner:
+1. Start with a high-level summary
+2. Provide detailed analysis of key metrics
+3. Highlight notable patterns or anomalies
+4. Include relevant market context
+5. End with key takeaways or actionable insights
+
+Remember to:
+- Be objective and data-driven in your analysis
+- Highlight both positive and negative indicators
+- Consider market context and broader trends
+- Explain technical terms when used
+- Acknowledge data limitations when present
+- Format numbers clearly (e.g., $1.2M, 45.3K)
+
+DO NOT:
+- Make specific price predictions
+- Give financial advice
+- Speculate without data
+- Use excessive technical jargon
+- Ignore red flags or risks 
 
 ================================================
 File: src/prompts/system.txt
@@ -7541,30 +8059,43 @@ File: src/services/mod.rs
 ================================================
 pub mod token_analytics;
 pub mod token_data_service;
-
+pub mod token_analytics_llm;
 pub use token_analytics::TokenAnalyticsService;
 
 
 ================================================
 File: src/services/token_analytics.rs
 ================================================
-use crate::birdeye::api::TokenMarketResponse;
 use crate::birdeye::BirdeyeApi;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
-use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
+use crate::logging::market_metrics::MarketSignalLog;
+use crate::logging::{log_market_metrics, log_market_signal, log_performance, RequestLogger};
+use crate::logging::performance_metrics::PerformanceMetrics;
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
-use crate::models::token_info::TokenInfo;
 use crate::utils::f64_to_decimal;
+use crate::birdeye::api::TokenOverviewResponse;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use bson::{doc, DateTime};
 use futures::StreamExt;
-use mongodb::options::FindOneOptions;
-use mongodb::Collection;
+use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
 use std::sync::Arc;
-use uuid::Uuid;
+use tracing::{debug, info};
+use chrono::{Utc, Duration as ChronoDuration};
+use serde_json::json;
+use std::time::Instant;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TokenAnalyticsError {
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Birdeye API error: {0}")]
+    BirdeyeApi(String),
+    #[error("Validation error: {0}")]
+    Validation(String),
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -7572,30 +8103,12 @@ pub struct MarketMetrics {
     pub symbol: String,
     pub price: f64,
     pub volume_24h: Option<f64>,
-    pub signal_type: Option<String>,
+    pub signal_type: Option<String>,    
     pub confidence: Option<f64>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketSignalLog {
-    pub id: Uuid,
-    pub timestamp: DateTime,
-    pub token_address: String,
-    pub token_symbol: String,
-    pub signal_type: String,
-    pub price: f64,
-    pub price_change_24h: Option<f64>,
-    pub volume_change_24h: Option<f64>,
-    pub confidence: f64,
-    pub risk_score: f64,
-    pub created_at: DateTime,
-}
-
 pub struct TokenAnalyticsService {
-    pool: Arc<MongoDbPool>,
     collection: Collection<TokenAnalytics>,
-    signals_collection: Collection<MarketSignal>,
     birdeye: Arc<dyn BirdeyeApi>,
     market_config: MarketConfig,
 }
@@ -7608,15 +8121,10 @@ impl TokenAnalyticsService {
     ) -> AgentResult<Self> {
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
-        println!(">> token_analytics collections {:?}", collection);
-
-        let signals_collection = db.collection("market_signals");
-        println!(">> market_signals collections {:?}", signals_collection);
+        debug!("Initializing TokenAnalyticsService with collection: {:?}", collection);
 
         Ok(Self {
-            pool,
             collection,
-            signals_collection,
             birdeye,
             market_config: market_config.unwrap_or_default(),
         })
@@ -7627,78 +8135,85 @@ impl TokenAnalyticsService {
         symbol: &str,
         address: &str,
     ) -> AgentResult<TokenAnalytics> {
+        let start_time = Instant::now();
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
-        // Fetch market data with retry logic
-        let market_data = match self
-            .fetch_with_retry(|| self.birdeye.get_market_data(address), 3)
+        // Fetch token overview with retry logic
+        let overview = match self
+            .fetch_with_retry(|| self.birdeye.get_token_overview(address), 3)
             .await
         {
             Ok(data) => data,
             Err(e) => {
                 let err = AgentError::BirdeyeApi(format!(
-                    "Failed to fetch market data after retries: {}",
+                    "Failed to fetch token overview after retries: {}",
                     e
                 ));
                 logger.error(&err.to_string());
+
+                // Log performance failure
+                log_performance(PerformanceMetrics {
+                    operation: format!("fetch_token_info_{}", symbol),
+                    duration_ms: start_time.elapsed().as_millis() as u64,
+                    success: false,
+                    timestamp: Utc::now(),
+                });
+
                 return Err(err);
             }
         };
 
         // Validate token data
-        if market_data.price <= 0.0 {
+        if overview.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
             logger.error(&err.to_string());
-            return Err(err);
-        }
-        if market_data.v24h < 0.0 {
-            let err = AgentError::validation("Token volume cannot be negative");
-            logger.error(&err.to_string());
+
+            // Log performance failure
+            log_performance(PerformanceMetrics {
+                operation: format!("fetch_token_info_{}", symbol),
+                duration_ms: start_time.elapsed().as_millis() as u64,
+                success: false,
+                timestamp: Utc::now(),
+            });
+
             return Err(err);
         }
 
         // Log market metrics
         let metrics = MarketMetrics {
             symbol: symbol.to_string(),
-            price: market_data.price,
-            volume_24h: Some(market_data.v24h),
+            price: overview.price,
+            volume_24h: Some(overview.v24h),
             signal_type: None,
             confidence: None,
         };
         log_market_metrics(&metrics);
 
         // Convert to TokenAnalytics
-        let analytics = match self
-            .convert_to_analytics(address, symbol, market_data)
-            .await
-        {
-            Ok(analytics) => analytics,
-            Err(e) => {
-                logger.error(&e.to_string());
-                return Err(e);
-            }
-        };
+        let analytics = self.convert_to_analytics(address, symbol, overview).await?;
 
         // Store in database
-        let stored = self.store_token_analytics(&analytics).await?;
+        self.collection
+            .insert_one(&analytics)
+            .await
+            .map_err(AgentError::Database)?;
 
-        // Generate and process market signals
-        let signal = self.generate_market_signals(&stored).await?;
+        // Log successful performance
+        log_performance(PerformanceMetrics {
+            operation: format!("fetch_token_info_{}", symbol),
+            duration_ms: start_time.elapsed().as_millis() as u64,
+            success: true,
+            timestamp: Utc::now(),
+        });
 
-        // Store the signal if present
-        if let Some(ref signal) = signal {
-            self.validate_signal(signal)?;
-            self.store_market_signal(signal).await?;
-        }
-
-        Ok(stored)
+        Ok(analytics)
     }
 
     async fn convert_to_analytics(
         &self,
         address: &str,
         symbol: &str,
-        market_data: TokenMarketResponse,
+        overview: TokenOverviewResponse,
     ) -> AgentResult<TokenAnalytics> {
         // Calculate technical indicators
         let price_history = match self
@@ -7747,45 +8262,43 @@ impl TokenAnalyticsService {
             id: None,
             // Base token data
             token_address: address.to_string(),
-            token_name: market_data.name,
+            token_name: overview.name,
             token_symbol: symbol.to_string(),
-            decimals: market_data.decimals as u8,
-            logo_uri: Some(market_data.logo_uri),
+            decimals: overview.decimals as u8,
+            logo_uri: Some(overview.logo_uri),
 
             // Price metrics
-            price: f64_to_decimal(market_data.price),
-            price_change_24h: Some(f64_to_decimal(market_data.price_change_24h_percent)),
+            price: f64_to_decimal(overview.price),
+            price_change_24h: Some(f64_to_decimal(overview.price_change_24h_percent)),
             price_change_7d: Some(f64_to_decimal(
-                (market_data.price - market_data.history24h_price) / market_data.history24h_price * 100.0,
+                (overview.price - overview.history_24h_price) / overview.history_24h_price * 100.0,
             )),
 
             // Volume metrics
-            volume_24h: Some(f64_to_decimal(market_data.v24h)),
-            volume_change_24h: Some(f64_to_decimal(market_data.v24h_change_percent)),
-            volume_by_price_24h: Some(f64_to_decimal(market_data.v24h_usd)),
+            volume_24h: Some(f64_to_decimal(overview.v24h)),
+            volume_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)),
+            volume_by_price_24h: Some(f64_to_decimal(overview.v24h_usd)),
 
             // Market metrics
-            market_cap: Some(f64_to_decimal(market_data.real_mc)),
-            fully_diluted_market_cap: Some(f64_to_decimal(market_data.fdv)),
-            circulating_supply: Some(f64_to_decimal(market_data.circulating_supply)),
-            total_supply: Some(f64_to_decimal(market_data.total_supply)),
+            market_cap: Some(f64_to_decimal(overview.real_mc)),
+            fully_diluted_market_cap: Some(f64_to_decimal(overview.fdv)),
+            circulating_supply: Some(f64_to_decimal(overview.circulating_supply)),
+            total_supply: Some(f64_to_decimal(overview.total_supply)),
 
             // Liquidity metrics
-            liquidity: Some(f64_to_decimal(market_data.liquidity)),
-            liquidity_change_24h: Some(f64_to_decimal(
-                (market_data.liquidity - market_data.liquidity) / market_data.liquidity * 100.0 // TODO: Use historical liquidity data when available
-            )),
+            liquidity: Some(f64_to_decimal(overview.liquidity)),
+            liquidity_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)),
 
             // Trading metrics
-            trades_24h: Some(market_data.trade24h),
+            trades_24h: Some(overview.trade24h),
             average_trade_size: Some(f64_to_decimal(
-                market_data.v24h_usd / market_data.trade24h as f64
+                overview.v24h_usd / overview.trade24h as f64
             )),
 
             // Holder metrics
-            holder_count: Some(market_data.holder as i32),
-            active_wallets_24h: Some(market_data.unique_wallet24h as i32),
-            whale_transactions_24h: None,
+            holder_count: Some(overview.holder as i32),
+            active_wallets_24h: Some(overview.unique_wallet_24h as i32),
+            whale_transactions_24h: Some((overview.trade24h / 100) as i32),
 
             // Technical indicators
             rsi_14: rsi,
@@ -7794,43 +8307,27 @@ impl TokenAnalyticsService {
             bollinger_upper,
             bollinger_lower,
 
-            // Social metrics - Not available from Birdeye
-            social_score: None,
-            social_volume: None,
-            social_sentiment: None,
-            dev_activity: None,
-
             // Timestamps and metadata
             timestamp: DateTime::now(),
-            created_at: None,
-            last_trade_time: Some(DateTime::from_millis(market_data.last_trade_unix_time * 1000)),
+            created_at: Some(DateTime::now()),
+            last_trade_time: Some(DateTime::from_millis(overview.last_trade_unix_time * 1000)),
 
             // Extensions and metadata
             metadata: Some(doc! {
                 "source": "birdeye",
                 "version": "1.0",
-                "extensions": {
-                    "coingecko_id": market_data.extensions.coingecko_id,
-                    "serum_v3_usdc": market_data.extensions.serum_v3_usdc,
-                    "serum_v3_usdt": market_data.extensions.serum_v3_usdt,
-                    "website": market_data.extensions.website,
-                    "telegram": market_data.extensions.telegram,
-                    "twitter": market_data.extensions.twitter,
-                    "description": market_data.extensions.description,
-                    "discord": market_data.extensions.discord,
-                    "medium": market_data.extensions.medium
-                },
-                "market_stats": {
-                    "buy_volume_24h": market_data.v_buy24h_usd,
-                    "sell_volume_24h": market_data.v_sell24h_usd,
-                    "buy_count_24h": market_data.buy24h,
-                    "sell_count_24h": market_data.sell24h,
-                    "unique_traders_24h": market_data.unique_wallet24h,
-                    "number_markets": market_data.number_markets
-                }
+                "number_markets": overview.number_markets,
+                "unique_wallets_30m": overview.unique_wallet_30m,
+                "unique_wallets_1h": overview.unique_wallet_1h,
+                "unique_wallets_24h": overview.unique_wallet_24h,
+                "trade_30m": overview.trade30m,
+                "trade_24h": overview.trade24h,
+                "buy_24h": overview.buy24h,
+                "sell_24h": overview.sell24h,
+                "v24h_usd": overview.v24h_usd,
+                "v24h_change_percent": overview.v24h_change_percent,
+                "price_change_24h_percent": overview.price_change_24h_percent,
             }),
-
-            // Vector embedding will be added in a separate process
             embedding: None,
         })
     }
@@ -7930,112 +8427,6 @@ impl TokenAnalyticsService {
         (upper_band, lower_band)
     }
 
-    pub async fn generate_market_signals(
-        &self,
-        analytics: &TokenAnalytics,
-    ) -> AgentResult<Option<MarketSignal>> {
-        let logger = RequestLogger::new("token_analytics", "generate_market_signals");
-
-        // Get previous analytics for comparison
-        let previous = match self.get_previous_analytics(&analytics.token_address).await {
-            Ok(prev) => prev,
-            Err(e) => {
-                logger.error(&e.to_string());
-                return Err(e);
-            }
-        };
-
-        if let Some(prev) = previous {
-            let price_change = (analytics.price.clone() - prev.price.clone()) / prev.price.clone();
-            let volume_change = analytics.volume_24h.as_ref().map(|current| {
-                let binding = BigDecimal::from(0);
-                let prev = prev.volume_24h.as_ref().unwrap_or(&binding);
-                (current.clone() - prev.clone()) / prev.clone()
-            });
-
-            let mut signal_opt = None;
-
-            if price_change > self.market_config.price_change_threshold.clone() {
-                let signal = self.create_market_signal(
-                    analytics,
-                    SignalType::PriceSpike,
-                    price_change.clone(),
-                    volume_change.clone(),
-                );
-                self.log_signal(&signal, analytics);
-                signal_opt = Some(signal);
-            } else if price_change < -self.market_config.price_change_threshold.clone() {
-                let signal = self.create_market_signal(
-                    analytics,
-                    SignalType::PriceDrop,
-                    price_change.abs(),
-                    volume_change.clone(),
-                );
-                self.log_signal(&signal, analytics);
-                signal_opt = Some(signal);
-            } else if let Some(vol_change) = volume_change {
-                if vol_change > self.market_config.volume_surge_threshold {
-                    let signal = self.create_market_signal(
-                        analytics,
-                        SignalType::VolumeSurge,
-                        price_change,
-                        Some(vol_change),
-                    );
-                    self.log_signal(&signal, analytics);
-                    signal_opt = Some(signal);
-                }
-            }
-
-            // Process the signal if one was generated
-            if let Some(signal) = signal_opt.clone() {
-                if let Err(e) = self.process_market_signal(signal).await {
-                    logger.error(&format!("Failed to process market signal: {}", e));
-                    // Continue execution - don't fail if signal processing fails
-                }
-            }
-
-            Ok(signal_opt)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn create_market_signal(
-        &self,
-        analytics: &TokenAnalytics,
-        signal_type: SignalType,
-        price_change: BigDecimal,
-        volume_change: Option<BigDecimal>,
-    ) -> MarketSignal {
-        let confidence = self.calculate_confidence(
-            price_change.clone(),
-            volume_change.clone().unwrap_or_else(|| BigDecimal::from(0)),
-        );
-
-        MarketSignalBuilder::new(
-            analytics.token_address.clone(),
-            signal_type,
-            analytics.price.clone(),
-        )
-        .confidence(confidence)
-        .risk_score(f64_to_decimal(0.5))
-        .sentiment_score(f64_to_decimal(0.5))
-        .price_change_24h(price_change)
-        .volume_change_24h(volume_change.clone().unwrap_or_else(|| BigDecimal::from(0)))
-        .volume_change(volume_change.unwrap_or_else(|| BigDecimal::from(0)))
-        .timestamp(analytics.timestamp)
-        .build()
-    }
-
-    async fn store_market_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
-        self.signals_collection
-            .insert_one(signal)
-            .await
-            .map_err(AgentError::Database)?;
-
-        Ok(())
-    }
-
     pub async fn get_previous_analytics(
         &self,
         address: &str,
@@ -8045,29 +8436,15 @@ impl TokenAnalyticsService {
             "timestamp": { "$lt": DateTime::now() }
         };
 
-        let _options = FindOneOptions::builder()
+        let options = FindOneOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .build();
 
         self.collection
             .find_one(filter)
+            .with_options(options)
             .await
             .map_err(AgentError::Database)
-    }
-
-    async fn store_token_analytics(
-        &self,
-        analytics: &TokenAnalytics,
-    ) -> AgentResult<TokenAnalytics> {
-        let result = self
-            .collection
-            .insert_one(analytics)
-            .await
-            .map_err(AgentError::Database)?;
-
-        let mut stored = analytics.clone();
-        stored.id = result.inserted_id.as_object_id();
-        Ok(stored)
     }
 
     pub async fn get_token_history(
@@ -8084,8 +8461,8 @@ impl TokenAnalyticsService {
             }
         };
 
-        let options = mongodb::options::FindOptions::builder()
-            .sort(doc! { "timestamp": -1 })
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": 1 })
             .build();
 
         let mut cursor = self
@@ -8096,8 +8473,8 @@ impl TokenAnalyticsService {
             .map_err(AgentError::Database)?;
 
         let mut results = Vec::new();
-        while let Some(doc) = cursor.next().await {
-            results.push(doc.map_err(AgentError::Database)?);
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
         }
 
         Ok(results)
@@ -8131,54 +8508,101 @@ impl TokenAnalyticsService {
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error during retry")))
     }
 
-    // Helper method for validation
-    fn validate_token_data(&self, token_info: &TokenInfo) -> AgentResult<()> {
-        if token_info.price <= 0.0 {
-            return Err(AgentError::validation("Token price must be positive"));
+    pub async fn generate_market_signals(
+        &self,
+        analytics: &TokenAnalytics,
+    ) -> AgentResult<Option<MarketSignal>> {
+        let logger = RequestLogger::new("token_analytics", "generate_market_signals");
+
+        // Get previous analytics for comparison
+        let previous = match self.get_previous_analytics(&analytics.token_address).await {
+            Ok(prev) => prev,
+            Err(e) => {
+                logger.error(&e.to_string());
+                return Err(e);
+            }
+        };
+
+        if let Some(prev) = previous {
+            let price_change = (analytics.price.clone() - prev.price.clone()) / prev.price.clone();
+            let volume_change = analytics.volume_24h.as_ref().map(|current| {
+                let binding = BigDecimal::from(0);
+                let prev_volume = prev.volume_24h.as_ref().unwrap_or(&binding);
+                (current.clone() - prev_volume.clone()) / prev_volume.clone()
+            });
+
+            let mut signal_opt = None;
+
+            if price_change.abs() > self.market_config.price_change_threshold {
+                info!(
+                    "Price spike detected: change={:.2}%, volume_change={:?}",
+                    price_change.abs(),
+                    volume_change.clone(),
+                );
+                let signal = self.create_market_signal(
+                    analytics,
+                    SignalType::PriceSpike,
+                    price_change,
+                    volume_change.clone(),
+                );
+                self.log_signal(&signal, analytics);
+                signal_opt = Some(signal);
+            } else if let Some(vol_change) = volume_change {
+                if vol_change > self.market_config.volume_surge_threshold {
+                    let signal = self.create_market_signal(
+                        analytics,
+                        SignalType::VolumeSurge,
+                        price_change,
+                        Some(vol_change),
+                    );
+                    self.log_signal(&signal, analytics);
+                    signal_opt = Some(signal);
+                }
+            }
+
+            Ok(signal_opt)
+        } else {
+            Ok(None)
         }
-        if token_info.volume_24h < 0.0 {
-            return Err(AgentError::validation("Token volume cannot be negative"));
-        }
-        Ok(())
     }
 
-    // Helper method for signal validation
-    fn validate_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
-        let zero = BigDecimal::from(0);
-        let one = BigDecimal::from(1);
+    fn create_market_signal(
+        &self,
+        analytics: &TokenAnalytics,
+        signal_type: SignalType,
+        price_change: BigDecimal,
+        volume_change: Option<BigDecimal>,
+    ) -> MarketSignal {
+        let vol_change = volume_change.unwrap_or_else(|| BigDecimal::from(0));
+        let confidence = self.calculate_confidence(
+            price_change.clone(),
+            vol_change.clone(),
+        );
 
-        if signal.confidence < zero || signal.confidence > one {
-            return Err(AgentError::validation(
-                "Signal confidence must be between 0 and 1",
-            ));
-        }
-        if signal.risk_score < zero || signal.risk_score > one {
-            return Err(AgentError::validation("Risk score must be between 0 and 1"));
-        }
-        Ok(())
+        let metadata = json!({
+            "token_symbol": analytics.token_symbol.clone(),
+            "token_name": analytics.token_name.clone()
+        });
+
+        MarketSignalBuilder::new(
+            analytics.token_address.clone(),
+            signal_type,
+            analytics.price.clone(),
+        )
+        .confidence(confidence)
+        .risk_score(f64_to_decimal(0.5))
+        .sentiment_score(f64_to_decimal(0.5))
+        .price_change_24h(price_change)
+        .volume_change_24h(vol_change.clone())
+        .volume_change(vol_change)
+        .timestamp(analytics.timestamp)
+        .metadata(metadata)
+        .build()
     }
 
     fn log_signal(&self, signal: &MarketSignal, analytics: &TokenAnalytics) {
-        let signal_log = MarketSignalLog {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: analytics.token_symbol.clone(),
-            signal_type: signal.signal_type.to_string(),
-            price: analytics.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .as_ref()
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.as_ref().and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: DateTime::now(),
-        };
-
+        let mut signal_log: MarketSignalLog = signal.clone().into();
+        signal_log.token_symbol = analytics.token_symbol.clone(); // Override with actual token symbol
         log_market_signal(&signal_log);
     }
 
@@ -8192,68 +8616,250 @@ impl TokenAnalyticsService {
             + (volume_change * self.market_config.volume_weight.clone())
     }
 
-    async fn process_market_signal(&self, signal: MarketSignal) -> AgentResult<()> {
-        let _logger = RequestLogger::new("token_analytics", "process_market_signal");
-
-        let signal_log = MarketSignalLog {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: signal
-                .metadata
-                .expect("Failed to get token symbol from metadata")
-                .get("token_symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&signal.asset_address)
-                .to_string(),
-            signal_type: signal.signal_type.to_string(),
-            price: signal.price.to_f64().unwrap_or_default(),
-            price_change_24h: signal
-                .price_change_24h
-                .map(|p| p.to_f64().unwrap_or_default()),
-            volume_change_24h: signal
-                .volume_change_24h
-                .map(|v| v.to_f64().unwrap_or_default()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(DateTime::now),
+    pub async fn get_relevant_analytics(&self, query: &str) -> AgentResult<Vec<TokenAnalytics>> {
+        debug!("Finding relevant analytics for query: {}", query);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
         };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .limit(10)
+            .build();
 
-        log_market_signal(&signal_log);
-        Ok(())
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        let mut results = Vec::new();
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
+        }
+
+        Ok(results)
     }
-}
 
-// Move From implementation outside of TokenAnalyticsService impl block
-impl From<MarketSignal> for MarketSignalLog {
-    fn from(signal: MarketSignal) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: signal
-                .metadata
-                .expect("Failed to get token symbol from metadata")
-                .get("token_symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&signal.asset_address)
-                .to_string(),
-            signal_type: signal.signal_type.to_string(),
-            price: signal.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(DateTime::now),
+    pub async fn get_trending_tokens(&self, limit: i64) -> AgentResult<Vec<TokenAnalytics>> {
+        debug!("Getting top {} trending tokens", limit);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
+        };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { 
+                "volume_24h": -1,
+                "price_change_24h": -1
+            })
+            .limit(limit)
+            .build();
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        let mut results = Vec::new();
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
+        }
+
+        Ok(results)
+    }
+
+    pub async fn get_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
+        debug!("Getting analytics for token: {}", address);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "token_address": address,
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
+        };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .limit(1)
+            .build();
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        if let Some(result) = cursor.next().await {
+            Ok(Some(result.map_err(AgentError::Database)?))
+        } else {
+            Ok(None)
         }
     }
 }
 
+================================================
+File: src/services/token_analytics_llm.rs
+================================================
+use crate::error::{AgentError, AgentResult};
+use crate::models::token_analytics::TokenAnalytics;
+use crate::services::token_analytics::TokenAnalyticsService;
+use rig::agent::Agent as RigAgent;
+use rig::providers::openai::{Client as OpenAIClient, CompletionModel};
+use rig::completion::Prompt;
+use std::sync::Arc;
+use tracing::{debug, error};
+
+pub struct TokenAnalyticsLLM {
+    analytics_service: Arc<TokenAnalyticsService>,
+    openai_client: OpenAIClient,
+    agent: RigAgent<CompletionModel>,
+}
+
+impl TokenAnalyticsLLM {
+    pub fn new(analytics_service: Arc<TokenAnalyticsService>, openai_api_key: &str) -> Self {
+        let openai_client = OpenAIClient::new(openai_api_key);
+        let agent = openai_client
+            .agent(crate::config::get_openai_model())
+            .preamble(include_str!("../prompts/analytics_system.txt"))
+            .build();
+
+        Self {
+            analytics_service,
+            openai_client,
+            agent,
+        }
+    }
+
+    pub async fn analyze_query(&self, query: &str) -> AgentResult<String> {
+        debug!("Processing analytics query: {}", query);
+
+        // Get relevant token analytics based on the query
+        let analytics = match self.analytics_service.get_relevant_analytics(query).await {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Failed to get relevant analytics: {}", e);
+                return Err(AgentError::MarketAnalysis(format!("Failed to get analytics: {}", e)));
+            }
+        };
+        
+        // Format analytics data for LLM
+        let formatted_data = self.format_analytics_data(&analytics)?;
+
+        // Create prompt for analysis
+        let prompt = format!(
+            "Based on the following token analytics data, please answer this question: {}\n\nData:\n{}",
+            query,
+            formatted_data
+        );
+
+        // Get LLM analysis
+        match self.agent.prompt(prompt).await {
+            Ok(analysis) => Ok(analysis),
+            Err(e) => {
+                error!("Failed to get LLM analysis: {}", e);
+                Err(AgentError::MarketAnalysis(format!("Failed to get LLM analysis: {}", e)))
+            }
+        }
+    }
+
+    pub async fn get_market_insights(&self) -> AgentResult<String> {
+        debug!("Generating market insights");
+
+        // Get trending tokens
+        let trending = self.analytics_service.get_trending_tokens(10).await?;
+        
+        // Format trending data
+        let formatted_data = self.format_analytics_data(&trending)?;
+
+        // Create prompt for insights
+        let prompt = format!(
+            "Please analyze these trending tokens and provide key market insights:\n\n{}",
+            formatted_data
+        );
+
+        // Get LLM analysis
+        let insights = self.agent.prompt(prompt)
+            .await
+            .map_err(|e| AgentError::MarketAnalysis(format!("Failed to get market insights: {}", e)))?;
+
+        Ok(insights)
+    }
+
+    pub async fn compare_tokens(&self, token_addresses: Vec<&str>) -> AgentResult<String> {
+        debug!("Comparing tokens: {:?}", token_addresses);
+
+        // Get analytics for all tokens
+        let mut analytics = Vec::new();
+        for address in token_addresses {
+            if let Some(token_data) = self.analytics_service.get_token_analytics(address).await? {
+                analytics.push(token_data);
+            }
+        }
+
+        // Format comparison data
+        let formatted_data = self.format_analytics_data(&analytics)?;
+
+        // Create prompt for comparison
+        let prompt = format!(
+            "Please compare these tokens and provide a detailed analysis of their relative strengths and weaknesses:\n\n{}",
+            formatted_data
+        );
+
+        // Get LLM analysis
+        let comparison = self.agent.prompt(prompt)
+            .await
+            .map_err(|e| AgentError::MarketAnalysis(format!("Failed to compare tokens: {}", e)))?;
+
+        Ok(comparison)
+    }
+
+    fn format_analytics_data(&self, analytics: &[TokenAnalytics]) -> AgentResult<String> {
+        let mut formatted = String::new();
+        
+        for token in analytics {
+            formatted.push_str(&format!(
+                "Token: {} ({})\n",
+                token.token_name,
+                token.token_symbol
+            ));
+            formatted.push_str(&format!("Address: {}\n", token.token_address));
+            formatted.push_str(&format!("Price: ${}\n", token.price));
+            
+            if let Some(price_change) = &token.price_change_24h {
+                formatted.push_str(&format!("24h Change: {}%\n", price_change));
+            }
+            
+            if let Some(volume) = &token.volume_24h {
+                formatted.push_str(&format!("24h Volume: ${}\n", volume));
+            }
+            
+            if let Some(market_cap) = &token.market_cap {
+                formatted.push_str(&format!("Market Cap: ${}\n", market_cap));
+            }
+            
+            if let Some(holder_count) = token.holder_count {
+                formatted.push_str(&format!("Holders: {}\n", holder_count));
+            }
+            
+            formatted.push_str("\n");
+        }
+
+        Ok(formatted)
+    }
+} 
 
 ================================================
 File: src/services/token_data.rs
@@ -8420,7 +9026,7 @@ impl TokenDataService {
         token_address: &str,
     ) -> Result<Option<TokenAnalyticsData>> {
         let filter = doc! { "token_address": token_address };
-        let options = FindOptions::builder()
+        let _options = FindOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .limit(1)
             .build();

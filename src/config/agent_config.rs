@@ -1,8 +1,8 @@
+use super::birdeye_config::BirdeyeConfig;
 use crate::error::{AgentError, AgentResult};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::time::Duration;
-use super::birdeye_config::BirdeyeConfig;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {

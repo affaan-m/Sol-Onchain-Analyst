@@ -30,7 +30,8 @@ async fn main() -> Result<()> {
 
     // Get MongoDB connection details
     let mongodb_uri = dotenvy::var("MONGODB_URI").context("MONGODB_URI must be set")?;
-    let mongodb_database = dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
+    let mongodb_database =
+        dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
 
     info!("Connecting to MongoDB at: {}", mongodb_uri);
 
@@ -68,7 +69,10 @@ async fn main() -> Result<()> {
 
     // Process each token
     while let Some(token) = cursor.try_next().await? {
-        info!("Processing analytics for token: {} ({})", token.symbol, token.address);
+        info!(
+            "Processing analytics for token: {} ({})",
+            token.symbol, token.address
+        );
 
         // Get token overview and store analytics
         match analytics_service

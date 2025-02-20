@@ -29,7 +29,8 @@ async fn main() -> Result<()> {
 
     // Get MongoDB connection details
     let mongodb_uri = dotenvy::var("MONGODB_URI").context("MONGODB_URI must be set")?;
-    let mongodb_database = dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
+    let mongodb_database =
+        dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
 
     info!("Connecting to MongoDB at: {}", mongodb_uri);
 
@@ -42,9 +43,9 @@ async fn main() -> Result<()> {
     };
 
     let db_pool = MongoDbPool::create_pool(config).await?;
-        info!("Successfully connected to MongoDB");
+    info!("Successfully connected to MongoDB");
     let db = db_pool.database(&mongodb_database);
-        info!("Database: {}", db.name());
+    info!("Database: {}", db.name());
 
     // Initialize Birdeye client
     let birdeye_api_key = dotenvy::var("BIRDEYE_API_KEY").context("BIRDEYE_API_KEY must be set")?;

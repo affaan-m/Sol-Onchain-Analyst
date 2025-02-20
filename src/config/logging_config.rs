@@ -12,4 +12,4 @@ pub fn get_log_level() -> Level {
         },
         Err(_) => Level::INFO,
     }
-} 
+}

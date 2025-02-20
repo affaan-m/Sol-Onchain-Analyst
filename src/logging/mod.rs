@@ -1,12 +1,12 @@
 use crate::services::token_analytics::MarketMetrics;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
 use market_metrics::MarketSignalLog;
 use performance_metrics::PerformanceMetrics;
 use serde::Serialize;
+use std::time::Instant;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
-use anyhow::Result;
-use chrono::{DateTime, Utc};
-use std::time::Instant;
 
 pub mod market_metrics;
 pub mod performance_metrics;
@@ -22,7 +22,7 @@ pub struct RequestLog {
     pub error: Option<String>,
 }
 
-#[allow(dead_code)]  // Fields are used when the logger is consumed by success()
+#[allow(dead_code)] // Fields are used when the logger is consumed by success()
 pub struct RequestLogger {
     module: String,
     action: String,
@@ -30,7 +30,7 @@ pub struct RequestLogger {
     request_id: String,
 }
 
-#[allow(dead_code)]  // Methods are used across the codebase in various service implementations
+#[allow(dead_code)] // Methods are used across the codebase in various service implementations
 impl RequestLogger {
     pub fn new(module: &str, action: &str) -> Self {
         Self {
@@ -91,7 +91,6 @@ pub fn log_market_signal(signal: &MarketSignalLog) {
     );
 }
 
-
 pub fn log_performance(metrics: PerformanceMetrics) {
     if metrics.success {
         info!(
@@ -109,8 +108,7 @@ pub fn log_performance(metrics: PerformanceMetrics) {
 }
 
 pub fn init_logging() -> Result<()> {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(env_filter)

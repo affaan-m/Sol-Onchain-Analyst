@@ -23,10 +23,9 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     // Get MongoDB connection details
-    let mongodb_uri = dotenvy::var("MONGODB_URI")
-        .context("MONGODB_URI must be set")?;
-    let mongodb_database = dotenvy::var("MONGODB_DATABASE")
-        .context("MONGODB_DATABASE must be set")?;
+    let mongodb_uri = dotenvy::var("MONGODB_URI").context("MONGODB_URI must be set")?;
+    let mongodb_database =
+        dotenvy::var("MONGODB_DATABASE").context("MONGODB_DATABASE must be set")?;
 
     info!("Connecting to MongoDB at: {}", mongodb_uri);
 

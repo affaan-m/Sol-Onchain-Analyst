@@ -1,11 +1,11 @@
 use crate::{
     agent::trader::TradingAgent,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::AgentConfig,
     models::market_signal::{MarketSignal, SignalType},
+    services::token_analytics::TokenAnalyticsService,
     trading::SolanaAgentKit,
     utils::f64_to_decimal,
-    birdeye::api::{BirdeyeApi, BirdeyeClient},
-    services::token_analytics::TokenAnalyticsService,
 };
 use anyhow::Result;
 use bson::DateTime;
@@ -211,8 +211,10 @@ async fn main() -> Result<()> {
     println!("Initialized MongoDB connection pool");
 
     // Initialize Solana agent
-    let rpc_url = std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
-    let private_key = std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not found in environment");
+    let rpc_url = std::env::var("SOLANA_RPC_URL")
+        .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
+    let private_key =
+        std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not found in environment");
     let keypair = Keypair::from_base58_string(&private_key);
     let solana_agent = SolanaAgentKit::new(&rpc_url, keypair);
 
@@ -221,19 +223,19 @@ async fn main() -> Result<()> {
 
     // Initialize services with MongoDB pool
     let birdeye: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-    let token_analytics_service = Arc::new(TokenAnalyticsService::new(
-        db_pool.clone(),
-        birdeye.clone(),
-        None,
-    ).await?);
+    let token_analytics_service =
+        Arc::new(TokenAnalyticsService::new(db_pool.clone(), birdeye.clone(), None).await?);
 
     // Initialize trading agent
-    let trader = Arc::new(TradingAgent::new(
-        config.clone(),
-        token_analytics_service,
-        db_pool.clone(),
-        solana_agent,
-    ).await?);
+    let trader = Arc::new(
+        TradingAgent::new(
+            config.clone(),
+            token_analytics_service,
+            db_pool.clone(),
+            solana_agent,
+        )
+        .await?,
+    );
     let running = Arc::new(AtomicBool::new(true));
 
     // Spawn the autonomous trading agent

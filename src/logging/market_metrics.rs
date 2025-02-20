@@ -1,7 +1,7 @@
+use bigdecimal::ToPrimitive;
+use bson::{doc, DateTime};
 use serde::Serialize;
 use uuid::Uuid;
-use bson::{doc, DateTime};
-use bigdecimal::ToPrimitive;
 
 use crate::models::market_signal::MarketSignal;
 

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::models::token_info::TokenExtensions;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiResponse<T> {
@@ -227,4 +227,4 @@ impl From<TokenMarketResponse> for TokenMarketData {
             volume_change_24h: response.v24h_change_percent.unwrap_or_default(),
         }
     }
-} 
+}

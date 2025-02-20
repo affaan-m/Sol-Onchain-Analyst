@@ -1,10 +1,10 @@
 pub mod api;
 
-use crate::models::token_info::TokenInfo;
-pub use api::BirdeyeApi;
 pub use crate::models::market_data::TokenMarketResponse;
-use async_trait::async_trait;
+use crate::models::token_info::TokenInfo;
 pub use crate::models::token_trending::TrendingToken;
+pub use api::BirdeyeApi;
+use async_trait::async_trait;
 
 pub const BIRDEYE_API_URL: &str = "https://public-api.birdeye.so";
 

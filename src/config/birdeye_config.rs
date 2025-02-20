@@ -15,4 +15,4 @@ impl BirdeyeConfig {
                 .unwrap_or_else(|_| "https://public-api.birdeye.so".to_string()),
         })
     }
-} 
+}

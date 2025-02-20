@@ -1,7 +1,7 @@
 use super::BIRDEYE_API_URL;
+use crate::models::market_data::{ApiResponse, TokenMarketResponse};
 use crate::models::token_info::TokenExtensions;
 use crate::models::token_trending::{TrendingToken, TrendingTokenData};
-use crate::models::market_data::{ApiResponse, TokenMarketResponse};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -248,10 +248,10 @@ pub struct TokenOverviewResponse {
 pub trait BirdeyeApi: Send + Sync {
     /// Get detailed market data for a token by address
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse>;
-    
+
     /// Get basic token overview information
     async fn get_token_overview(&self, address: &str) -> Result<TokenOverviewResponse>;
-    
+
     /// Get trending tokens data
     async fn get_token_trending(&self) -> Result<Vec<TrendingToken>>;
 }
@@ -272,7 +272,7 @@ impl BirdeyeClient {
     async fn get(&self, endpoint: &str) -> Result<reqwest::Response> {
         let url = format!("{}{}", BIRDEYE_API_URL, endpoint);
         debug!("Making GET request to: {}", url);
-        
+
         let response = self
             .client
             .get(&url)
@@ -283,7 +283,10 @@ impl BirdeyeClient {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "No error text".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "No error text".to_string());
             error!("HTTP error {}: {}", status, error_text);
             return Err(anyhow!("HTTP {} error: {}", status, error_text));
         }
@@ -309,7 +312,9 @@ impl BirdeyeApi for BirdeyeClient {
             debug!("Successfully retrieved market data for {}", address);
             Ok(response.data)
         } else {
-            let error_msg = response.message.unwrap_or_else(|| "Unknown error".to_string());
+            let error_msg = response
+                .message
+                .unwrap_or_else(|| "Unknown error".to_string());
             error!("Failed to get market data: {}", error_msg);
             Err(anyhow!("Failed to get market data: {}", error_msg))
         }
@@ -327,13 +332,18 @@ impl BirdeyeApi for BirdeyeClient {
 
         if response.success {
             if response.data.address != address {
-                error!("Token address mismatch: requested {}, but got {}", address, response.data.address);
+                error!(
+                    "Token address mismatch: requested {}, but got {}",
+                    address, response.data.address
+                );
                 return Err(anyhow!("Token not found: {}", address));
             }
             debug!("Successfully retrieved token overview for {}", address);
             Ok(response.data)
         } else {
-            let error_msg = response.message.unwrap_or_else(|| "Unknown error".to_string());
+            let error_msg = response
+                .message
+                .unwrap_or_else(|| "Unknown error".to_string());
             error!("Failed to get token overview: {}", error_msg);
             Err(anyhow!("Failed to get token overview: {}", error_msg))
         }
@@ -350,10 +360,15 @@ impl BirdeyeApi for BirdeyeClient {
             .context("Failed to deserialize trending tokens response")?;
 
         if response.success {
-            debug!("Successfully retrieved {} trending tokens", response.data.tokens.len());
+            debug!(
+                "Successfully retrieved {} trending tokens",
+                response.data.tokens.len()
+            );
             Ok(response.data.tokens)
         } else {
-            let error_msg = response.message.unwrap_or_else(|| "Unknown error".to_string());
+            let error_msg = response
+                .message
+                .unwrap_or_else(|| "Unknown error".to_string());
             error!("Failed to get trending tokens: {}", error_msg);
             Err(anyhow!("Failed to get trending tokens: {}", error_msg))
         }

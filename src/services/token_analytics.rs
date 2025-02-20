@@ -1,23 +1,26 @@
+use crate::birdeye::api::TokenOverviewResponse;
 use crate::birdeye::BirdeyeApi;
-use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
+use crate::config::mongodb::MongoDbPool;
 use crate::error::{AgentError, AgentResult};
 use crate::logging::market_metrics::MarketSignalLog;
-use crate::logging::{log_market_metrics, log_market_signal, log_performance, RequestLogger};
 use crate::logging::performance_metrics::PerformanceMetrics;
+use crate::logging::{log_market_metrics, log_market_signal, log_performance, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
-use crate::birdeye::api::TokenOverviewResponse;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use bson::{doc, DateTime};
+use chrono::{Duration as ChronoDuration, Utc};
 use futures::StreamExt;
-use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
-use std::sync::Arc;
-use tracing::{debug, info};
-use chrono::{Utc, Duration as ChronoDuration};
+use mongodb::{
+    options::{FindOneOptions, FindOptions},
+    Collection,
+};
 use serde_json::json;
+use std::sync::Arc;
 use std::time::Instant;
+use tracing::{debug, info};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenAnalyticsError {
@@ -35,7 +38,7 @@ pub struct MarketMetrics {
     pub symbol: String,
     pub price: f64,
     pub volume_24h: Option<f64>,
-    pub signal_type: Option<String>,    
+    pub signal_type: Option<String>,
     pub confidence: Option<f64>,
 }
 
@@ -53,7 +56,10 @@ impl TokenAnalyticsService {
     ) -> AgentResult<Self> {
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
-        debug!("Initializing TokenAnalyticsService with collection: {:?}", collection);
+        debug!(
+            "Initializing TokenAnalyticsService with collection: {:?}",
+            collection
+        );
 
         Ok(Self {
             collection,
@@ -223,9 +229,7 @@ impl TokenAnalyticsService {
 
             // Trading metrics
             trades_24h: Some(overview.trade24h),
-            average_trade_size: Some(f64_to_decimal(
-                overview.v24h_usd / overview.trade24h as f64
-            )),
+            average_trade_size: Some(f64_to_decimal(overview.v24h_usd / overview.trade24h as f64)),
 
             // Holder metrics
             holder_count: Some(overview.holder as i32),
@@ -393,9 +397,7 @@ impl TokenAnalyticsService {
             }
         };
 
-        let options = FindOptions::builder()
-            .sort(doc! { "timestamp": 1 })
-            .build();
+        let options = FindOptions::builder().sort(doc! { "timestamp": 1 }).build();
 
         let mut cursor = self
             .collection
@@ -506,10 +508,7 @@ impl TokenAnalyticsService {
         volume_change: Option<BigDecimal>,
     ) -> MarketSignal {
         let vol_change = volume_change.unwrap_or_else(|| BigDecimal::from(0));
-        let confidence = self.calculate_confidence(
-            price_change.clone(),
-            vol_change.clone(),
-        );
+        let confidence = self.calculate_confidence(price_change.clone(), vol_change.clone());
 
         let metadata = json!({
             "token_symbol": analytics.token_symbol.clone(),
@@ -550,14 +549,14 @@ impl TokenAnalyticsService {
 
     pub async fn get_relevant_analytics(&self, query: &str) -> AgentResult<Vec<TokenAnalytics>> {
         debug!("Finding relevant analytics for query: {}", query);
-        
+
         let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
         let filter = doc! {
             "timestamp": {
                 "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
             }
         };
-        
+
         let options = FindOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .limit(10)
@@ -580,16 +579,16 @@ impl TokenAnalyticsService {
 
     pub async fn get_trending_tokens(&self, limit: i64) -> AgentResult<Vec<TokenAnalytics>> {
         debug!("Getting top {} trending tokens", limit);
-        
+
         let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
         let filter = doc! {
             "timestamp": {
                 "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
             }
         };
-        
+
         let options = FindOptions::builder()
-            .sort(doc! { 
+            .sort(doc! {
                 "volume_24h": -1,
                 "price_change_24h": -1
             })
@@ -613,7 +612,7 @@ impl TokenAnalyticsService {
 
     pub async fn get_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
         debug!("Getting analytics for token: {}", address);
-        
+
         let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
         let filter = doc! {
             "token_address": address,
@@ -621,7 +620,7 @@ impl TokenAnalyticsService {
                 "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
             }
         };
-        
+
         let options = FindOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .limit(1)

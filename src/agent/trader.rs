@@ -1,19 +1,19 @@
 // use crate::models::trade::Trade;
 use crate::{
+    config::mongodb::MongoDbPool,
     config::AgentConfig,
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
     services::TokenAnalyticsService,
+    trading::{trading_engine::TradingEngine, SolanaAgentKit},
     utils::f64_to_decimal,
-    trading::{SolanaAgentKit, trading_engine::TradingEngine},
-    config::mongodb::MongoDbPool,
 };
 use bigdecimal::BigDecimal;
+use bson;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::sleep;
 use tracing::{error, info};
-use bson;
 
 pub struct TradingAgent {
     analytics_service: Arc<TokenAnalyticsService>,
@@ -117,7 +117,8 @@ impl TradingAgent {
 
     pub async fn execute_trade(&self, symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
         info!("Executing trade for {}", symbol);
-        self.engine.execute_trade(signal)
+        self.engine
+            .execute_trade(signal)
             .await
             .map_err(|e| AgentError::Trading(format!("Trade execution failed: {}", e)))
     }
@@ -145,7 +146,7 @@ impl TradingAgent {
 
         // Insert into trades collection
         self.db_pool
-            .database("cainam")  // Use a constant or config value for database name
+            .database("cainam") // Use a constant or config value for database name
             .collection("trades")
             .insert_one(trade_update)
             .await

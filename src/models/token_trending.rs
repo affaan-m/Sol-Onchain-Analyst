@@ -33,4 +33,3 @@ pub struct TrendingToken {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_24h_change_percent: Option<f64>,
 }
-

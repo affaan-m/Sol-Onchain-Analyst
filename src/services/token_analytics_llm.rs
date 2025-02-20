@@ -2,8 +2,8 @@ use crate::error::{AgentError, AgentResult};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::services::token_analytics::TokenAnalyticsService;
 use rig::agent::Agent as RigAgent;
-use rig::providers::openai::{Client as OpenAIClient, CompletionModel};
 use rig::completion::Prompt;
+use rig::providers::openai::{Client as OpenAIClient, CompletionModel};
 use std::sync::Arc;
 use tracing::{debug, error};
 
@@ -36,10 +36,13 @@ impl TokenAnalyticsLLM {
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to get relevant analytics: {}", e);
-                return Err(AgentError::MarketAnalysis(format!("Failed to get analytics: {}", e)));
+                return Err(AgentError::MarketAnalysis(format!(
+                    "Failed to get analytics: {}",
+                    e
+                )));
             }
         };
-        
+
         // Format analytics data for LLM
         let formatted_data = self.format_analytics_data(&analytics)?;
 
@@ -55,7 +58,10 @@ impl TokenAnalyticsLLM {
             Ok(analysis) => Ok(analysis),
             Err(e) => {
                 error!("Failed to get LLM analysis: {}", e);
-                Err(AgentError::MarketAnalysis(format!("Failed to get LLM analysis: {}", e)))
+                Err(AgentError::MarketAnalysis(format!(
+                    "Failed to get LLM analysis: {}",
+                    e
+                )))
             }
         }
     }
@@ -65,7 +71,7 @@ impl TokenAnalyticsLLM {
 
         // Get trending tokens
         let trending = self.analytics_service.get_trending_tokens(10).await?;
-        
+
         // Format trending data
         let formatted_data = self.format_analytics_data(&trending)?;
 
@@ -76,9 +82,9 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        let insights = self.agent.prompt(prompt)
-            .await
-            .map_err(|e| AgentError::MarketAnalysis(format!("Failed to get market insights: {}", e)))?;
+        let insights = self.agent.prompt(prompt).await.map_err(|e| {
+            AgentError::MarketAnalysis(format!("Failed to get market insights: {}", e))
+        })?;
 
         Ok(insights)
     }
@@ -104,44 +110,44 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        let comparison = self.agent.prompt(prompt)
-            .await
-            .map_err(|e| AgentError::MarketAnalysis(format!("Failed to compare tokens: {}", e)))?;
+        let comparison =
+            self.agent.prompt(prompt).await.map_err(|e| {
+                AgentError::MarketAnalysis(format!("Failed to compare tokens: {}", e))
+            })?;
 
         Ok(comparison)
     }
 
     fn format_analytics_data(&self, analytics: &[TokenAnalytics]) -> AgentResult<String> {
         let mut formatted = String::new();
-        
+
         for token in analytics {
             formatted.push_str(&format!(
                 "Token: {} ({})\n",
-                token.token_name,
-                token.token_symbol
+                token.token_name, token.token_symbol
             ));
             formatted.push_str(&format!("Address: {}\n", token.token_address));
             formatted.push_str(&format!("Price: ${}\n", token.price));
-            
+
             if let Some(price_change) = &token.price_change_24h {
                 formatted.push_str(&format!("24h Change: {}%\n", price_change));
             }
-            
+
             if let Some(volume) = &token.volume_24h {
                 formatted.push_str(&format!("24h Volume: ${}\n", volume));
             }
-            
+
             if let Some(market_cap) = &token.market_cap {
                 formatted.push_str(&format!("Market Cap: ${}\n", market_cap));
             }
-            
+
             if let Some(holder_count) = token.holder_count {
                 formatted.push_str(&format!("Holders: {}\n", holder_count));
             }
-            
+
             formatted.push_str("\n");
         }
 
         Ok(formatted)
     }
-} 
+}
