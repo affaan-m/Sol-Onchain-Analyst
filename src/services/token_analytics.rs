@@ -14,7 +14,6 @@ use futures::StreamExt;
 use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
 use std::sync::Arc;
 use tracing::{debug, info};
-use uuid::Uuid;
 use chrono::{Utc, Duration as ChronoDuration};
 use serde_json::json;
 
@@ -36,22 +35,6 @@ pub struct MarketMetrics {
     pub volume_24h: Option<f64>,
     pub signal_type: Option<String>,    
     pub confidence: Option<f64>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketSignalLog {
-    pub id: Uuid,
-    pub timestamp: DateTime,
-    pub token_address: String,
-    pub token_symbol: String,
-    pub signal_type: String,
-    pub price: f64,
-    pub price_change_24h: Option<f64>,
-    pub volume_change_24h: Option<f64>,
-    pub confidence: f64,
-    pub risk_score: f64,
-    pub created_at: DateTime,
 }
 
 pub struct TokenAnalyticsService {
@@ -500,7 +483,8 @@ impl TokenAnalyticsService {
         );
 
         let metadata = json!({
-            "token_symbol": analytics.token_symbol.clone()
+            "token_symbol": analytics.token_symbol.clone(),
+            "token_name": analytics.token_name.clone()
         });
 
         MarketSignalBuilder::new(
@@ -520,26 +504,8 @@ impl TokenAnalyticsService {
     }
 
     fn log_signal(&self, signal: &MarketSignal, analytics: &TokenAnalytics) {
-        let signal_log = MarketSignalLog {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: analytics.token_symbol.clone(),
-            signal_type: signal.signal_type.to_string(),
-            price: analytics.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .as_ref()
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.as_ref().and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: DateTime::now(),
-        };
-
+        let mut signal_log: MarketSignalLog = signal.clone().into();
+        signal_log.token_symbol = analytics.token_symbol.clone(); // Override with actual token symbol
         log_market_signal(&signal_log);
     }
 
@@ -643,37 +609,6 @@ impl TokenAnalyticsService {
             Ok(Some(result.map_err(AgentError::Database)?))
         } else {
             Ok(None)
-        }
-    }
-}
-
-
-// Move From implementation outside of TokenAnalyticsService impl block
-impl From<MarketSignal> for MarketSignalLog {
-    fn from(signal: MarketSignal) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: signal
-                .metadata
-                .expect("Failed to get token symbol from metadata")
-                .get("token_symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&signal.asset_address)
-                .to_string(),
-            signal_type: signal.signal_type.to_string(),
-            price: signal.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(DateTime::now),
         }
     }
 }

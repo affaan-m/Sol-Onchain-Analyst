@@ -1,13 +1,11 @@
 use market_metrics::MarketSignalLog;
 use performance_metrics::PerformanceMetrics;
 use serde::Serialize;
-use std::time::Instant;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
 use crate::services::token_analytics::MarketMetrics;
 use anyhow::Result;
 use std::time::Instant;
-use chrono::{DateTime, Utc};
 
 pub mod market_metrics;
 pub mod performance_metrics;
@@ -92,6 +90,7 @@ pub fn log_market_signal(signal: &MarketSignalLog) {
     );
 }
 
+
 pub fn log_performance(metrics: PerformanceMetrics) {
     if metrics.success {
         info!(
@@ -109,7 +108,8 @@ pub fn log_performance(metrics: PerformanceMetrics) {
 }
 
 pub fn init_logging() -> Result<()> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(env_filter)

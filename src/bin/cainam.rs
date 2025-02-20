@@ -1,7 +1,7 @@
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::{AgentConfig, mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig}},
-    services::{TokenAnalyticsService, TokenAnalyticsLLM},
+    services::{TokenAnalyticsService, token_analytics_llm::TokenAnalyticsLLM},
 };
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
