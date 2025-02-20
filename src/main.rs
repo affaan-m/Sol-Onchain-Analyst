@@ -4,6 +4,8 @@ use crate::{
     models::market_signal::{MarketSignal, SignalType},
     trading::SolanaAgentKit,
     utils::f64_to_decimal,
+    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    services::token_analytics::TokenAnalyticsService,
 };
 use anyhow::Result;
 use bson::DateTime;
@@ -208,7 +210,6 @@ async fn main() -> Result<()> {
     let db_pool = init_mongodb().await?;
     println!("Initialized MongoDB connection pool");
 
-    // TODO: zTgx hardcoded
     // Initialize Solana agent
     let rpc_url = std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
     let private_key = std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not found in environment");
@@ -218,42 +219,42 @@ async fn main() -> Result<()> {
     // Load configuration from environment
     let config = AgentConfig::new_from_env()?;
 
+    // Initialize services with MongoDB pool
+    let birdeye: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
+    let token_analytics_service = Arc::new(TokenAnalyticsService::new(
+        db_pool.clone(),
+        birdeye.clone(),
+        None,
+    ).await?);
+
     // Initialize trading agent
-    let trader = Arc::new(TradingAgent::new(config.clone(), db_pool, solana_agent).await?);
+    let trader = Arc::new(TradingAgent::new(
+        config.clone(),
+        token_analytics_service,
+        db_pool.clone(),
+        solana_agent,
+    ).await?);
     let running = Arc::new(AtomicBool::new(true));
 
-    // Initialize services with MongoDB pool
-    // let token_analytics_service = TokenAnalyticsService::new(
-    //     db_pool.clone(),
-    //     birdeye.clone(),
-    //     birdeye_extended.clone(),
-    //     Some(market_config.clone()),
-    // ).await?;
-
-    // let portfolio_optimizer = PortfolioOptimizer::new(db_pool.clone());
-
-    // // Initialize vector store
-    // let vector_store = VectorStore::new().await?;
-
-    // // Spawn the autonomous trading agent
-    // let trader_clone = trader.clone();
-    // let running_clone = running.clone();
-    // let trading_handle = tokio::spawn(async move {
-    //     info!("Starting autonomous trading...");
-    //     if let Err(e) = trader_clone.run().await {
-    //         error!("Trading agent error: {}", e);
-    //         running_clone.store(false, Ordering::SeqCst);
-    //     }
-    // });
+    // Spawn the autonomous trading agent
+    let trader_clone = trader.clone();
+    let running_clone = running.clone();
+    let trading_handle = tokio::spawn(async move {
+        info!("Starting autonomous trading...");
+        if let Err(e) = trader_clone.run().await {
+            error!("Trading agent error: {}", e);
+            running_clone.store(false, Ordering::SeqCst);
+        }
+    });
 
     // Handle user input in a separate task
     let input_handle = tokio::spawn(handle_user_input(trader.clone(), config, running.clone()));
 
     // Wait for either task to complete
     tokio::select! {
-        // _ = trading_handle => {
-        //     info!("Trading task completed");
-        // }
+        _ = trading_handle => {
+            info!("Trading task completed");
+        }
         _ = input_handle => {
             info!("User input task completed");
         }

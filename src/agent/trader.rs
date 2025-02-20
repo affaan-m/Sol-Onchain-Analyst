@@ -1,125 +1,51 @@
 // use crate::models::trade::Trade;
 use crate::{
-    birdeye::api::BirdeyeClient,
-    config::mongodb::MongoDbPool,
-    config::{AgentConfig, MarketConfig},
+    config::AgentConfig,
     error::{AgentError, AgentResult},
     models::market_signal::{MarketSignal, SignalType},
     services::TokenAnalyticsService,
-    trading::trading_engine::TradingEngine,
-    trading::SolanaAgentKit,
     utils::f64_to_decimal,
+    trading::{SolanaAgentKit, trading_engine::TradingEngine},
+    config::mongodb::MongoDbPool,
 };
 use bigdecimal::BigDecimal;
-use rig::{
-    agent::Agent,
-    providers::openai::{Client as OpenAIClient, CompletionModel},
-};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::sleep;
-use tracing::{error, info};
-
-const MAX_RETRIES: u32 = 3;
-const RETRY_DELAY: u64 = 1000; // 1 second
+use tracing::{error, info, warn};
+use bson;
 
 pub struct TradingAgent {
-    agent: Agent<CompletionModel>,
-    trading_engine: TradingEngine,
     analytics_service: Arc<TokenAnalyticsService>,
     config: AgentConfig,
     running: Arc<AtomicBool>,
-    db: Arc<MongoDbPool>,
-    birdeye: Arc<BirdeyeClient>,
-    birdeye_extended: Arc<BirdeyeClient>,
+    engine: TradingEngine,
+    db_pool: Arc<MongoDbPool>,
 }
 
 impl TradingAgent {
     pub async fn new(
         config: AgentConfig,
-        db: Arc<MongoDbPool>,
+        analytics_service: Arc<TokenAnalyticsService>,
+        db_pool: Arc<MongoDbPool>,
         solana_agent: SolanaAgentKit,
     ) -> AgentResult<Self> {
         info!("Initializing TradingAgent...");
 
-        // Initialize OpenAI client
-        let openai_client = OpenAIClient::new(&config.openai_api_key);
-
-        info!("Creating GPT-4 agent...");
-        let agent = openai_client
-            .agent(crate::config::get_openai_model())
-            .preamble(include_str!("../prompts/system.txt"))
-            .build();
-
-        // Initialize components
-        let trading_engine = TradingEngine::new(
+        let engine = TradingEngine::new(
             config.trade_min_confidence,
             config.trade_max_amount,
             solana_agent,
         );
 
-        // info!("Initializing Twitter client...");
-        // let mut twitter_client = TwitterClient::new(
-        //     config.twitter_email.clone(),
-        //     config.twitter_username.clone(),
-        //     config.twitter_password.clone(),
-        // );
-
-        // // Retry Twitter login with exponential backoff
-        // let mut retry_count = 0;
-        // loop {
-        //     match twitter_client.login().await {
-        //         Ok(_) => {
-        //             info!("Successfully logged in to Twitter");
-        //             break;
-        //         }
-        //         Err(e) => {
-        //             retry_count += 1;
-        //             if retry_count >= MAX_RETRIES {
-        //                 error!("Failed to login to Twitter after {} attempts", MAX_RETRIES);
-        //                 return Err(AgentError::TwitterApi(format!("Login failed: {}", e)));
-        //             }
-        //             warn!(
-        //                 "Failed to login to Twitter (attempt {}), retrying...",
-        //                 retry_count
-        //             );
-        //             sleep(Duration::from_millis(RETRY_DELAY * 2u64.pow(retry_count))).await;
-        //         }
-        //     }
-        // }
-
-        info!("Initializing Birdeye clients...");
-        let birdeye = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-        let birdeye_extended = Arc::new(BirdeyeClient::new(config.birdeye_api_key.clone()));
-
-        // Initialize market config
-        let market_config = MarketConfig::new_from_env()?;
-
-        // Initialize analytics service
-        let analytics_service = Arc::new(
-            TokenAnalyticsService::new(db.clone(), birdeye.clone(), Some(market_config)).await?,
-        );
-
         Ok(Self {
-            agent,
-            trading_engine,
             analytics_service,
             config,
             running: Arc::new(AtomicBool::new(false)),
-            db,
-            birdeye,
-            birdeye_extended,
+            engine,
+            db_pool,
         })
     }
-
-    // async fn store_trade(&self, trade: &Trade) -> Result<(), Error> {
-    //     let collection = self.db.database("cainam").collection("trades");
-    //     collection
-    //         .insert_one(trade)
-    //         .await
-    //         .map_err(|e| Error::Mongo(e))?;
-    //     Ok(())
-    // }
 
     pub async fn analyze_market(
         &self,
@@ -178,49 +104,54 @@ impl TradingAgent {
 
         // Convert f64 config values to BigDecimal
         let threshold = f64_to_decimal(self.config.trade_min_confidence);
-        let max_amount = f64_to_decimal(self.config.trade_max_amount);
 
         if signal.confidence >= threshold {
-            let amount = (max_amount.clone() * signal.confidence.clone()).min(max_amount.clone());
-
-            match action {
-                "BUY" | "SELL" => {
-                    info!(
-                        "Executing {} trade for {} with amount {}",
-                        action, signal.asset_address, amount
-                    );
-                    self.trading_engine
-                        .execute_trade(signal)
-                        .await
-                        .map_err(|e| {
-                            AgentError::Trading(format!("Trade execution failed: {}", e))
-                        })?;
-                }
-                _ => {}
-            }
+            info!(
+                "Signal meets confidence threshold for {}: {} (confidence: {:.2})",
+                signal.asset_address, action, signal.confidence
+            );
         }
 
         Ok(Some(action.to_string()))
     }
 
-    pub async fn execute_trade(&self, _symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
-        self.trading_engine
-            .execute_trade(signal)
+    pub async fn execute_trade(&self, symbol: &str, signal: &MarketSignal) -> AgentResult<String> {
+        info!("Executing trade for {}", symbol);
+        self.engine.execute_trade(signal)
             .await
             .map_err(|e| AgentError::Trading(format!("Trade execution failed: {}", e)))
     }
 
     pub async fn post_trade_update(
         &self,
-        _symbol: &str,
-        _action: &str,
-        _amount: f64,
-        _signal_type: &SignalType,
+        symbol: &str,
+        action: &str,
+        amount: f64,
+        signal_type: &SignalType,
     ) -> AgentResult<()> {
-        // TODO: Implement post-trade updates
-        // - Update portfolio state
-        // - Log trade details
-        // - Send notifications
+        info!(
+            "Posting trade update - Symbol: {}, Action: {}, Amount: {}, Type: {:?}",
+            symbol, action, amount, signal_type
+        );
+
+        // Create trade update document
+        let trade_update = bson::doc! {
+            "symbol": symbol,
+            "action": action,
+            "amount": amount,
+            "signal_type": format!("{:?}", signal_type),
+            "timestamp": bson::DateTime::now(),
+        };
+
+        // Insert into trades collection
+        self.db_pool
+            .database("cainam")  // Use a constant or config value for database name
+            .collection("trades")
+            .insert_one(trade_update)
+            .await
+            .map_err(|e| AgentError::Database(e.into()))?;
+
+        info!("Trade update posted successfully");
         Ok(())
     }
 

@@ -151,3 +151,46 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Author: Matt Gunnin
 - Email: <matt@cainamventures.com>
 - Repository: <https://github.com/cainamventures/cainam-core>
+
+## CLI Usage
+
+The `cainam` CLI tool provides several commands for interacting with the platform:
+
+### Get Trending Tokens
+
+```bash
+cargo run --bin cainam trending
+```
+
+This command displays a list of trending tokens with their current prices, 24h changes, volumes, and market caps.
+
+### Get Token Overview
+
+```bash
+cargo run --bin cainam token <TOKEN_ADDRESS>
+```
+
+Shows detailed information about a specific token, including:
+- Current price and market cap
+- 24h volume and price change
+- Number of holders and active wallets
+
+### Analyze Market Signals
+
+```bash
+cargo run --bin cainam signals <TOKEN_ADDRESS>
+```
+
+Analyzes market signals for a specific token, displaying:
+- Signal type (if any)
+- Confidence score
+- Risk assessment
+- Price and volume changes
+
+### Monitor Tokens
+
+```bash
+cargo run --bin cainam monitor <TOKEN_ADDRESS1,TOKEN_ADDRESS2,...> [--interval <SECONDS>]
+```
+
+Continuously monitors specified tokens for market signals. The interval defaults to 300 seconds (5 minutes).

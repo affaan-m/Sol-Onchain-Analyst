@@ -1,21 +1,23 @@
 use crate::birdeye::BirdeyeApi;
-use crate::models::market_data::TokenMarketResponse;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
 use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
-use crate::models::token_info::TokenInfo;
 use crate::utils::f64_to_decimal;
 use crate::birdeye::api::TokenOverviewResponse;
+use rig::providers::openai::Client as OpenAIClient;
 use bigdecimal::{BigDecimal, ToPrimitive};
-use bson::{doc, DateTime};
+use bson::{doc, DateTime, Document, oid::ObjectId};
 use futures::StreamExt;
-use mongodb::options::FindOneOptions;
-use mongodb::Collection;
+use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
 use std::sync::Arc;
 use uuid::Uuid;
+use std::time::Duration;
+use chrono::{Utc, Duration as ChronoDuration};
+use tracing::{debug, info};
+use serde_json::json;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,25 +46,25 @@ pub struct MarketSignalLog {
 }
 
 pub struct TokenAnalyticsService {
-    pool: Arc<MongoDbPool>,
     collection: Collection<TokenAnalytics>,
     birdeye: Arc<dyn BirdeyeApi>,
+    market_config: MarketConfig,
 }
 
 impl TokenAnalyticsService {
     pub async fn new(
         pool: Arc<MongoDbPool>,
         birdeye: Arc<dyn BirdeyeApi>,
-        _market_config: Option<MarketConfig>,
+        market_config: Option<MarketConfig>,
     ) -> AgentResult<Self> {
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
-        println!(">> token_analytics collections {:?}", collection);
+        debug!("Initializing TokenAnalyticsService with collection: {:?}", collection);
 
         Ok(Self {
-            pool,
             collection,
             birdeye,
+            market_config: market_config.unwrap_or_default(),
         })
     }
 
@@ -107,21 +109,15 @@ impl TokenAnalyticsService {
         log_market_metrics(&metrics);
 
         // Convert to TokenAnalytics
-        let analytics = match self
-            .convert_to_analytics(address, symbol, overview)
-            .await
-        {
-            Ok(analytics) => analytics,
-            Err(e) => {
-                logger.error(&e.to_string());
-                return Err(e);
-            }
-        };
+        let analytics = self.convert_to_analytics(address, symbol, overview).await?;
 
         // Store in database
-        let stored = self.store_token_analytics(&analytics).await?;
+        self.collection
+            .insert_one(&analytics)
+            .await
+            .map_err(AgentError::Database)?;
 
-        Ok(stored)
+        Ok(analytics)
     }
 
     async fn convert_to_analytics(
@@ -202,7 +198,7 @@ impl TokenAnalyticsService {
 
             // Liquidity metrics
             liquidity: Some(f64_to_decimal(overview.liquidity)),
-            liquidity_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)), // Using volume change as proxy for liquidity change
+            liquidity_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)),
 
             // Trading metrics
             trades_24h: Some(overview.trade24h),
@@ -213,7 +209,7 @@ impl TokenAnalyticsService {
             // Holder metrics
             holder_count: Some(overview.holder as i32),
             active_wallets_24h: Some(overview.unique_wallet_24h as i32),
-            whale_transactions_24h: Some((overview.trade24h / 100) as i32), // Estimating whale transactions as 1% of total trades
+            whale_transactions_24h: Some((overview.trade24h / 100) as i32),
 
             // Technical indicators
             rsi_14: rsi,
@@ -351,29 +347,15 @@ impl TokenAnalyticsService {
             "timestamp": { "$lt": DateTime::now() }
         };
 
-        let _options = FindOneOptions::builder()
+        let options = FindOneOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .build();
 
         self.collection
             .find_one(filter)
+            .with_options(options)
             .await
             .map_err(AgentError::Database)
-    }
-
-    async fn store_token_analytics(
-        &self,
-        analytics: &TokenAnalytics,
-    ) -> AgentResult<TokenAnalytics> {
-        let result = self
-            .collection
-            .insert_one(analytics)
-            .await
-            .map_err(AgentError::Database)?;
-
-        let mut stored = analytics.clone();
-        stored.id = result.inserted_id.as_object_id();
-        Ok(stored)
     }
 
     pub async fn get_token_history(
@@ -390,8 +372,8 @@ impl TokenAnalyticsService {
             }
         };
 
-        let options = mongodb::options::FindOptions::builder()
-            .sort(doc! { "timestamp": -1 })
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": 1 })
             .build();
 
         let mut cursor = self
@@ -402,8 +384,8 @@ impl TokenAnalyticsService {
             .map_err(AgentError::Database)?;
 
         let mut results = Vec::new();
-        while let Some(doc) = cursor.next().await {
-            results.push(doc.map_err(AgentError::Database)?);
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
         }
 
         Ok(results)
@@ -435,6 +417,224 @@ impl TokenAnalyticsService {
         }
 
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error during retry")))
+    }
+
+    pub async fn generate_market_signals(
+        &self,
+        analytics: &TokenAnalytics,
+    ) -> AgentResult<Option<MarketSignal>> {
+        let logger = RequestLogger::new("token_analytics", "generate_market_signals");
+
+        // Get previous analytics for comparison
+        let previous = match self.get_previous_analytics(&analytics.token_address).await {
+            Ok(prev) => prev,
+            Err(e) => {
+                logger.error(&e.to_string());
+                return Err(e);
+            }
+        };
+
+        if let Some(prev) = previous {
+            let price_change = (analytics.price.clone() - prev.price.clone()) / prev.price.clone();
+            let volume_change = analytics.volume_24h.as_ref().map(|current| {
+                let binding = BigDecimal::from(0);
+                let prev_volume = prev.volume_24h.as_ref().unwrap_or(&binding);
+                (current.clone() - prev_volume.clone()) / prev_volume.clone()
+            });
+
+            let mut signal_opt = None;
+
+            if price_change.abs() > self.market_config.price_change_threshold {
+                info!(
+                    "Price spike detected: change={:.2}%, volume_change={:?}",
+                    price_change.abs(),
+                    volume_change.clone(),
+                );
+                let signal = self.create_market_signal(
+                    analytics,
+                    SignalType::PriceSpike,
+                    price_change,
+                    volume_change.clone(),
+                );
+                self.log_signal(&signal, analytics);
+                signal_opt = Some(signal);
+            } else if let Some(vol_change) = volume_change {
+                if vol_change > self.market_config.volume_surge_threshold {
+                    let signal = self.create_market_signal(
+                        analytics,
+                        SignalType::VolumeSurge,
+                        price_change,
+                        Some(vol_change),
+                    );
+                    self.log_signal(&signal, analytics);
+                    signal_opt = Some(signal);
+                }
+            }
+
+            Ok(signal_opt)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn create_market_signal(
+        &self,
+        analytics: &TokenAnalytics,
+        signal_type: SignalType,
+        price_change: BigDecimal,
+        volume_change: Option<BigDecimal>,
+    ) -> MarketSignal {
+        let vol_change = volume_change.unwrap_or_else(|| BigDecimal::from(0));
+        let confidence = self.calculate_confidence(
+            price_change.clone(),
+            vol_change.clone(),
+        );
+
+        let metadata = json!({
+            "token_symbol": analytics.token_symbol.clone()
+        });
+
+        MarketSignalBuilder::new(
+            analytics.token_address.clone(),
+            signal_type,
+            analytics.price.clone(),
+        )
+        .confidence(confidence)
+        .risk_score(f64_to_decimal(0.5))
+        .sentiment_score(f64_to_decimal(0.5))
+        .price_change_24h(price_change)
+        .volume_change_24h(vol_change.clone())
+        .volume_change(vol_change)
+        .timestamp(analytics.timestamp)
+        .metadata(metadata)
+        .build()
+    }
+
+    fn log_signal(&self, signal: &MarketSignal, analytics: &TokenAnalytics) {
+        let signal_log = MarketSignalLog {
+            id: Uuid::new_v4(),
+            timestamp: DateTime::now(),
+            token_address: signal.asset_address.clone(),
+            token_symbol: analytics.token_symbol.clone(),
+            signal_type: signal.signal_type.to_string(),
+            price: analytics.price.to_f64().unwrap_or_default(),
+            price_change_24h: Some(
+                signal
+                    .price_change_24h
+                    .as_ref()
+                    .and_then(|p| p.to_f64())
+                    .unwrap_or_default(),
+            ),
+            volume_change_24h: signal.volume_change_24h.as_ref().and_then(|v| v.to_f64()),
+            confidence: signal.confidence.to_f64().unwrap_or_default(),
+            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
+            created_at: DateTime::now(),
+        };
+
+        log_market_signal(&signal_log);
+    }
+
+    fn calculate_confidence(
+        &self,
+        price_change: BigDecimal,
+        volume_change: BigDecimal,
+    ) -> BigDecimal {
+        self.market_config.base_confidence.clone()
+            + (price_change * self.market_config.price_weight.clone())
+            + (volume_change * self.market_config.volume_weight.clone())
+    }
+
+    pub async fn get_relevant_analytics(&self, query: &str) -> AgentResult<Vec<TokenAnalytics>> {
+        debug!("Finding relevant analytics for query: {}", query);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
+        };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .limit(10)
+            .build();
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        let mut results = Vec::new();
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
+        }
+
+        Ok(results)
+    }
+
+    pub async fn get_trending_tokens(&self, limit: i64) -> AgentResult<Vec<TokenAnalytics>> {
+        debug!("Getting top {} trending tokens", limit);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
+        };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { 
+                "volume_24h": -1,
+                "price_change_24h": -1
+            })
+            .limit(limit)
+            .build();
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        let mut results = Vec::new();
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
+        }
+
+        Ok(results)
+    }
+
+    pub async fn get_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
+        debug!("Getting analytics for token: {}", address);
+        
+        let twenty_four_hours_ago = Utc::now() - ChronoDuration::hours(24);
+        let filter = doc! {
+            "token_address": address,
+            "timestamp": {
+                "$gte": DateTime::from_millis(twenty_four_hours_ago.timestamp_millis())
+            }
+        };
+        
+        let options = FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .limit(1)
+            .build();
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(options)
+            .await
+            .map_err(AgentError::Database)?;
+
+        if let Some(result) = cursor.next().await {
+            Ok(Some(result.map_err(AgentError::Database)?))
+        } else {
+            Ok(None)
+        }
     }
 }
 
