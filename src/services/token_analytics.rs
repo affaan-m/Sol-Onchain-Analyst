@@ -22,16 +22,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info};
 
-#[derive(Debug, thiserror::Error)]
-pub enum TokenAnalyticsError {
-    #[error("Database error: {0}")]
-    Database(String),
-    #[error("Birdeye API error: {0}")]
-    BirdeyeApi(String),
-    #[error("Validation error: {0}")]
-    Validation(String),
-}
-
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketMetrics {
@@ -68,12 +58,34 @@ impl TokenAnalyticsService {
         })
     }
 
+    fn log_operation_performance(&self, operation: &str, start_time: Instant, success: bool) {
+        log_performance(PerformanceMetrics {
+            operation: operation.to_string(),
+            duration_ms: start_time.elapsed().as_millis() as u64,
+            success,
+            timestamp: Utc::now(),
+        });
+    }
+
+    async fn collect_cursor_results(
+        &self,
+        cursor: mongodb::Cursor<TokenAnalytics>,
+    ) -> AgentResult<Vec<TokenAnalytics>> {
+        let mut results = Vec::new();
+        let mut cursor = cursor;
+        while let Some(result) = cursor.next().await {
+            results.push(result.map_err(AgentError::Database)?);
+        }
+        Ok(results)
+    }
+
     pub async fn fetch_and_store_token_info(
         &self,
         symbol: &str,
         address: &str,
     ) -> AgentResult<TokenAnalytics> {
         let start_time = Instant::now();
+        let operation = format!("fetch_token_info_{}", symbol);
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
         // Fetch token overview with retry logic
@@ -88,15 +100,7 @@ impl TokenAnalyticsService {
                     e
                 ));
                 logger.error(&err.to_string());
-
-                // Log performance failure
-                log_performance(PerformanceMetrics {
-                    operation: format!("fetch_token_info_{}", symbol),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    success: false,
-                    timestamp: Utc::now(),
-                });
-
+                self.log_operation_performance(&operation, start_time, false);
                 return Err(err);
             }
         };
@@ -105,15 +109,7 @@ impl TokenAnalyticsService {
         if overview.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
             logger.error(&err.to_string());
-
-            // Log performance failure
-            log_performance(PerformanceMetrics {
-                operation: format!("fetch_token_info_{}", symbol),
-                duration_ms: start_time.elapsed().as_millis() as u64,
-                success: false,
-                timestamp: Utc::now(),
-            });
-
+            self.log_operation_performance(&operation, start_time, false);
             return Err(err);
         }
 
@@ -136,14 +132,7 @@ impl TokenAnalyticsService {
             .await
             .map_err(AgentError::Database)?;
 
-        // Log successful performance
-        log_performance(PerformanceMetrics {
-            operation: format!("fetch_token_info_{}", symbol),
-            duration_ms: start_time.elapsed().as_millis() as u64,
-            success: true,
-            timestamp: Utc::now(),
-        });
-
+        self.log_operation_performance(&operation, start_time, true);
         Ok(analytics)
     }
 
@@ -202,7 +191,7 @@ impl TokenAnalyticsService {
             token_address: address.to_string(),
             token_name: overview.name,
             token_symbol: symbol.to_string(),
-            decimals: overview.decimals as u8,
+            decimals: overview.decimals,
             logo_uri: Some(overview.logo_uri),
 
             // Price metrics
@@ -399,19 +388,14 @@ impl TokenAnalyticsService {
 
         let options = FindOptions::builder().sort(doc! { "timestamp": 1 }).build();
 
-        let mut cursor = self
+        let cursor = self
             .collection
             .find(filter)
             .with_options(options)
             .await
             .map_err(AgentError::Database)?;
 
-        let mut results = Vec::new();
-        while let Some(result) = cursor.next().await {
-            results.push(result.map_err(AgentError::Database)?);
-        }
-
-        Ok(results)
+        self.collect_cursor_results(cursor).await
     }
 
     // Helper method for retrying API calls
@@ -547,6 +531,11 @@ impl TokenAnalyticsService {
             + (volume_change * self.market_config.volume_weight.clone())
     }
 
+    /// Get analytics data relevant to a specific query.
+    /// This method is used by the LLM service for semantic analysis and by the CLI for showing recent trading activity.
+    /// 
+    /// # Arguments
+    /// * `query` - The search query to find relevant analytics
     pub async fn get_relevant_analytics(&self, query: &str) -> AgentResult<Vec<TokenAnalytics>> {
         debug!("Finding relevant analytics for query: {}", query);
 
@@ -562,21 +551,21 @@ impl TokenAnalyticsService {
             .limit(10)
             .build();
 
-        let mut cursor = self
+        let cursor = self
             .collection
             .find(filter)
             .with_options(options)
             .await
             .map_err(AgentError::Database)?;
 
-        let mut results = Vec::new();
-        while let Some(result) = cursor.next().await {
-            results.push(result.map_err(AgentError::Database)?);
-        }
-
-        Ok(results)
+        self.collect_cursor_results(cursor).await
     }
 
+    /// Get the top trending tokens based on volume and price changes.
+    /// Used by both the LLM service for market insights and the CLI for monitoring.
+    /// 
+    /// # Arguments
+    /// * `limit` - Maximum number of trending tokens to return
     pub async fn get_trending_tokens(&self, limit: i64) -> AgentResult<Vec<TokenAnalytics>> {
         debug!("Getting top {} trending tokens", limit);
 
@@ -595,21 +584,21 @@ impl TokenAnalyticsService {
             .limit(limit)
             .build();
 
-        let mut cursor = self
+        let cursor = self
             .collection
             .find(filter)
             .with_options(options)
             .await
             .map_err(AgentError::Database)?;
 
-        let mut results = Vec::new();
-        while let Some(result) = cursor.next().await {
-            results.push(result.map_err(AgentError::Database)?);
-        }
-
-        Ok(results)
+        self.collect_cursor_results(cursor).await
     }
 
+    /// Get the most recent analytics data for a specific token.
+    /// Used for token comparison in the LLM service and for monitoring in the CLI.
+    /// 
+    /// # Arguments
+    /// * `address` - The token's address
     pub async fn get_token_analytics(&self, address: &str) -> AgentResult<Option<TokenAnalytics>> {
         debug!("Getting analytics for token: {}", address);
 
