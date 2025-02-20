@@ -198,7 +198,7 @@ async fn init_mongodb() -> Result<Arc<MongoDbPool>> {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    // logging::init_logging()?;
+    logging::init_logging()?;
 
     println!("Starting Cainam Core...");
 

@@ -3,7 +3,8 @@ use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
 use crate::logging::market_metrics::MarketSignalLog;
-use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
+use crate::logging::{log_market_metrics, log_market_signal, log_performance, RequestLogger};
+use crate::logging::performance_metrics::PerformanceMetrics;
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
@@ -16,6 +17,7 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use chrono::{Utc, Duration as ChronoDuration};
 use serde_json::json;
+use std::time::Instant;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenAnalyticsError {
@@ -65,6 +67,7 @@ impl TokenAnalyticsService {
         symbol: &str,
         address: &str,
     ) -> AgentResult<TokenAnalytics> {
+        let start_time = Instant::now();
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
         // Fetch token overview with retry logic
@@ -79,6 +82,15 @@ impl TokenAnalyticsService {
                     e
                 ));
                 logger.error(&err.to_string());
+
+                // Log performance failure
+                log_performance(PerformanceMetrics {
+                    operation: format!("fetch_token_info_{}", symbol),
+                    duration_ms: start_time.elapsed().as_millis() as u64,
+                    success: false,
+                    timestamp: Utc::now(),
+                });
+
                 return Err(err);
             }
         };
@@ -87,6 +99,15 @@ impl TokenAnalyticsService {
         if overview.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
             logger.error(&err.to_string());
+
+            // Log performance failure
+            log_performance(PerformanceMetrics {
+                operation: format!("fetch_token_info_{}", symbol),
+                duration_ms: start_time.elapsed().as_millis() as u64,
+                success: false,
+                timestamp: Utc::now(),
+            });
+
             return Err(err);
         }
 
@@ -108,6 +129,14 @@ impl TokenAnalyticsService {
             .insert_one(&analytics)
             .await
             .map_err(AgentError::Database)?;
+
+        // Log successful performance
+        log_performance(PerformanceMetrics {
+            operation: format!("fetch_token_info_{}", symbol),
+            duration_ms: start_time.elapsed().as_millis() as u64,
+            success: true,
+            timestamp: Utc::now(),
+        });
 
         Ok(analytics)
     }

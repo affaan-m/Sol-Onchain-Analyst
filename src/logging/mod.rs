@@ -1,10 +1,11 @@
+use crate::services::token_analytics::MarketMetrics;
 use market_metrics::MarketSignalLog;
 use performance_metrics::PerformanceMetrics;
 use serde::Serialize;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
-use crate::services::token_analytics::MarketMetrics;
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use std::time::Instant;
 
 pub mod market_metrics;
@@ -21,20 +22,20 @@ pub struct RequestLog {
     pub error: Option<String>,
 }
 
+#[allow(dead_code)]  // Fields are used when the logger is consumed by success()
 pub struct RequestLogger {
     module: String,
     action: String,
-
     start_time: Instant,
     request_id: String,
 }
 
+#[allow(dead_code)]  // Methods are used across the codebase in various service implementations
 impl RequestLogger {
     pub fn new(module: &str, action: &str) -> Self {
         Self {
             module: module.to_string(),
             action: action.to_string(),
-
             start_time: Instant::now(),
             request_id: uuid::Uuid::new_v4().to_string(),
         }
