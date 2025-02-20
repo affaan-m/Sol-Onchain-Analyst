@@ -22,11 +22,10 @@
 //! }
 //! ```
 
-use rig_mongodb::{MongoDbPool, bson::doc};
+use mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
 use std::sync::Arc;
 use anyhow::Result;
 use tracing::{debug, info};
-use crate::config::mongodb::MongoConfig;
 
 pub mod positions;
 pub mod sync;

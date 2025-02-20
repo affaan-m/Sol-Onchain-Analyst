@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
-    models::trending_token::TrendingToken,
+    models::token_trending::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
 };
 use dotenvy::dotenv;
@@ -57,10 +57,10 @@ async fn main() -> Result<()> {
 
     // Get database and collections
     let db = db_pool.database(&mongodb_database);
-    let trending_collection = db.collection::<TrendingToken>("trending_tokens");
+    let trending_collection = db.collection::<TrendingToken>("token_trending");
 
-    // Get tokens from the trending_tokens collection
-    info!("Fetching tokens from trending_tokens collection...");
+    // Get tokens from the token_trending collection
+    info!("Fetching tokens from token_trending collection...");
     let filter = doc! {};
     let mut cursor = trending_collection.find(filter).await?;
     let mut processed = 0;

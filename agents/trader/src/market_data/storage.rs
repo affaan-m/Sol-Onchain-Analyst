@@ -258,7 +258,7 @@ impl MarketDataStorage {
         }
     }
 
-    pub async fn get_trending_tokens_history(&self) -> Vec<(DateTime<Utc>, Vec<String>)> {
+    pub async fn get_token_trending_history(&self) -> Vec<(DateTime<Utc>, Vec<String>)> {
         let snapshots = self.market_snapshots.read().await;
         snapshots.iter()
             .map(|snapshot| (

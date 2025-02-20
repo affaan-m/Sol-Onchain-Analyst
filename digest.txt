@@ -17,7 +17,7 @@ Directory structure:
     ├── migrations/
     ├── scripts/
     │   ├── capture_token_analytics.rs
-    │   ├── capture_trending_tokens.rs
+    │   ├── capture_token_trending.rs
     │   └── setup_mongodb.rs
     ├── src/
     │   ├── error.rs
@@ -86,7 +86,7 @@ Directory structure:
     │   │   ├── mod.rs
     │   │   ├── token_analytics.rs
     │   │   ├── token_info.rs
-    │   │   └── trending_token.rs
+    │   │   └── token_trending.rs
     │   ├── personality/
     │   │   └── mod.rs
     │   ├── prompts/
@@ -297,8 +297,8 @@ name = "setup_mongodb"
 path = "scripts/setup_mongodb.rs"
 
 [[bin]]
-name = "capture_trending_tokens"
-path = "scripts/capture_trending_tokens.rs"
+name = "capture_token_trending"
+path = "scripts/capture_token_trending.rs"
 
 [[bin]]
 name = "capture_token_analytics"
@@ -464,14 +464,16 @@ File: memory-bank/activeContext.md
 # Active Context
 
 ## Current Focus
+
 - Market data capture and analysis system for Solana tokens
 - Two-phase data collection process:
   1. Trending token capture from Birdeye API
   2. Detailed token analytics collection for trending tokens
 
 ## Recent Changes
+
 - Split market data capture into two separate scripts:
-  1. `capture_trending_tokens.rs`: Fetches trending tokens and stores in MongoDB
+  1. `capture_token_trending.rs`: Fetches trending tokens and stores in MongoDB
   2. `capture_token_analytics.rs`: Processes trending tokens to get detailed analytics
 - Fixed MongoDB integration issues:
   - Corrected database connection handling
@@ -484,17 +486,19 @@ File: memory-bank/activeContext.md
   - Removed deprecated test scripts
 
 ## Active Decisions
+
 - Using MongoDB for data storage with specific collections:
-  - `trending_tokens`: Stores basic trending token data
+  - `token_trending`: Stores basic trending token data
   - `token_analytics`: Stores detailed token analytics and metrics
 - Implementing rate limiting (500ms delay) between API calls to respect Birdeye's limits
 - Using compound indexes for efficient querying by address and timestamp
 - Maintaining three core scripts:
   1. `setup_mongodb.rs` for database initialization
-  2. `capture_trending_tokens.rs` for trending token collection
+  2. `capture_token_trending.rs` for trending token collection
   3. `capture_token_analytics.rs` for detailed analytics
 
 ## Next Steps
+
 1. Implement automated scheduling for both capture scripts
 2. Add data validation and cleanup processes
 3. Develop analytics dashboard for monitoring token performance
@@ -503,6 +507,7 @@ File: memory-bank/activeContext.md
 6. Clean up deprecated scripts from repository
 
 ## Current Considerations
+
 - Need to handle API rate limits carefully
 - Consider implementing data archival strategy
 - Monitor MongoDB performance and indexing
@@ -777,7 +782,7 @@ This document outlines the collections within the `cainam` database, their purpo
 
 ### 1. Market Data Collections
 
-#### 1.1. `trending_tokens`
+#### 1.1. `token_trending`
 
 * **Purpose:** Stores trending token data from the Birdeye API. This is the initial point of discovery for potentially interesting tokens.
 * **API Endpoint:** `https://public-api.birdeye.so/defi/token_trending`
@@ -892,7 +897,7 @@ This document outlines the collections within the `cainam` database, their purpo
   * Single: `{ "social_sentiment.overall_score": 1 }`
   * Single: `{ "whale_activity_index": 1 }`
   * Single: `{ "rsi_14": 1 }`
-* **Relationship:** Fed by `trending_tokens` and Birdeye API calls. Generates data for `market_signals`.
+* **Relationship:** Fed by `token_trending` and Birdeye API calls. Generates data for `market_signals`.
 
 ### 2. Trading and Strategy Collections
 
@@ -1809,26 +1814,30 @@ File: memory-bank/techContext.md
 ## Core Technologies
 
 ### Backend
+
 - Rust (2021 edition)
 - Tokio async runtime
 - MongoDB for data storage
 - Birdeye API integration
 
 ### Database
+
 - MongoDB Atlas
 - Collections:
-  - `trending_tokens`
+  - `token_trending`
   - `token_analytics`
   - Vector store support for embeddings
 - Compound indexing for efficient queries
 
 ### APIs and Integration
+
 - Birdeye API
   - Token trending data
   - Token analytics and market data
   - Rate limited with 500ms delay between requests
 
 ### Development Tools
+
 - Cargo for build and dependency management
 - Environment configuration via `.env`
 - Tracing for logging and debugging
@@ -1836,6 +1845,7 @@ File: memory-bank/techContext.md
 ## Key Dependencies
 
 ### Core
+
 ```toml
 anyhow = "1.0"
 async-trait = "0.1"
@@ -1846,6 +1856,7 @@ tokio = { version = "1", features = ["full"] }
 ```
 
 ### Blockchain
+
 ```toml
 solana-sdk = "2.2.1"
 solana-program = "2.2.1"
@@ -1853,6 +1864,7 @@ spl-token = "7.0"
 ```
 
 ### Utilities
+
 ```toml
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
@@ -1862,6 +1874,7 @@ dotenvy = "0.15.7"
 ## Architecture Components
 
 ### Data Collection
+
 1. Trending Token Capture
    - Fetches trending tokens from Birdeye
    - Stores in MongoDB with timestamps
@@ -1873,17 +1886,20 @@ dotenvy = "0.15.7"
    - Stores comprehensive market data
 
 ### Services
+
 - TokenAnalyticsService
 - TokenDataService
 - BirdeyeClient
 
 ## Development Setup
+
 1. MongoDB Atlas cluster configuration
 2. Environment variables in `.env`
 3. Rust toolchain setup
 4. Birdeye API key configuration
 
 ## Technical Constraints
+
 - Birdeye API rate limits
 - MongoDB Atlas connection limits
 - Memory usage for vector operations
@@ -1975,7 +1991,7 @@ use anyhow::{Context, Result};
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
-    models::trending_token::TrendingToken,
+    models::token_trending::TrendingToken,
     services::token_analytics::TokenAnalyticsService,
 };
 use dotenvy::dotenv;
@@ -2030,10 +2046,10 @@ async fn main() -> Result<()> {
 
     // Get database and collections
     let db = db_pool.database(&mongodb_database);
-    let trending_collection = db.collection::<TrendingToken>("trending_tokens");
+    let trending_collection = db.collection::<TrendingToken>("token_trending");
 
-    // Get tokens from the trending_tokens collection
-    info!("Fetching tokens from trending_tokens collection...");
+    // Get tokens from the token_trending collection
+    info!("Fetching tokens from token_trending collection...");
     let filter = doc! {};
     let mut cursor = trending_collection.find(filter).await?;
     let mut processed = 0;
@@ -2087,13 +2103,13 @@ async fn main() -> Result<()> {
 
 
 ================================================
-File: scripts/capture_trending_tokens.rs
+File: scripts/capture_token_trending.rs
 ================================================
 use anyhow::{Context, Result};
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
-    models::trending_token::TrendingToken,
+    models::token_trending::TrendingToken,
 };
 use dotenvy::dotenv;
 use mongodb::bson::{doc, oid::ObjectId, DateTime};
@@ -2142,9 +2158,9 @@ async fn main() -> Result<()> {
 
     let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key));
     info!("Initialized Birdeye client");
-    
+
     // Get trending tokens collection
-    let trending_collection = db.collection::<TrendingToken>("trending_tokens");
+    let trending_collection = db.collection::<TrendingToken>("token_trending");
 
     // Create compound index on address and timestamp
     let index = IndexModel::builder()
@@ -2157,11 +2173,11 @@ async fn main() -> Result<()> {
     trending_collection.create_index(index).await?;
 
     info!("Fetching trending tokens from Birdeye...");
-    let trending_tokens = birdeye_client.get_trending_tokens().await?;
+    let token_trending = birdeye_client.get_token_trending().await?;
     let current_timestamp = DateTime::now();
 
     let mut tokens_stored = 0;
-    for token in trending_tokens {
+    for token in token_trending {
         // Add timestamp and id to token before storing
         let token_with_meta = TrendingToken {
             id: Some(ObjectId::new()),
@@ -2241,31 +2257,31 @@ async fn main() -> Result<()> {
 
     // Drop existing time series collections
     info!("Dropping existing time series collections...");
-    match db.run_command(doc! { "drop": "trending_tokens" }).await {
-        Ok(_) => info!("Dropped trending_tokens collection"),
-        Err(e) => info!("Error dropping trending_tokens: {}", e),
+    match db.run_command(doc! { "drop": "token_trending" }).await {
+        Ok(_) => info!("Dropped token_trending collection"),
+        Err(e) => info!("Error dropping token_trending: {}", e),
     }
     match db.run_command(doc! { "drop": "token_analytics" }).await {
         Ok(_) => info!("Dropped token_analytics collection"),
         Err(e) => info!("Error dropping token_analytics: {}", e),
     }
 
-    // Setup trending_tokens collection
-    info!("Setting up trending_tokens collection...");
+    // Setup token_trending collection
+    info!("Setting up token_trending collection...");
     match db
         .run_command(doc! {
-            "create": "trending_tokens"
+            "create": "token_trending"
         })
         .await
     {
-        Ok(_) => info!("Created trending_tokens collection"),
-        Err(e) => info!("trending_tokens collection may already exist: {}", e),
+        Ok(_) => info!("Created token_trending collection"),
+        Err(e) => info!("token_trending collection may already exist: {}", e),
     }
 
     // Create compound index for time-based queries
     match db
         .run_command(doc! {
-            "createIndexes": "trending_tokens",
+            "createIndexes": "token_trending",
             "indexes": [{
                 "key": { "timestamp": -1 },
                 "name": "timestamp_desc"
@@ -2273,17 +2289,17 @@ async fn main() -> Result<()> {
         })
         .await
     {
-        Ok(_) => info!("Created timestamp index for trending_tokens"),
+        Ok(_) => info!("Created timestamp index for token_trending"),
         Err(e) => info!("Index may already exist: {}", e),
     }
 
-    // Create search index for trending_tokens
-    info!("Setting up search index for trending_tokens...");
+    // Create search index for token_trending
+    info!("Setting up search index for token_trending...");
     match db
         .run_command(doc! {
-            "createSearchIndexes": "trending_tokens",
+            "createSearchIndexes": "token_trending",
             "indexes": [{
-                "name": "trending_tokens_index",
+                "name": "token_trending_index",
                 "definition": {
                     "mappings": {
                         "dynamic": true,
@@ -2309,7 +2325,7 @@ async fn main() -> Result<()> {
         })
         .await
     {
-        Ok(_) => info!("Created search index for trending_tokens"),
+        Ok(_) => info!("Created search index for token_trending"),
         Err(e) => info!("Search index may already exist: {}", e),
     }
 
@@ -4271,7 +4287,7 @@ File: src/birdeye/api.rs
 use super::BIRDEYE_API_URL;
 use crate::config::BirdeyeConfig;
 use crate::models::token_info::TokenExtensions;
-use crate::models::trending_token::{TrendingToken, TrendingTokenData};
+use crate::models::token_trending::{TrendingToken, TrendingTokenData};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -4550,7 +4566,7 @@ pub trait BirdeyeApi: Send + Sync {
     async fn get_token_overview(&self, address: &str) -> Result<TokenOverviewResponse>;
     
     /// Get trending tokens data
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>>;
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>>;
 }
 
 pub struct BirdeyeClient {
@@ -4632,7 +4648,7 @@ impl BirdeyeApi for BirdeyeClient {
         }
     }
 
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>> {
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
         debug!("Fetching trending tokens");
         let endpoint = "/defi/token_trending?sort_by=rank&sort_type=asc&limit=20";
         let response: ApiResponse<TrendingTokenData> = self
@@ -4658,7 +4674,7 @@ impl BirdeyeApi for BirdeyeClient {
 pub struct MockBirdeyeApi {
     pub market_data: Option<TokenMarketResponse>,
     pub token_overview: Option<TokenOverviewResponse>,
-    pub trending_tokens: Option<Vec<TrendingToken>>,
+    pub token_trending: Option<Vec<TrendingToken>>,
 }
 
 #[cfg(test)]
@@ -4667,7 +4683,7 @@ impl MockBirdeyeApi {
         MockBirdeyeApi {
             market_data: None,
             token_overview: None,
-            trending_tokens: None,
+            token_trending: None,
         }
     }
 }
@@ -4683,8 +4699,8 @@ impl BirdeyeApi for MockBirdeyeApi {
         self.token_overview.clone().ok_or(anyhow!("Mock not set"))
     }
 
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>> {
-        self.trending_tokens.clone().ok_or(anyhow!("Mock not set"))
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
+        self.token_trending.clone().ok_or(anyhow!("Mock not set"))
     }
 }
 
@@ -4696,7 +4712,7 @@ pub mod api;
 use crate::models::token_info::TokenInfo;
 pub use api::{BirdeyeApi, TokenMarketResponse};
 use async_trait::async_trait;
-pub use crate::models::trending_token::TrendingToken;
+pub use crate::models::token_trending::TrendingToken;
 
 pub const BIRDEYE_API_URL: &str = "https://public-api.birdeye.so";
 const RATE_LIMIT_DELAY: u64 = 500; // 500ms between requests
@@ -4713,7 +4729,7 @@ pub trait BirdeyeClient: Send + Sync {
     async fn get_token_info(&self, symbol: &str) -> Result<TokenInfo, anyhow::Error>;
     async fn get_token_info_by_address(&self, address: &str) -> Result<TokenInfo, anyhow::Error>;
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse, anyhow::Error>;
-    async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>, anyhow::Error>;
+    async fn get_token_trending(&self, limit: usize) -> Result<Vec<TrendingToken>, anyhow::Error>;
 }
 
 
@@ -6315,7 +6331,7 @@ impl<M: CompletionModel> DataSyncService<M> {
         
         // Fetch trending tokens
         info!("Fetching trending tokens from BirdEye");
-        let trends = self.data_provider.get_trending_tokens(20).await?;
+        let trends = self.data_provider.get_token_trending(20).await?;
         info!("Found {} trending tokens", trends.len());
 
         // Insert token states and analyze trading opportunities
@@ -6941,7 +6957,7 @@ use serde::{Deserialize, Serialize};
 pub mod market_signal;
 pub mod token_analytics;
 pub mod token_info;
-pub mod trending_token;
+pub mod token_trending;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeStatus;
@@ -7148,7 +7164,7 @@ pub struct TokenExtensions {
 
 
 ================================================
-File: src/models/trending_token.rs
+File: src/models/token_trending.rs
 ================================================
 use bson::{oid::ObjectId, DateTime};
 use serde::{Deserialize, Serialize};

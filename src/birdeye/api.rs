@@ -1,7 +1,7 @@
 use super::BIRDEYE_API_URL;
 use crate::config::BirdeyeConfig;
 use crate::models::token_info::TokenExtensions;
-use crate::models::trending_token::{TrendingToken, TrendingTokenData};
+use crate::models::token_trending::{TrendingToken, TrendingTokenData};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -280,7 +280,7 @@ pub trait BirdeyeApi: Send + Sync {
     async fn get_token_overview(&self, address: &str) -> Result<TokenOverviewResponse>;
     
     /// Get trending tokens data
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>>;
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>>;
 }
 
 pub struct BirdeyeClient {
@@ -362,7 +362,7 @@ impl BirdeyeApi for BirdeyeClient {
         }
     }
 
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>> {
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
         debug!("Fetching trending tokens");
         let endpoint = "/defi/token_trending?sort_by=rank&sort_type=asc&limit=20";
         let response: ApiResponse<TrendingTokenData> = self
@@ -388,7 +388,7 @@ impl BirdeyeApi for BirdeyeClient {
 pub struct MockBirdeyeApi {
     pub market_data: Option<TokenMarketResponse>,
     pub token_overview: Option<TokenOverviewResponse>,
-    pub trending_tokens: Option<Vec<TrendingToken>>,
+    pub token_trending: Option<Vec<TrendingToken>>,
 }
 
 #[cfg(test)]
@@ -397,7 +397,7 @@ impl MockBirdeyeApi {
         MockBirdeyeApi {
             market_data: None,
             token_overview: None,
-            trending_tokens: None,
+            token_trending: None,
         }
     }
 }
@@ -413,7 +413,7 @@ impl BirdeyeApi for MockBirdeyeApi {
         self.token_overview.clone().ok_or(anyhow!("Mock not set"))
     }
 
-    async fn get_trending_tokens(&self) -> Result<Vec<TrendingToken>> {
-        self.trending_tokens.clone().ok_or(anyhow!("Mock not set"))
+    async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
+        self.token_trending.clone().ok_or(anyhow!("Mock not set"))
     }
 }

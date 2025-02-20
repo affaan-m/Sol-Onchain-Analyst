@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
-    models::trending_token::TrendingToken,
+    models::token_trending::TrendingToken,
 };
 use dotenvy::dotenv;
 use mongodb::bson::{doc, oid::ObjectId, DateTime};
@@ -51,9 +51,9 @@ async fn main() -> Result<()> {
 
     let birdeye_client: Arc<dyn BirdeyeApi> = Arc::new(BirdeyeClient::new(birdeye_api_key));
     info!("Initialized Birdeye client");
-    
+
     // Get trending tokens collection
-    let trending_collection = db.collection::<TrendingToken>("trending_tokens");
+    let trending_collection = db.collection::<TrendingToken>("token_trending");
 
     // Create compound index on address and timestamp
     let index = IndexModel::builder()
@@ -66,11 +66,11 @@ async fn main() -> Result<()> {
     trending_collection.create_index(index).await?;
 
     info!("Fetching trending tokens from Birdeye...");
-    let trending_tokens = birdeye_client.get_trending_tokens().await?;
+    let token_trending = birdeye_client.get_token_trending().await?;
     let current_timestamp = DateTime::now();
 
     let mut tokens_stored = 0;
-    for token in trending_tokens {
+    for token in token_trending {
         // Add timestamp and id to token before storing
         let token_with_meta = TrendingToken {
             id: Some(ObjectId::new()),

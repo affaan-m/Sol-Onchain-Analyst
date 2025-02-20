@@ -44,31 +44,31 @@ async fn main() -> Result<()> {
 
     // Drop existing time series collections
     info!("Dropping existing time series collections...");
-    match db.run_command(doc! { "drop": "trending_tokens" }).await {
-        Ok(_) => info!("Dropped trending_tokens collection"),
-        Err(e) => info!("Error dropping trending_tokens: {}", e),
+    match db.run_command(doc! { "drop": "token_trending" }).await {
+        Ok(_) => info!("Dropped token_trending collection"),
+        Err(e) => info!("Error dropping token_trending: {}", e),
     }
     match db.run_command(doc! { "drop": "token_analytics" }).await {
         Ok(_) => info!("Dropped token_analytics collection"),
         Err(e) => info!("Error dropping token_analytics: {}", e),
     }
 
-    // Setup trending_tokens collection
-    info!("Setting up trending_tokens collection...");
+    // Setup token_trending collection
+    info!("Setting up token_trending collection...");
     match db
         .run_command(doc! {
-            "create": "trending_tokens"
+            "create": "token_trending"
         })
         .await
     {
-        Ok(_) => info!("Created trending_tokens collection"),
-        Err(e) => info!("trending_tokens collection may already exist: {}", e),
+        Ok(_) => info!("Created token_trending collection"),
+        Err(e) => info!("token_trending collection may already exist: {}", e),
     }
 
     // Create compound index for time-based queries
     match db
         .run_command(doc! {
-            "createIndexes": "trending_tokens",
+            "createIndexes": "token_trending",
             "indexes": [{
                 "key": { "timestamp": -1 },
                 "name": "timestamp_desc"
@@ -76,17 +76,17 @@ async fn main() -> Result<()> {
         })
         .await
     {
-        Ok(_) => info!("Created timestamp index for trending_tokens"),
+        Ok(_) => info!("Created timestamp index for token_trending"),
         Err(e) => info!("Index may already exist: {}", e),
     }
 
-    // Create search index for trending_tokens
-    info!("Setting up search index for trending_tokens...");
+    // Create search index for token_trending
+    info!("Setting up search index for token_trending...");
     match db
         .run_command(doc! {
-            "createSearchIndexes": "trending_tokens",
+            "createSearchIndexes": "token_trending",
             "indexes": [{
-                "name": "trending_tokens_index",
+                "name": "token_trending_index",
                 "definition": {
                     "mappings": {
                         "dynamic": true,
@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
         })
         .await
     {
-        Ok(_) => info!("Created search index for trending_tokens"),
+        Ok(_) => info!("Created search index for token_trending"),
         Err(e) => info!("Search index may already exist: {}", e),
     }
 
@@ -154,22 +154,22 @@ async fn main() -> Result<()> {
                     "mappings": {
                         "dynamic": true,
                         "fields": {
-                            "token_address": { "type": "string"},
-                            "token_name": { "type": "string"},
-                            "token_symbol": { "type": "string"},
-                            "timestamp": { "type": "date" },
-                            "liquidity": { "type": "number" },
-                            "volume_24h": { "type": "number" },
-                            "volume_change_24h": { "type": "number" },
-                            "market_cap": { "type": "number" },
+                            "bollinger_lower": { "type": "number" },
+                            "bollinger_upper": { "type": "number" },
                             "fully_diluted_market_cap": { "type": "number" },
+                            "liquidity": { "type": "number" },
+                            "macd": { "type": "number" },
+                            "macd_signal": { "type": "number" },
+                            "market_cap": { "type": "number" },
                             "price": { "type": "number" },
                             "price_change_24h": { "type": "number" },
                             "rsi_14": { "type": "number" },
-                            "macd": { "type": "number" },
-                            "macd_signal": { "type": "number" },
-                            "bollinger_upper": { "type": "number" },
-                            "bollinger_lower": { "type": "number" }
+                            "timestamp": { "type": "date" },
+                            "token_address": { "type": "string"},
+                            "token_name": { "type": "string"},
+                            "token_symbol": { "type": "string"},
+                            "volume_24h": { "type": "number" },
+                            "volume_change_24h": { "type": "number" }
                         }
                     }
                 }

@@ -22,7 +22,7 @@ pub struct MarketMetrics {
     pub symbol: String,
     pub price: f64,
     pub volume_24h: Option<f64>,
-    pub signal_type: Option<String>,
+    pub signal_type: Option<String>,    
     pub confidence: Option<f64>,
 }
 

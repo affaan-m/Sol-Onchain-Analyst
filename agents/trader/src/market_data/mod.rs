@@ -124,7 +124,7 @@ pub struct SocialMetrics {
 #[async_trait]
 pub trait DataProvider: Send + Sync + std::fmt::Debug {
     async fn get_token_metadata(&self, token_address: &str) -> Result<EnhancedTokenMetadata>;
-    async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<MarketTrend>>;
+    async fn get_token_trending(&self, limit: usize) -> Result<Vec<MarketTrend>>;
     async fn get_historical_prices(&self, address: &str, timeframe: &str) -> Result<Vec<PricePoint>>;
     async fn get_macro_indicators(&self) -> Result<MacroIndicator>;
     async fn get_social_metrics(&self, address: &str) -> Result<SocialMetrics>;
@@ -158,12 +158,12 @@ impl DataProvider for AggregatedDataProvider {
         Err(anyhow::anyhow!("No provider could fetch token metadata"))
     }
 
-    async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<MarketTrend>> {
+    async fn get_token_trending(&self, limit: usize) -> Result<Vec<MarketTrend>> {
         let mut all_trends = Vec::new();
         
         // Collect trends from all providers
         for provider in &self.providers {
-            if let Ok(mut trends) = provider.get_trending_tokens(limit).await {
+            if let Ok(mut trends) = provider.get_token_trending(limit).await {
                 all_trends.append(&mut trends);
             }
         }
@@ -330,7 +330,7 @@ mod tests {
             })
         }
 
-        async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<MarketTrend>> {
+        async fn get_token_trending(&self, limit: usize) -> Result<Vec<MarketTrend>> {
             let mut trends = Vec::new();
             for i in 0..limit {
                 trends.push(MarketTrend {

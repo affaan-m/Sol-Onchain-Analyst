@@ -3,26 +3,30 @@
 ## Core Technologies
 
 ### Backend
+
 - Rust (2021 edition)
 - Tokio async runtime
 - MongoDB for data storage
 - Birdeye API integration
 
 ### Database
+
 - MongoDB Atlas
 - Collections:
-  - `trending_tokens`
+  - `token_trending`
   - `token_analytics`
   - Vector store support for embeddings
 - Compound indexing for efficient queries
 
 ### APIs and Integration
+
 - Birdeye API
   - Token trending data
   - Token analytics and market data
   - Rate limited with 500ms delay between requests
 
 ### Development Tools
+
 - Cargo for build and dependency management
 - Environment configuration via `.env`
 - Tracing for logging and debugging
@@ -30,6 +34,7 @@
 ## Key Dependencies
 
 ### Core
+
 ```toml
 anyhow = "1.0"
 async-trait = "0.1"
@@ -40,6 +45,7 @@ tokio = { version = "1", features = ["full"] }
 ```
 
 ### Blockchain
+
 ```toml
 solana-sdk = "2.2.1"
 solana-program = "2.2.1"
@@ -47,6 +53,7 @@ spl-token = "7.0"
 ```
 
 ### Utilities
+
 ```toml
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
@@ -56,6 +63,7 @@ dotenvy = "0.15.7"
 ## Architecture Components
 
 ### Data Collection
+
 1. Trending Token Capture
    - Fetches trending tokens from Birdeye
    - Stores in MongoDB with timestamps
@@ -67,17 +75,20 @@ dotenvy = "0.15.7"
    - Stores comprehensive market data
 
 ### Services
+
 - TokenAnalyticsService
 - TokenDataService
 - BirdeyeClient
 
 ## Development Setup
+
 1. MongoDB Atlas cluster configuration
 2. Environment variables in `.env`
 3. Rust toolchain setup
 4. Birdeye API key configuration
 
 ## Technical Constraints
+
 - Birdeye API rate limits
 - MongoDB Atlas connection limits
 - Memory usage for vector operations

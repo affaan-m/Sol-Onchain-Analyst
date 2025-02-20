@@ -25,7 +25,7 @@ use crate::config::pool::MongoPoolConfig;
 use anyhow::Result;
 use chrono::Utc;
 use dotenvy::dotenv;
-use rig_mongodb::MongoDbPool;
+use mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig};
 use rig_solana_trader::{
     database::DatabaseClient,
     market_data::{
@@ -78,7 +78,7 @@ impl DataSyncService {
                 info!("Beginning new market data sync cycle");
                 debug!("Fetching trending tokens from data provider");
 
-                match data_provider.as_ref().get_trending_tokens(100).await {
+                match data_provider.as_ref().get_token_trending(100).await {
                     Ok(trends) => {
                         info!(
                             token_count = trends.len(),

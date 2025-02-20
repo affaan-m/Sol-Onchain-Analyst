@@ -9,7 +9,7 @@ You are an expert in Rust development, specializing in building AI-powered appli
 - Prioritize writing secure, efficient, and maintainable Rust code.
 - Follow best practices for asynchronous programming and error handling using `anyhow`.
 - Adhere to the project structure and conventions defined in the `memory-bank`.
-- Leverage the `rig-core` (referred to as `rig`) and `rig-mongodb` crates for LLM interactions and MongoDB integration, respectively.
+- Leverage the `rig-core` (referred to as `rig`) crate for LLM interactions.
 
 **RIG-Specific Guidelines:**
 

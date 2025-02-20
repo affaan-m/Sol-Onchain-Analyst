@@ -61,7 +61,7 @@ impl<M: CompletionModel> DataSyncService<M> {
         
         // Fetch trending tokens
         info!("Fetching trending tokens from BirdEye");
-        let trends = self.data_provider.get_trending_tokens(20).await?;
+        let trends = self.data_provider.get_token_trending(20).await?;
         info!("Found {} trending tokens", trends.len());
 
         // Insert token states and analyze trading opportunities

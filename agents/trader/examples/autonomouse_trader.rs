@@ -98,11 +98,11 @@ async fn main() -> Result<()> {
     // Main trading loop
     loop {
         // 1. Get trending tokens
-        let trending_tokens = market_data.get_trending_tokens(10).await?;
-        info!("Found {} trending tokens to analyze", trending_tokens.len());
+        let token_trending = market_data.get_token_trending(10).await?;
+        info!("Found {} trending tokens to analyze", token_trending.len());
 
         // 2. Process each token
-        for token in trending_tokens {
+        for token in token_trending {
             if let Some(result) = pipeline.process_token(&token.address).await? {
                 // Record trade result
                 performance_analyzer.record_trade(result.into());

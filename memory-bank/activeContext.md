@@ -1,14 +1,16 @@
 # Active Context
 
 ## Current Focus
+
 - Market data capture and analysis system for Solana tokens
 - Two-phase data collection process:
   1. Trending token capture from Birdeye API
   2. Detailed token analytics collection for trending tokens
 
 ## Recent Changes
+
 - Split market data capture into two separate scripts:
-  1. `capture_trending_tokens.rs`: Fetches trending tokens and stores in MongoDB
+  1. `capture_token_trending.rs`: Fetches trending tokens and stores in MongoDB
   2. `capture_token_analytics.rs`: Processes trending tokens to get detailed analytics
 - Fixed MongoDB integration issues:
   - Corrected database connection handling
@@ -21,17 +23,19 @@
   - Removed deprecated test scripts
 
 ## Active Decisions
+
 - Using MongoDB for data storage with specific collections:
-  - `trending_tokens`: Stores basic trending token data
+  - `token_trending`: Stores basic trending token data
   - `token_analytics`: Stores detailed token analytics and metrics
 - Implementing rate limiting (500ms delay) between API calls to respect Birdeye's limits
 - Using compound indexes for efficient querying by address and timestamp
 - Maintaining three core scripts:
   1. `setup_mongodb.rs` for database initialization
-  2. `capture_trending_tokens.rs` for trending token collection
+  2. `capture_token_trending.rs` for trending token collection
   3. `capture_token_analytics.rs` for detailed analytics
 
 ## Next Steps
+
 1. Implement automated scheduling for both capture scripts
 2. Add data validation and cleanup processes
 3. Develop analytics dashboard for monitoring token performance
@@ -40,6 +44,7 @@
 6. Clean up deprecated scripts from repository
 
 ## Current Considerations
+
 - Need to handle API rate limits carefully
 - Consider implementing data archival strategy
 - Monitor MongoDB performance and indexing

@@ -312,21 +312,21 @@ impl BirdEyeProvider {
     async fn get_trending_by_rank(&self) -> Result<Vec<MarketTrend>> {
         debug!("Fetching trending tokens by rank");
         let url = "https://public-api.birdeye.so/defi/token_trending?sort_by=rank&sort_type=asc&offset=0&limit=20";
-        self.get_trending_tokens_internal(url).await
+        self.get_token_trending_internal(url).await
     }
 
     #[instrument(skip(self), fields(api = "birdeye"))]
     async fn get_trending_by_volume(&self) -> Result<Vec<MarketTrend>> {
         debug!("Fetching trending tokens by volume");
         let url = "https://public-api.birdeye.so/defi/token_trending?sort_by=volume_24hUSD&sort_type=asc&offset=0&limit=20";
-        self.get_trending_tokens_internal(url).await
+        self.get_token_trending_internal(url).await
     }
 
     #[instrument(skip(self), fields(api = "birdeye"))]
     async fn get_trending_by_liquidity(&self) -> Result<Vec<MarketTrend>> {
         debug!("Fetching trending tokens by liquidity");
         let url = "https://public-api.birdeye.so/defi/token_trending?sort_by=liquidity&sort_type=asc&offset=0&limit=20";
-        self.get_trending_tokens_internal(url).await
+        self.get_token_trending_internal(url).await
     }
 
     async fn get_new_listings(&self, limit: usize) -> Result<Vec<MarketTrend>> {
@@ -476,7 +476,7 @@ impl BirdEyeProvider {
     }
 
     #[instrument(skip(self), fields(api = "birdeye"))]
-    async fn get_trending_tokens_internal(&self, url: &str) -> Result<Vec<MarketTrend>> {
+    async fn get_token_trending_internal(&self, url: &str) -> Result<Vec<MarketTrend>> {
         debug!(url = %url, "Making API request");
 
         let response = self
@@ -574,7 +574,7 @@ impl DataProvider for BirdEyeProvider {
     }
 
     #[instrument(skip(self), fields(api = "birdeye"))]
-    async fn get_trending_tokens(&self, _limit: usize) -> Result<Vec<MarketTrend>> {
+    async fn get_token_trending(&self, _limit: usize) -> Result<Vec<MarketTrend>> {
         debug!("Fetching trending tokens from all sources");
         let mut all_trends = Vec::new();
 

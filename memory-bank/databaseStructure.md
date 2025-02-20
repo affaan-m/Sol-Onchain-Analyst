@@ -6,7 +6,7 @@ This document outlines the collections within the `cainam` database, their purpo
 
 ### 1. Market Data Collections
 
-#### 1.1. `trending_tokens`
+#### 1.1. `token_trending`
 
 * **Purpose:** Stores trending token data from the Birdeye API. This is the initial point of discovery for potentially interesting tokens.
 * **API Endpoint:** `https://public-api.birdeye.so/defi/token_trending`
@@ -121,7 +121,7 @@ This document outlines the collections within the `cainam` database, their purpo
   * Single: `{ "social_sentiment.overall_score": 1 }`
   * Single: `{ "whale_activity_index": 1 }`
   * Single: `{ "rsi_14": 1 }`
-* **Relationship:** Fed by `trending_tokens` and Birdeye API calls. Generates data for `market_signals`.
+* **Relationship:** Fed by `token_trending` and Birdeye API calls. Generates data for `market_signals`.
 
 ### 2. Trading and Strategy Collections
 

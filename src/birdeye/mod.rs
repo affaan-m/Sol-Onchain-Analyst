@@ -2,7 +2,7 @@ pub mod api;
 use crate::models::token_info::TokenInfo;
 pub use api::{BirdeyeApi, TokenMarketResponse};
 use async_trait::async_trait;
-pub use crate::models::trending_token::TrendingToken;
+pub use crate::models::token_trending::TrendingToken;
 
 pub const BIRDEYE_API_URL: &str = "https://public-api.birdeye.so";
 const RATE_LIMIT_DELAY: u64 = 500; // 500ms between requests
@@ -19,5 +19,5 @@ pub trait BirdeyeClient: Send + Sync {
     async fn get_token_info(&self, symbol: &str) -> Result<TokenInfo, anyhow::Error>;
     async fn get_token_info_by_address(&self, address: &str) -> Result<TokenInfo, anyhow::Error>;
     async fn get_market_data(&self, address: &str) -> Result<TokenMarketResponse, anyhow::Error>;
-    async fn get_trending_tokens(&self, limit: usize) -> Result<Vec<TrendingToken>, anyhow::Error>;
+    async fn get_token_trending(&self, limit: usize) -> Result<Vec<TrendingToken>, anyhow::Error>;
 }
