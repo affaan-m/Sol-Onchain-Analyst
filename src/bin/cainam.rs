@@ -125,6 +125,12 @@ async fn main() -> Result<()> {
                 .fetch_and_store_token_info(&overview.symbol, &address)
                 .await?;
             
+            // Get AI analysis of the signals
+            let signal_analysis = analytics_llm.analyze_query(&format!(
+                "Analyze the market signals and technical indicators for {} ({}) and provide trading insights.",
+                overview.name, overview.symbol
+            )).await?;
+            
             if let Some(signal) = analytics_service.generate_market_signals(&analytics).await? {
                 println!("\nMarket Signals for {} ({}):", overview.name, overview.symbol);
                 println!("Signal Type: {:?}", signal.signal_type);
@@ -136,6 +142,22 @@ async fn main() -> Result<()> {
                 if let Some(volume_change) = &signal.volume_change_24h {
                     println!("Volume Change (24h): {:.2}%", volume_change);
                 }
+                
+                // Get relevant historical analytics
+                if let Ok(relevant_data) = analytics_service.get_relevant_analytics(&format!(
+                    "Recent trading activity for {} token", overview.symbol
+                )).await {
+                    println!("\nRecent Trading Activity:");
+                    for data in relevant_data.iter().take(3) {
+                        println!("  Time: {}", data.timestamp);
+                        println!("  Price: ${:.8}", data.price);
+                        if let Some(vol) = &data.volume_24h {
+                            println!("  Volume: ${:.2}", vol);
+                        }
+                    }
+                }
+                
+                println!("\nAI Analysis:\n{}", signal_analysis);
             } else {
                 println!("\nNo significant market signals detected.");
             }
@@ -147,6 +169,14 @@ async fn main() -> Result<()> {
             println!("Press Ctrl+C to stop.");
 
             loop {
+                // Get trending tokens to compare with monitored tokens
+                if let Ok(trending) = analytics_service.get_trending_tokens(5).await {
+                    println!("\nTop Trending Tokens:");
+                    for token in trending {
+                        println!("  {} (${:.8})", token.token_symbol, token.price);
+                    }
+                }
+
                 for address in &addresses {
                     match birdeye.get_token_overview(address).await {
                         Ok(overview) => {
@@ -154,14 +184,23 @@ async fn main() -> Result<()> {
                                 .fetch_and_store_token_info(&overview.symbol, address)
                                 .await?;
                             
-                            if let Some(signal) = analytics_service.generate_market_signals(&analytics).await? {
-                                println!("\n[{}] Signal for {} ({}):", 
-                                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                                    overview.name,
-                                    overview.symbol
-                                );
-                                println!("Type: {:?} (Confidence: {:.2})", signal.signal_type, signal.confidence);
-                                println!("Price: ${:.8} ({:+.2}%)", overview.price, overview.price_change_24h_percent);
+                            // Get token analytics history
+                            if let Ok(Some(token_data)) = analytics_service.get_token_analytics(address).await {
+                                if let Some(signal) = analytics_service.generate_market_signals(&analytics).await? {
+                                    println!("\n[{}] Signal for {} ({}):", 
+                                        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                                        overview.name,
+                                        overview.symbol
+                                    );
+                                    println!("Type: {:?} (Confidence: {:.2})", signal.signal_type, signal.confidence);
+                                    println!("Price: ${:.8} ({:+.2}%)", overview.price, overview.price_change_24h_percent);
+                                    
+                                    // Compare with historical data
+                                    if let Some(prev_price) = token_data.price.to_string().parse::<f64>().ok() {
+                                        let price_diff = ((overview.price - prev_price) / prev_price) * 100.0;
+                                        println!("Price Change since last check: {:.2}%", price_diff);
+                                    }
+                                }
                             }
                         }
                         Err(e) => {
