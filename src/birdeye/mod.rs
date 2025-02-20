@@ -1,4 +1,5 @@
 pub mod api;
+
 use crate::models::token_info::TokenInfo;
 pub use api::BirdeyeApi;
 pub use crate::models::market_data::TokenMarketResponse;
@@ -6,7 +7,6 @@ use async_trait::async_trait;
 pub use crate::models::token_trending::TrendingToken;
 
 pub const BIRDEYE_API_URL: &str = "https://public-api.birdeye.so";
-const RATE_LIMIT_DELAY: u64 = 500; // 500ms between requests
 
 pub const TOKEN_ADDRESSES: &[(&str, &str)] = &[
     ("SOL", "So11111111111111111111111111111111111111112"),

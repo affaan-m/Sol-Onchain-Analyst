@@ -1,7 +1,6 @@
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::{AgentConfig, mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig}},
-    error::{AgentError, AgentResult},
     services::{
         token_analytics::TokenAnalyticsService,
         token_analytics_llm::TokenAnalyticsLLM,
@@ -55,7 +54,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    let subscriber = FmtSubscriber::builder()
+    let _subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .init();
 

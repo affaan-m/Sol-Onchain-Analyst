@@ -161,7 +161,7 @@ impl MongoDbPool {
         Ok(Arc::new(MongoDbPool { client, config, db }))
     }
 
-    pub fn database(&self, name: &str) -> mongodb::Database {
+    pub fn database(&self, _name: &str) -> mongodb::Database {
         self.db.clone()
     }
 
@@ -217,7 +217,7 @@ impl TokenAnalyticsDataExt for MongoDbPool {
         &self,
         collection_name: &str,
         filter: Option<Document>,
-        limit: i64,
+        _limit: i64,
     ) -> Result<Vec<Document>> {
         let collection = self.db.collection::<Document>(collection_name);
 

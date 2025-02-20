@@ -7,6 +7,7 @@ use rig::completion::Prompt;
 use serde_json::Value;
 use std::sync::Arc;
 use tracing::{debug, info};
+use anyhow::Result;
 
 pub struct TokenAnalyticsLLM {
     analytics_service: Arc<TokenAnalyticsService>,

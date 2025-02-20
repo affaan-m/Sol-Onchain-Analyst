@@ -12,7 +12,7 @@ use bigdecimal::BigDecimal;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use bson;
 
 pub struct TradingAgent {

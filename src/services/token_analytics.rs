@@ -7,9 +7,8 @@ use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
 use crate::birdeye::api::TokenOverviewResponse;
-use rig::providers::openai::Client as OpenAIClient;
 use bigdecimal::{BigDecimal, ToPrimitive};
-use bson::{doc, DateTime, Document, oid::ObjectId};
+use bson::{doc, DateTime};
 use futures::StreamExt;
 use mongodb::{options::{FindOptions, FindOneOptions}, Collection};
 use std::sync::Arc;

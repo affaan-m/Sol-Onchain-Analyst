@@ -1,7 +1,7 @@
 use super::BIRDEYE_API_URL;
 use crate::models::token_info::TokenExtensions;
 use crate::models::token_trending::{TrendingToken, TrendingTokenData};
-use crate::models::market_data::{ApiResponse, TokenMarketResponse, TokenMarketData};
+use crate::models::market_data::{ApiResponse, TokenMarketResponse};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;

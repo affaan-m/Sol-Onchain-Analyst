@@ -57,7 +57,7 @@ impl TokenDataService {
         token_address: &str,
     ) -> Result<Option<TokenAnalyticsData>> {
         let filter = doc! { "token_address": token_address };
-        let options = FindOptions::builder()
+        let _options = FindOptions::builder()
             .sort(doc! { "timestamp": -1 })
             .limit(1)
             .build();
