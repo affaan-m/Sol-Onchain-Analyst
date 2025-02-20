@@ -2,6 +2,7 @@ use crate::birdeye::{BirdeyeApi, TokenInfo};
 use crate::config::mongodb::MongoDbPool;
 use crate::config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
+use crate::logging::market_metrics::MarketSignalLog;
 use crate::logging::{log_market_metrics, log_market_signal, RequestLogger};
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
@@ -13,11 +14,9 @@ use mongodb::options::{FindOneOptions, FindOptions};
 use mongodb::Collection;
 use rig::providers::openai::{self, EmbeddingModel};
 use rig_mongodb::{MongoDbVectorIndex, SearchParams};
+use uuid::Uuid;
 use std::sync::Arc;
 use tracing::info;
-use uuid::Uuid;
-
-const TEXT_EMBEDDING_ADA_002: &str = "text-embedding-ada-002";
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenAnalyticsError {
@@ -45,22 +44,6 @@ pub struct MarketMetrics {
     pub volume_24h: Option<f64>,
     pub signal_type: Option<String>,
     pub confidence: Option<f64>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketSignalLog {
-    pub id: Uuid,
-    pub timestamp: DateTime,
-    pub token_address: String,
-    pub token_symbol: String,
-    pub signal_type: String,
-    pub price: f64,
-    pub price_change_24h: Option<f64>,
-    pub volume_change_24h: Option<f64>,
-    pub confidence: f64,
-    pub risk_score: f64,
-    pub created_at: DateTime,
 }
 
 pub struct TokenAnalyticsService {
@@ -542,35 +525,6 @@ impl TokenAnalyticsService {
 
         log_market_signal(&signal_log);
         Ok(())
-    }
-}
-
-impl From<MarketSignal> for MarketSignalLog {
-    fn from(signal: MarketSignal) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: signal
-                .metadata
-                .expect("Failed to get token symbol from metadata")
-                .get("token_symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&signal.asset_address)
-                .to_string(),
-            signal_type: signal.signal_type.to_string(),
-            price: signal.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(DateTime::now),
-        }
     }
 }
 
