@@ -60,12 +60,6 @@ pub struct EnhancedTokenMetadata {
     pub active_wallets_24h: u32,
     pub whale_transactions_24h: u32,
     pub average_transaction_size: f64,
-    
-    // Sentiment metrics
-    pub social_score: Option<f64>,
-    pub social_volume: Option<u32>,
-    pub social_sentiment: Option<f64>,
-    pub dev_activity: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -323,10 +317,6 @@ mod tests {
                 active_wallets_24h: 0,
                 whale_transactions_24h: 0,
                 average_transaction_size: 0.0,
-                social_score: None,
-                social_volume: None,
-                social_sentiment: None,
-                dev_activity: None,
             })
         }
 

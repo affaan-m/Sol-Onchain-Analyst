@@ -24,6 +24,12 @@
   - Token trending data
   - Token analytics and market data
   - Rate limited with 500ms delay between requests
+  - Response structure:
+    - Basic token info (address, symbol, name, decimals)
+    - Market metrics (price, volume, liquidity)
+    - Supply information (total, circulating)
+    - Extended metadata (fdv, holder metrics)
+    - Trading data (last trade time, market count)
 
 ### Development Tools
 

@@ -57,61 +57,41 @@ This document outlines the collections within the `cainam` database, their purpo
         "decimals": number,
         "logo_uri": string,
 
-        //-- Price Data (from Birdeye and calculated)
+        //-- Price and Market Data (from Birdeye)
         "price": number,
         "price_change_24h": number,
-        "price_change_7d": number,  // Calculated from historical data
-        "price_high_24h": number,    // From OHLCV data or calculated
-        "price_low_24h": number,     // From OHLCV data or calculated
-
-        //-- Volume Data (from Birdeye)
+        "price_change_7d": number,
         "volume_24h": number,
         "volume_change_24h": number,
-        "volume_by_price_24h": document, // Could be a nested document with price ranges and volumes
-
-        //-- Market Cap and Supply (from Birdeye)
         "market_cap": number,
-        "fully_diluted_market_cap": number,
+        "fully_diluted_valuation": number,  // Updated from Birdeye fdv field
         "circulating_supply": number,
         "total_supply": number,
 
-        //-- Liquidity (from Birdeye)
+        //-- Extended Market Data (from Birdeye)
         "liquidity": number,
-        "liquidity_change_24h": number, // Calculated
+        "liquidity_change_24h": number,
+        "number_markets": number,           // New field from Birdeye
+        "last_trade_unix_time": number,     // New field from Birdeye
+        "last_trade_human_time": string,    // New field from Birdeye
+        "extensions": document,             // New field from Birdeye for additional metadata
 
-        //-- Trading Metrics (from Birdeye and calculated)
+        //-- Trading Metrics
         "trades_24h": number,
-        "average_trade_size": number, // Calculated (volume_24h / trades_24h)
-        "buy_volume_24h": number,      // From Birdeye trade data
-        "sell_volume_24h": number,     // From Birdeye trade data
-
-        //-- Holder Metrics (from Birdeye, potentially supplemented by other sources)
-        "holder_count": number,
-        "active_wallets_24h": number, // Requires additional on-chain analysis
-        "whale_transactions_24h": number, // Requires additional on-chain analysis, defining "whale" threshold
+        "average_trade_size": number,
+        "buy_volume_24h": number,
+        "sell_volume_24h": number,
 
         //-- Technical Indicators (Calculated)
         "rsi_14": number,
-        "sma_20": number,
-        "ema_50": number,
-        "bollinger_bands": document, // { upper: number, middle: number, lower: number }
         "macd": document,          // { macd: number, signal: number, histogram: number }
+        "bollinger_bands": document, // { upper: number, middle: number, lower: number }
 
-        //-- Sentiment Analysis (from Analyst Agent)
-        "social_sentiment": document, // { overall_score: number, twitter_score: number, telegram_score: number, ... }
-        "news_sentiment": number,
-
-        //-- On-Chain Analysis (from Analyst Agent, potentially using Birdeye's wallet APIs)
-        "whale_activity_index": number, // (0-1, based on whale transaction volume and count)
-        "network_growth": number,      // New addresses interacting with the token
-        "concentration_ratio": number,  // Percentage of supply held by top N addresses
-
-        //-- Risk Metrics (from Risk Manager Agent)
-        "volatility_30d": number,     // Annualized volatility
-        "value_at_risk_95": number,  // 95% VaR
-        "expected_shortfall_95": number, // 95% Expected Shortfall
-
-        "timestamp": date
+        //-- Timestamps and Metadata
+        "timestamp": date,
+        "created_at": date,
+        "metadata": document,      // Additional metadata and context
+        "embedding": array         // Vector embedding for similarity search
     }
     ```
 

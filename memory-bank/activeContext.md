@@ -6,9 +6,14 @@
 - Two-phase data collection process:
   1. Trending token capture from Birdeye API
   2. Detailed token analytics collection for trending tokens
+- API response handling optimization and struct alignment
 
 ## Recent Changes
 
+- Updated TokenOverviewResponse struct to match Birdeye API:
+  - Added new fields: decimals, fdv, extensions, supply metrics
+  - Improved field naming and serialization
+  - Enhanced type safety and documentation
 - Split market data capture into two separate scripts:
   1. `capture_token_trending.rs`: Fetches trending tokens and stores in MongoDB
   2. `capture_token_analytics.rs`: Processes trending tokens to get detailed analytics

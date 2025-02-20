@@ -53,12 +53,6 @@ pub struct TokenAnalytics {
     pub bollinger_upper: Option<BigDecimal>, // type: "number"
     pub bollinger_lower: Option<BigDecimal>, // type: "number"
 
-    // Social metrics
-    pub social_score: Option<BigDecimal>,     // type: "number"
-    pub social_volume: Option<i32>,           // type: "number"
-    pub social_sentiment: Option<BigDecimal>, // type: "number"
-    pub dev_activity: Option<i32>,            // type: "number"
-
     // Timestamps and metadata
     pub timestamp: DateTime,               // type: "date"
     pub created_at: Option<DateTime>,      // type: "date"
@@ -105,10 +99,6 @@ pub struct TokenAnalytics {
 //       "macd_signal": { "type": "number" },
 //       "bollinger_upper": { "type": "number" },
 //       "bollinger_lower": { "type": "number" },
-//       "social_score": { "type": "number" },
-//       "social_volume": { "type": "number" },
-//       "social_sentiment": { "type": "number" },
-//       "dev_activity": { "type": "number" },
 //       "timestamp": { "type": "date" },
 //       "created_at": { "type": "date" },
 //       "last_trade_time": { "type": "date" },

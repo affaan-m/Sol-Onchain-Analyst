@@ -46,30 +46,23 @@ pub struct MarketSignalLog {
 pub struct TokenAnalyticsService {
     pool: Arc<MongoDbPool>,
     collection: Collection<TokenAnalytics>,
-    signals_collection: Collection<MarketSignal>,
     birdeye: Arc<dyn BirdeyeApi>,
-    market_config: MarketConfig,
 }
 
 impl TokenAnalyticsService {
     pub async fn new(
         pool: Arc<MongoDbPool>,
         birdeye: Arc<dyn BirdeyeApi>,
-        market_config: Option<MarketConfig>,
+        _market_config: Option<MarketConfig>,
     ) -> AgentResult<Self> {
         let db = pool.database(&pool.get_config().database);
         let collection = db.collection("token_analytics");
         println!(">> token_analytics collections {:?}", collection);
 
-        let signals_collection = db.collection("market_signals");
-        println!(">> market_signals collections {:?}", signals_collection);
-
         Ok(Self {
             pool,
             collection,
-            signals_collection,
             birdeye,
-            market_config: market_config.unwrap_or_default(),
         })
     }
 
@@ -80,8 +73,8 @@ impl TokenAnalyticsService {
     ) -> AgentResult<TokenAnalytics> {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
-        // Fetch market data with retry logic
-        let token_overview = match self
+        // Fetch token overview with retry logic
+        let overview = match self
             .fetch_with_retry(|| self.birdeye.get_token_overview(address), 3)
             .await
         {
@@ -97,13 +90,8 @@ impl TokenAnalyticsService {
         };
 
         // Validate token data
-        if token_overview.price <= 0.0 {
+        if overview.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
-            logger.error(&err.to_string());
-            return Err(err);
-        }
-        if token_overview.volume_24h.unwrap_or_default() < 0.0 {
-            let err = AgentError::validation("Token volume cannot be negative");
             logger.error(&err.to_string());
             return Err(err);
         }
@@ -111,8 +99,8 @@ impl TokenAnalyticsService {
         // Log market metrics
         let metrics = MarketMetrics {
             symbol: symbol.to_string(),
-            price: token_overview.price,
-            volume_24h: token_overview.volume_24h,
+            price: overview.price,
+            volume_24h: Some(overview.v24h),
             signal_type: None,
             confidence: None,
         };
@@ -120,7 +108,7 @@ impl TokenAnalyticsService {
 
         // Convert to TokenAnalytics
         let analytics = match self
-            .convert_to_analytics(address, symbol, token_overview)
+            .convert_to_analytics(address, symbol, overview)
             .await
         {
             Ok(analytics) => analytics,
@@ -132,15 +120,6 @@ impl TokenAnalyticsService {
 
         // Store in database
         let stored = self.store_token_analytics(&analytics).await?;
-
-        // Generate and process market signals
-        let signal = self.generate_market_signals(&stored).await?;
-
-        // Store the signal if present
-        if let Some(ref signal) = signal {
-            self.validate_signal(signal)?;
-            self.store_market_signal(signal).await?;
-        }
 
         Ok(stored)
     }
@@ -201,36 +180,40 @@ impl TokenAnalyticsService {
             token_name: overview.name,
             token_symbol: symbol.to_string(),
             decimals: overview.decimals as u8,
-            logo_uri: overview.logo_uri,
+            logo_uri: Some(overview.logo_uri),
 
             // Price metrics
             price: f64_to_decimal(overview.price),
-            price_change_24h: overview.price_change_24h.map(f64_to_decimal),
-            price_change_7d: Some(f64_to_decimal(0.0)),
+            price_change_24h: Some(f64_to_decimal(overview.price_change_24h_percent)),
+            price_change_7d: Some(f64_to_decimal(
+                (overview.price - overview.history_24h_price) / overview.history_24h_price * 100.0,
+            )),
 
             // Volume metrics
-            volume_24h: overview.volume_24h.map(f64_to_decimal),
-            volume_change_24h: None, // Not available in overview
-            volume_by_price_24h: None, // Not available in overview
+            volume_24h: Some(f64_to_decimal(overview.v24h)),
+            volume_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)),
+            volume_by_price_24h: Some(f64_to_decimal(overview.v24h_usd)),
 
             // Market metrics
-            market_cap: overview.market_cap.map(f64_to_decimal),
-            fully_diluted_market_cap: None, // Not available in overview
-            circulating_supply: None, // Not available in overview
-            total_supply: None, // Not available in overview
+            market_cap: Some(f64_to_decimal(overview.real_mc)),
+            fully_diluted_market_cap: Some(f64_to_decimal(overview.fdv)),
+            circulating_supply: Some(f64_to_decimal(overview.circulating_supply)),
+            total_supply: Some(f64_to_decimal(overview.total_supply)),
 
             // Liquidity metrics
-            liquidity: overview.liquidity.map(f64_to_decimal),
-            liquidity_change_24h: None, // Not available in overview
+            liquidity: Some(f64_to_decimal(overview.liquidity)),
+            liquidity_change_24h: Some(f64_to_decimal(overview.v24h_change_percent)), // Using volume change as proxy for liquidity change
 
             // Trading metrics
-            trades_24h: None, // Not available in overview
-            average_trade_size: None, // Not available in overview
+            trades_24h: Some(overview.trade24h),
+            average_trade_size: Some(f64_to_decimal(
+                overview.v24h_usd / overview.trade24h as f64
+            )),
 
             // Holder metrics
-            holder_count: overview.holder_count,
-            active_wallets_24h: None, // Not available in overview
-            whale_transactions_24h: None,
+            holder_count: Some(overview.holder as i32),
+            active_wallets_24h: Some(overview.unique_wallet_24h as i32),
+            whale_transactions_24h: Some((overview.trade24h / 100) as i32), // Estimating whale transactions as 1% of total trades
 
             // Technical indicators
             rsi_14: rsi,
@@ -239,24 +222,27 @@ impl TokenAnalyticsService {
             bollinger_upper,
             bollinger_lower,
 
-            // Social metrics - Not available from overview
-            social_score: None,
-            social_volume: None,
-            social_sentiment: None,
-            dev_activity: None,
-
             // Timestamps and metadata
             timestamp: DateTime::now(),
-            created_at: None,
-            last_trade_time: None, // Not available in overview
+            created_at: Some(DateTime::now()),
+            last_trade_time: Some(DateTime::from_millis(overview.last_trade_unix_time * 1000)),
 
             // Extensions and metadata
             metadata: Some(doc! {
                 "source": "birdeye",
-                "version": "1.0"
+                "version": "1.0",
+                "number_markets": overview.number_markets,
+                "unique_wallets_30m": overview.unique_wallet_30m,
+                "unique_wallets_1h": overview.unique_wallet_1h,
+                "unique_wallets_24h": overview.unique_wallet_24h,
+                "trade_30m": overview.trade30m,
+                "trade_24h": overview.trade24h,
+                "buy_24h": overview.buy24h,
+                "sell_24h": overview.sell24h,
+                "v24h_usd": overview.v24h_usd,
+                "v24h_change_percent": overview.v24h_change_percent,
+                "price_change_24h_percent": overview.price_change_24h_percent,
             }),
-
-            // Vector embedding will be added in a separate process
             embedding: None,
         })
     }
@@ -356,112 +342,6 @@ impl TokenAnalyticsService {
         (upper_band, lower_band)
     }
 
-    pub async fn generate_market_signals(
-        &self,
-        analytics: &TokenAnalytics,
-    ) -> AgentResult<Option<MarketSignal>> {
-        let logger = RequestLogger::new("token_analytics", "generate_market_signals");
-
-        // Get previous analytics for comparison
-        let previous = match self.get_previous_analytics(&analytics.token_address).await {
-            Ok(prev) => prev,
-            Err(e) => {
-                logger.error(&e.to_string());
-                return Err(e);
-            }
-        };
-
-        if let Some(prev) = previous {
-            let price_change = (analytics.price.clone() - prev.price.clone()) / prev.price.clone();
-            let volume_change = analytics.volume_24h.as_ref().map(|current| {
-                let binding = BigDecimal::from(0);
-                let prev = prev.volume_24h.as_ref().unwrap_or(&binding);
-                (current.clone() - prev.clone()) / prev.clone()
-            });
-
-            let mut signal_opt = None;
-
-            if price_change > self.market_config.price_change_threshold.clone() {
-                let signal = self.create_market_signal(
-                    analytics,
-                    SignalType::PriceSpike,
-                    price_change.clone(),
-                    volume_change.clone(),
-                );
-                self.log_signal(&signal, analytics);
-                signal_opt = Some(signal);
-            } else if price_change < -self.market_config.price_change_threshold.clone() {
-                let signal = self.create_market_signal(
-                    analytics,
-                    SignalType::PriceDrop,
-                    price_change.abs(),
-                    volume_change.clone(),
-                );
-                self.log_signal(&signal, analytics);
-                signal_opt = Some(signal);
-            } else if let Some(vol_change) = volume_change {
-                if vol_change > self.market_config.volume_surge_threshold {
-                    let signal = self.create_market_signal(
-                        analytics,
-                        SignalType::VolumeSurge,
-                        price_change,
-                        Some(vol_change),
-                    );
-                    self.log_signal(&signal, analytics);
-                    signal_opt = Some(signal);
-                }
-            }
-
-            // Process the signal if one was generated
-            if let Some(signal) = signal_opt.clone() {
-                if let Err(e) = self.process_market_signal(signal).await {
-                    logger.error(&format!("Failed to process market signal: {}", e));
-                    // Continue execution - don't fail if signal processing fails
-                }
-            }
-
-            Ok(signal_opt)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn create_market_signal(
-        &self,
-        analytics: &TokenAnalytics,
-        signal_type: SignalType,
-        price_change: BigDecimal,
-        volume_change: Option<BigDecimal>,
-    ) -> MarketSignal {
-        let confidence = self.calculate_confidence(
-            price_change.clone(),
-            volume_change.clone().unwrap_or_else(|| BigDecimal::from(0)),
-        );
-
-        MarketSignalBuilder::new(
-            analytics.token_address.clone(),
-            signal_type,
-            analytics.price.clone(),
-        )
-        .confidence(confidence)
-        .risk_score(f64_to_decimal(0.5))
-        .sentiment_score(f64_to_decimal(0.5))
-        .price_change_24h(price_change)
-        .volume_change_24h(volume_change.clone().unwrap_or_else(|| BigDecimal::from(0)))
-        .volume_change(volume_change.unwrap_or_else(|| BigDecimal::from(0)))
-        .timestamp(analytics.timestamp)
-        .build()
-    }
-
-    async fn store_market_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
-        self.signals_collection
-            .insert_one(signal)
-            .await
-            .map_err(AgentError::Database)?;
-
-        Ok(())
-    }
-
     pub async fn get_previous_analytics(
         &self,
         address: &str,
@@ -555,98 +435,6 @@ impl TokenAnalyticsService {
         }
 
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error during retry")))
-    }
-
-    // Helper method for validation
-    fn validate_token_data(&self, token_info: &TokenInfo) -> AgentResult<()> {
-        if token_info.price <= 0.0 {
-            return Err(AgentError::validation("Token price must be positive"));
-        }
-        if token_info.volume_24h < 0.0 {
-            return Err(AgentError::validation("Token volume cannot be negative"));
-        }
-        Ok(())
-    }
-
-    // Helper method for signal validation
-    fn validate_signal(&self, signal: &MarketSignal) -> AgentResult<()> {
-        let zero = BigDecimal::from(0);
-        let one = BigDecimal::from(1);
-
-        if signal.confidence < zero || signal.confidence > one {
-            return Err(AgentError::validation(
-                "Signal confidence must be between 0 and 1",
-            ));
-        }
-        if signal.risk_score < zero || signal.risk_score > one {
-            return Err(AgentError::validation("Risk score must be between 0 and 1"));
-        }
-        Ok(())
-    }
-
-    fn log_signal(&self, signal: &MarketSignal, analytics: &TokenAnalytics) {
-        let signal_log = MarketSignalLog {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: analytics.token_symbol.clone(),
-            signal_type: signal.signal_type.to_string(),
-            price: analytics.price.to_f64().unwrap_or_default(),
-            price_change_24h: Some(
-                signal
-                    .price_change_24h
-                    .as_ref()
-                    .and_then(|p| p.to_f64())
-                    .unwrap_or_default(),
-            ),
-            volume_change_24h: signal.volume_change_24h.as_ref().and_then(|v| v.to_f64()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: DateTime::now(),
-        };
-
-        log_market_signal(&signal_log);
-    }
-
-    fn calculate_confidence(
-        &self,
-        price_change: BigDecimal,
-        volume_change: BigDecimal,
-    ) -> BigDecimal {
-        self.market_config.base_confidence.clone()
-            + (price_change * self.market_config.price_weight.clone())
-            + (volume_change * self.market_config.volume_weight.clone())
-    }
-
-    async fn process_market_signal(&self, signal: MarketSignal) -> AgentResult<()> {
-        let _logger = RequestLogger::new("token_analytics", "process_market_signal");
-
-        let signal_log = MarketSignalLog {
-            id: Uuid::new_v4(),
-            timestamp: DateTime::now(),
-            token_address: signal.asset_address.clone(),
-            token_symbol: signal
-                .metadata
-                .expect("Failed to get token symbol from metadata")
-                .get("token_symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&signal.asset_address)
-                .to_string(),
-            signal_type: signal.signal_type.to_string(),
-            price: signal.price.to_f64().unwrap_or_default(),
-            price_change_24h: signal
-                .price_change_24h
-                .map(|p| p.to_f64().unwrap_or_default()),
-            volume_change_24h: signal
-                .volume_change_24h
-                .map(|v| v.to_f64().unwrap_or_default()),
-            confidence: signal.confidence.to_f64().unwrap_or_default(),
-            risk_score: signal.risk_score.to_f64().unwrap_or_default(),
-            created_at: signal.created_at.unwrap_or_else(DateTime::now),
-        };
-
-        log_market_signal(&signal_log);
-        Ok(())
     }
 }
 

@@ -70,34 +70,23 @@ async fn main() -> Result<()> {
     while let Some(token) = cursor.try_next().await? {
         info!("Processing analytics for token: {} ({})", token.symbol, token.address);
 
-        // First get basic token overview
-        match birdeye_client.get_token_overview(&token.address).await {
-            Ok(overview) => {
+        // Get token overview and store analytics
+        match analytics_service
+            .fetch_and_store_token_info(&token.symbol, &token.address)
+            .await
+        {
+            Ok(analytics) => {
+                processed += 1;
                 info!(
-                    "Got token overview for {}: price=${:.4}, mcap=${:.2}",
+                    "Successfully stored analytics for {}: price=${:.4}, mcap=${:.2}",
                     token.symbol,
-                    overview.price,
-                    overview.market_cap.unwrap_or_default()
+                    analytics.price,
+                    analytics.market_cap.unwrap_or_default()
                 );
-
-                // If overview looks good, fetch and store detailed analytics
-                match analytics_service
-                    .fetch_and_store_token_info(&token.symbol, &token.address)
-                    .await
-                {
-                    Ok(_) => {
-                        processed += 1;
-                        info!("Successfully stored analytics for {}", token.symbol);
-                    }
-                    Err(e) => {
-                        errors += 1;
-                        error!("Failed to store analytics for {}: {}", token.symbol, e);
-                    }
-                }
             }
             Err(e) => {
                 errors += 1;
-                error!("Failed to get overview for {}: {}", token.symbol, e);
+                error!("Failed to process analytics for {}: {}", token.symbol, e);
             }
         }
 
