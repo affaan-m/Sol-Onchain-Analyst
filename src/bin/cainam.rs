@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
             
             println!("\nToken Overview:");
             println!("Name: {} ({})", overview.name, overview.symbol);
-            println!("Price: ${:.4}", overview.price);
+            println!("Price: ${:.8}", overview.price);
             println!("Market Cap: ${:.2}M", overview.market_cap / 1_000_000.0);
             println!("24h Volume: ${:.2}", overview.v24h_usd);
             println!("24h Price Change: {:.2}%", overview.price_change_24h_percent);
@@ -154,7 +154,7 @@ async fn main() -> Result<()> {
                                     overview.symbol
                                 );
                                 println!("Type: {:?} (Confidence: {:.2})", signal.signal_type, signal.confidence);
-                                println!("Price: ${:.4} ({:+.2}%)", overview.price, overview.price_change_24h_percent);
+                                println!("Price: ${:.8} ({:+.2}%)", overview.price, overview.price_change_24h_percent);
                             }
                         }
                         Err(e) => {
