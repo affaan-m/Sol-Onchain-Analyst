@@ -26,3 +26,7 @@ docs/examples/*
 
 # Cargo
 Cargo.lock
+
+# Digest
+digest_src.txt
+digest_trader.txt
