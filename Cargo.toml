@@ -9,6 +9,10 @@ keywords = ["ai", "solana", "rust", "cainam", "cainam-ventures"]
 description = "Core functionality for the Cainam project"
 
 [[bin]]
+name = "cainam"
+path = "src/bin/cainam.rs"
+
+[[bin]]
 name = "cainam-core"
 path = "src/main.rs"
 

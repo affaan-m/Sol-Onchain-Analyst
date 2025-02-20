@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use cainam_core::{
-    birdeye::api::{BirdeyeApi, BirdeyeClient},
+    birdeye::api::BirdeyeClient,
     config::mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     models::token_trending::TrendingToken,
     services::token_analytics::TokenAnalyticsService,

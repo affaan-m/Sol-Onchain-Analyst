@@ -1,10 +1,7 @@
 use cainam_core::{
     birdeye::api::{BirdeyeApi, BirdeyeClient},
     config::{AgentConfig, mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig}},
-    services::{
-        token_analytics::TokenAnalyticsService,
-        token_analytics_llm::TokenAnalyticsLLM,
-    },
+    services::{TokenAnalyticsService, TokenAnalyticsLLM},
 };
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
@@ -83,9 +80,10 @@ async fn main() -> Result<()> {
         TokenAnalyticsService::new(db_pool.into(), birdeye.clone(), None).await?,
     );
     
+    let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
     let analytics_llm = TokenAnalyticsLLM::new(
         analytics_service.clone(),
-        &config.openai_api_key,
+        &openai_api_key,
     );
 
     // Process commands
@@ -99,6 +97,15 @@ async fn main() -> Result<()> {
         Commands::Token { address } => {
             info!("Fetching token analytics for {}", address);
             let overview = birdeye.get_token_overview(&address).await?;
+            let analytics = analytics_service
+                .fetch_and_store_token_info(&overview.symbol, &address)
+                .await?;
+            
+            // Get AI analysis of the token
+            let analysis = analytics_llm.analyze_query(&format!(
+                "Analyze the token {} ({}) with price ${:.8} and provide insights about its current market status.",
+                overview.name, overview.symbol, overview.price
+            )).await?;
             
             println!("\nToken Overview:");
             println!("Name: {} ({})", overview.name, overview.symbol);
@@ -108,6 +115,7 @@ async fn main() -> Result<()> {
             println!("24h Price Change: {:.2}%", overview.price_change_24h_percent);
             println!("Holders: {}", overview.holder);
             println!("Active Wallets (24h): {}", overview.unique_wallet_24h);
+            println!("\nAI Analysis:\n{}", analysis);
         }
 
         Commands::Signals { address } => {

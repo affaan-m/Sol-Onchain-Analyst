@@ -4,10 +4,8 @@ use crate::services::token_analytics::TokenAnalyticsService;
 use rig::agent::Agent as RigAgent;
 use rig::providers::openai::{Client as OpenAIClient, CompletionModel};
 use rig::completion::Prompt;
-use serde_json::Value;
 use std::sync::Arc;
-use tracing::{debug, info};
-use anyhow::Result;
+use tracing::{debug, error};
 
 pub struct TokenAnalyticsLLM {
     analytics_service: Arc<TokenAnalyticsService>,
@@ -34,7 +32,13 @@ impl TokenAnalyticsLLM {
         debug!("Processing analytics query: {}", query);
 
         // Get relevant token analytics based on the query
-        let analytics = self.analytics_service.get_relevant_analytics(query).await?;
+        let analytics = match self.analytics_service.get_relevant_analytics(query).await {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Failed to get relevant analytics: {}", e);
+                return Err(AgentError::MarketAnalysis(format!("Failed to get analytics: {}", e)));
+            }
+        };
         
         // Format analytics data for LLM
         let formatted_data = self.format_analytics_data(&analytics)?;
@@ -47,11 +51,13 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        let analysis = self.agent.prompt(prompt)
-            .await
-            .map_err(|e| AgentError::MarketAnalysis(format!("Failed to get LLM analysis: {}", e)))?;
-
-        Ok(analysis)
+        match self.agent.prompt(prompt).await {
+            Ok(analysis) => Ok(analysis),
+            Err(e) => {
+                error!("Failed to get LLM analysis: {}", e);
+                Err(AgentError::MarketAnalysis(format!("Failed to get LLM analysis: {}", e)))
+            }
+        }
     }
 
     pub async fn get_market_insights(&self) -> AgentResult<String> {
