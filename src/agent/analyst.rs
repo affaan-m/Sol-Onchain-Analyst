@@ -1,6 +1,5 @@
 use crate::birdeye::api::{BirdeyeApi, BirdeyeClient};
 use crate::config::mongodb::MongoDbPool;
-use crate::config::birdeye_config::BirdeyeConfig;
 use crate::models::market_signal::MarketSignal;
 use crate::services::token_analytics::TokenAnalyticsService;
 use anyhow::Result;

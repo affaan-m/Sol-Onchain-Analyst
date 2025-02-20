@@ -14,9 +14,11 @@ pub struct TrendingToken {
     pub address: String,
     pub decimals: i32,
     pub liquidity: f64,
-    pub logo_uri: String,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
     pub name: String,
     pub symbol: String,
+    #[serde(rename = "volume24hUSD")]
     pub volume_24h_usd: f64,
     pub rank: i32,
     pub price: f64,

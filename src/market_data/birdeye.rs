@@ -1,22 +1,15 @@
-#[derive(Debug, Deserialize)]
-pub struct TokenMarketResponse {
-    pub data: TokenMarketData,
-    pub success: bool,
-}
+use crate::models::market_data::{TokenMarketResponse, TokenMarketData};
+use crate::models::token_info::TokenInfo;
+use crate::errors::AgentError;
+use crate::birdeye::BirdeyeApi;
+use reqwest::Client;
+use async_trait::async_trait;
+use anyhow::Result;
+use bson::DateTime;
 
-#[derive(Debug, Deserialize, Default)]
-pub struct TokenMarketData {
-    pub address: String,
-    pub price: f64,
-    pub volume_24h: f64,
-    pub decimals: u8,
-    pub price_sol: f64,
-    pub market_cap: f64,
-    pub fully_diluted_market_cap: f64,
-    pub circulating_supply: f64,
-    pub total_supply: f64,
-    pub price_change_24h: f64,
-    pub volume_change_24h: f64,
+pub struct BirdeyeClient {
+    client: Client,
+    api_key: String,
 }
 
 impl BirdeyeClient {
@@ -48,16 +41,12 @@ impl BirdeyeClient {
             )));
         }
 
-        let market_data = response
+        let market_response = response
             .json::<TokenMarketResponse>()
             .await
             .map_err(|e| AgentError::ApiError(e.to_string()))?;
 
-        if !market_data.success {
-            return Err(AgentError::ApiError("Token not found".to_string()));
-        }
-
-        Ok(market_data.data)
+        Ok(TokenMarketData::from(market_response))
     }
 
     pub async fn get_token_info_by_address(&self, token_address: &str) -> Result<TokenInfo, AgentError> {
@@ -69,12 +58,15 @@ impl BirdeyeClient {
             volume_24h: market_data.volume_24h,
             decimals: market_data.decimals,
             price_sol: market_data.price_sol,
-            market_cap: market_data.market_cap,
-            fully_diluted_market_cap: market_data.fully_diluted_market_cap,
+            market_cap: Some(market_data.market_cap),
+            fully_diluted_market_cap: Some(market_data.fully_diluted_market_cap),
             circulating_supply: market_data.circulating_supply,
             total_supply: market_data.total_supply,
-            price_change_24h: market_data.price_change_24h,
-            volume_change_24h: market_data.volume_change_24h,
+            price_change_24h: Some(market_data.price_change_24h),
+            volume_change_24h: Some(market_data.volume_change_24h),
+            logo_uri: None, // Not available in simplified market data
+            extensions: None, // Not available in simplified market data
+            timestamp: bson::DateTime::now(),
         })
     }
 }

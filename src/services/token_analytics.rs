@@ -1,5 +1,5 @@
-use crate::birdeye::api::TokenMarketResponse;
 use crate::birdeye::BirdeyeApi;
+use crate::models::market_data::TokenMarketResponse;
 use crate::config::mongodb::MongoDbPool;
 use crate::config::market_config::MarketConfig;
 use crate::error::{AgentError, AgentResult};
@@ -8,6 +8,7 @@ use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType
 use crate::models::token_analytics::TokenAnalytics;
 use crate::models::token_info::TokenInfo;
 use crate::utils::f64_to_decimal;
+use crate::birdeye::api::TokenOverviewResponse;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use bson::{doc, DateTime};
 use futures::StreamExt;
@@ -80,14 +81,14 @@ impl TokenAnalyticsService {
         let logger = RequestLogger::new("token_analytics", "fetch_and_store_token_info");
 
         // Fetch market data with retry logic
-        let market_data = match self
-            .fetch_with_retry(|| self.birdeye.get_market_data(address), 3)
+        let token_overview = match self
+            .fetch_with_retry(|| self.birdeye.get_token_overview(address), 3)
             .await
         {
             Ok(data) => data,
             Err(e) => {
                 let err = AgentError::BirdeyeApi(format!(
-                    "Failed to fetch market data after retries: {}",
+                    "Failed to fetch token overview after retries: {}",
                     e
                 ));
                 logger.error(&err.to_string());
@@ -96,12 +97,12 @@ impl TokenAnalyticsService {
         };
 
         // Validate token data
-        if market_data.price <= 0.0 {
+        if token_overview.price <= 0.0 {
             let err = AgentError::validation("Token price must be positive");
             logger.error(&err.to_string());
             return Err(err);
         }
-        if market_data.v24h < 0.0 {
+        if token_overview.volume_24h.unwrap_or_default() < 0.0 {
             let err = AgentError::validation("Token volume cannot be negative");
             logger.error(&err.to_string());
             return Err(err);
@@ -110,8 +111,8 @@ impl TokenAnalyticsService {
         // Log market metrics
         let metrics = MarketMetrics {
             symbol: symbol.to_string(),
-            price: market_data.price,
-            volume_24h: Some(market_data.v24h),
+            price: token_overview.price,
+            volume_24h: token_overview.volume_24h,
             signal_type: None,
             confidence: None,
         };
@@ -119,7 +120,7 @@ impl TokenAnalyticsService {
 
         // Convert to TokenAnalytics
         let analytics = match self
-            .convert_to_analytics(address, symbol, market_data)
+            .convert_to_analytics(address, symbol, token_overview)
             .await
         {
             Ok(analytics) => analytics,
@@ -148,7 +149,7 @@ impl TokenAnalyticsService {
         &self,
         address: &str,
         symbol: &str,
-        market_data: TokenMarketResponse,
+        overview: TokenOverviewResponse,
     ) -> AgentResult<TokenAnalytics> {
         // Calculate technical indicators
         let price_history = match self
@@ -197,44 +198,38 @@ impl TokenAnalyticsService {
             id: None,
             // Base token data
             token_address: address.to_string(),
-            token_name: market_data.name,
+            token_name: overview.name,
             token_symbol: symbol.to_string(),
-            decimals: market_data.decimals as u8,
-            logo_uri: Some(market_data.logo_uri),
+            decimals: overview.decimals as u8,
+            logo_uri: overview.logo_uri,
 
             // Price metrics
-            price: f64_to_decimal(market_data.price),
-            price_change_24h: Some(f64_to_decimal(market_data.price_change_24h_percent)),
-            price_change_7d: Some(f64_to_decimal(
-                (market_data.price - market_data.history24h_price) / market_data.history24h_price * 100.0,
-            )),
+            price: f64_to_decimal(overview.price),
+            price_change_24h: overview.price_change_24h.map(f64_to_decimal),
+            price_change_7d: Some(f64_to_decimal(0.0)),
 
             // Volume metrics
-            volume_24h: Some(f64_to_decimal(market_data.v24h)),
-            volume_change_24h: Some(f64_to_decimal(market_data.v24h_change_percent)),
-            volume_by_price_24h: Some(f64_to_decimal(market_data.v24h_usd)),
+            volume_24h: overview.volume_24h.map(f64_to_decimal),
+            volume_change_24h: None, // Not available in overview
+            volume_by_price_24h: None, // Not available in overview
 
             // Market metrics
-            market_cap: Some(f64_to_decimal(market_data.real_mc)),
-            fully_diluted_market_cap: Some(f64_to_decimal(market_data.fdv)),
-            circulating_supply: Some(f64_to_decimal(market_data.circulating_supply)),
-            total_supply: Some(f64_to_decimal(market_data.total_supply)),
+            market_cap: overview.market_cap.map(f64_to_decimal),
+            fully_diluted_market_cap: None, // Not available in overview
+            circulating_supply: None, // Not available in overview
+            total_supply: None, // Not available in overview
 
             // Liquidity metrics
-            liquidity: Some(f64_to_decimal(market_data.liquidity)),
-            liquidity_change_24h: Some(f64_to_decimal(
-                (market_data.liquidity - market_data.liquidity) / market_data.liquidity * 100.0 // TODO: Use historical liquidity data when available
-            )),
+            liquidity: overview.liquidity.map(f64_to_decimal),
+            liquidity_change_24h: None, // Not available in overview
 
             // Trading metrics
-            trades_24h: Some(market_data.trade24h),
-            average_trade_size: Some(f64_to_decimal(
-                market_data.v24h_usd / market_data.trade24h as f64
-            )),
+            trades_24h: None, // Not available in overview
+            average_trade_size: None, // Not available in overview
 
             // Holder metrics
-            holder_count: Some(market_data.holder as i32),
-            active_wallets_24h: Some(market_data.unique_wallet24h as i32),
+            holder_count: overview.holder_count,
+            active_wallets_24h: None, // Not available in overview
             whale_transactions_24h: None,
 
             // Technical indicators
@@ -244,7 +239,7 @@ impl TokenAnalyticsService {
             bollinger_upper,
             bollinger_lower,
 
-            // Social metrics - Not available from Birdeye
+            // Social metrics - Not available from overview
             social_score: None,
             social_volume: None,
             social_sentiment: None,
@@ -253,31 +248,12 @@ impl TokenAnalyticsService {
             // Timestamps and metadata
             timestamp: DateTime::now(),
             created_at: None,
-            last_trade_time: Some(DateTime::from_millis(market_data.last_trade_unix_time * 1000)),
+            last_trade_time: None, // Not available in overview
 
             // Extensions and metadata
             metadata: Some(doc! {
                 "source": "birdeye",
-                "version": "1.0",
-                "extensions": {
-                    "coingecko_id": market_data.extensions.coingecko_id,
-                    "serum_v3_usdc": market_data.extensions.serum_v3_usdc,
-                    "serum_v3_usdt": market_data.extensions.serum_v3_usdt,
-                    "website": market_data.extensions.website,
-                    "telegram": market_data.extensions.telegram,
-                    "twitter": market_data.extensions.twitter,
-                    "description": market_data.extensions.description,
-                    "discord": market_data.extensions.discord,
-                    "medium": market_data.extensions.medium
-                },
-                "market_stats": {
-                    "buy_volume_24h": market_data.v_buy24h_usd,
-                    "sell_volume_24h": market_data.v_sell24h_usd,
-                    "buy_count_24h": market_data.buy24h,
-                    "sell_count_24h": market_data.sell24h,
-                    "unique_traders_24h": market_data.unique_wallet24h,
-                    "number_markets": market_data.number_markets
-                }
+                "version": "1.0"
             }),
 
             // Vector embedding will be added in a separate process
