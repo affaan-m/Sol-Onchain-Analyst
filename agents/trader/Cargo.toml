@@ -8,7 +8,6 @@ edition = "2021"
 rig = { version = "0.8.0", features = ["openai", "mongodb", "solana"] }
 rig-core = "0.8.0"
 rig-mongodb = "0.2.4"
-rig-postgres = "0.2.4"
 rig-solana-trader = "0.1.0"
 
 # Core dependencies
