@@ -426,3 +426,300 @@ curl --request GET \\
 ```
 
 ---
+
+## Token - Holder List
+
+/defi/v3/token/holder
+
+Retrieves a list of holders for a DeFi token based on optional parameters.
+
+**Parameters:**
+
+| Name                  | Type    | Required | Default     | Description                                                                                                                                                                                                                                                                                          |
+| :-------------------- | :------ | :------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `address`             | string  | Yes      |             | The address of the token to retrieve holder list for                                                                                                                                                                                                                                                                                          |
+| `offset`              | integer | No       | 0           | Offset (0 to 10000)                                                                                                                                                                                                                                                                                 |
+| `limit`               | integer | No       | 100         | Limit (1 to 100)                                                                                                                                                                                                                                                                                    |
+| `x-chain`             | string  | No       | solana      | Chain: `solana`, `ethereum`, `arbitrum`, `avalanche`, `bsc`, `optimism`, `polygon`, `base`, `zksyncsui`                                                                                                                                                                                               |
+
+**Example Request (cURL):**
+
+```bash
+curl --request GET \
+     --url 'https://public-api.birdeye.so/defi/v3/token/holder?address=So11111111111111111111111111111111111111112&offset=0&limit=10' \
+     --header 'X-API-KEY: e218eef66dd64c3c9eaffc048daecfd4' \
+     --header 'accept: application/json' \
+     --header 'x-chain: solana'
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "amount": "4932818849997655",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "AVzP2GeRmqGphJsMxWoqjpUifPpCret7LqWhD8NWQK49",
+        "token_account": "BUvduFTd2sWFagCunBPLupG8fBTJqweLw9DuhruNFSCm",
+        "ui_amount": 4932818.849997655
+      },
+      {
+        "amount": "712122828237960",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "GugU1tP7doLeTw9hQP51xRJyS8Da1fWxuiy2rVrnMD2m",
+        "token_account": "2nQNF8F9LLWMqdjymiLK2u8HoHMvYa4orCXsp3w65fQ2",
+        "ui_amount": 712122.82823796
+      },
+      {
+        "amount": "251255823790212",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "9DrvZvyWh1HuAoZxvYWMvkf2XCzryCpGgHqrMjyDWpmo",
+        "token_account": "GafNuUXj9rxGLn4y79dPu6MHSuPWeJR6UtTWuexpGh3U",
+        "ui_amount": 251255.823790212
+      },
+      {
+        "amount": "200771445434177",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ",
+        "token_account": "7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5",
+        "ui_amount": 200771.445434177
+      },
+      {
+        "amount": "175561398365832",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+        "token_account": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+        "ui_amount": 175561.398365832
+      },
+      {
+        "amount": "142588953090466",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "JCNCMFXo5M5qwUPg2Utu1u6YWp3MbygxqBsBeXXJfrw",
+        "token_account": "DfYCNezifxAEsQbAJ1b3j6PX3JVBe8fu11KBhxsbw5d2",
+        "ui_amount": 142588.953090466
+      },
+      {
+        "amount": "140052392000398",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "Hp53XEtt4S8SvPCXarsLSdGfZBuUr5mMmZmX2DRNXQKp",
+        "token_account": "F7tcS67EfP4bBJhWLxCk6ZmPVcsmPnJvPLQcDw5eeR67",
+        "ui_amount": 140052.392000398
+      },
+      {
+        "amount": "138876506806430",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "DdZR6zRFiUt4S5mg7AV1uKB2z1f1WzcNYCaTEEWPAuby",
+        "token_account": "8UviNr47S8eL6J3WfDxMRa3hvLta1VDJwNWqsDgtN3Cv",
+        "ui_amount": 138876.50680643
+      },
+      {
+        "amount": "136355682096188",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+        "token_account": "5Zumc1SYPmQ89nqwXqzogeuhdJ85iEMpSk35A4P87pmD",
+        "ui_amount": 136355.682096188
+      },
+      {
+        "amount": "123158734994002",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "DD3AeAssFvjqTvRTrRAtpfjkBF8FpVKnFuwnMLN9haXD",
+        "token_account": "2eicbpitfJXDwqCuFAmPgDP7t2oUotnAzbGzRKLMgSLe",
+        "ui_amount": 123158.734994002
+      }
+    ]
+  },
+  "success": true
+}
+```
+
+---
+
+## Token - Mint/Burn
+
+/defi/v3/token/mint-burn
+
+Retrieves mint/burn transactions for a DeFi token based on optional parameters.
+
+**Parameters:**
+
+| Name                  | Type    | Required | Default     | Description                                                                                                                                                                                                                                                                                          |
+| :-------------------- | :------ | :------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `address`             | string  | Yes      |             | The address of the token to retrieve mint/burn transactions for                                                                                                                                                                                                                                                                                          |
+| `offset`              | integer | No       | 0           | Offset (0 to 10000)                                                                                                                                                                                                                                                                                 |
+| `limit`               | integer | No       | 100         | Limit (1 to 100)                                                                                                                                                                                                                                                                                    |
+| `x-chain`             | string  | No       | solana      | Chain: `solana`, `ethereum`, `arbitrum`, `avalanche`, `bsc`, `optimism`, `polygon`, `base`, `zksyncsui`                                                                                                                                                                                               |
+
+**Example Request (cURL):**
+
+```bash
+curl --request GET \
+     --url 'https://public-api.birdeye.so/defi/v3/token/holder?address=So11111111111111111111111111111111111111112&offset=0&limit=100' \
+     --header 'X-API-KEY: e218eef66dd64c3c9eaffc048daecfd4' \
+     --header 'accept: application/json' \
+     --header 'x-chain: solana'
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "amount": "4932964050422626",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "AVzP2GeRmqGphJsMxWoqjpUifPpCret7LqWhD8NWQK49",
+        "token_account": "BUvduFTd2sWFagCunBPLupG8fBTJqweLw9DuhruNFSCm",
+        "ui_amount": 4932964.050422626
+      },
+      {
+        "amount": "712125892209890",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "GugU1tP7doLeTw9hQP51xRJyS8Da1fWxuiy2rVrnMD2m",
+        "token_account": "2nQNF8F9LLWMqdjymiLK2u8HoHMvYa4orCXsp3w65fQ2",
+        "ui_amount": 712125.89220989
+      },
+      {
+        "amount": "251220218668199",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "9DrvZvyWh1HuAoZxvYWMvkf2XCzryCpGgHqrMjyDWpmo",
+        "token_account": "GafNuUXj9rxGLn4y79dPu6MHSuPWeJR6UtTWuexpGh3U",
+        "ui_amount": 251220.218668199
+      },
+      {
+        "amount": "200771895434177",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ",
+        "token_account": "7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5",
+        "ui_amount": 200771.895434177
+      },
+      {
+        "amount": "174644893006183",
+        "decimals": 9,
+        "mint": "So11111111111111111111111111111111111111112",
+        "owner": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+        "token_account": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+        "ui_amount": 174644.893006183
+      }
+    ]
+  },
+  "success": true
+}
+```
+
+---
+
+## Search - Token, Market Data
+
+/defi/v3/search
+
+Search for token and market data by matching a pattern or a specific token, market address.
+
+**Parameters:**
+
+| Name                  | Type    | Required | Default     | Description                                                                                                                                                                                                                                                                                          |
+| :-------------------- | :------ | :------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`               | string  | No      | `all`            | The chain to search for.                                                                                                                                                                                   |
+| `keyword`             | string  | No      |             | The keyword to search for                                                                                                                                                                                                                                                                              |
+| `target`              | string  | No       | `all`            | The target to search for.                                                                                                                                                                                                                                                                              |
+| `sort_by`             | string  | Yes       | `liquidity`           | Sort by: `liquidity`, `market_cap`, `volume_24h`, `price_change_24h_percent`                                                                                                                                                                                                                                                                                 |
+| `sort_type`           | string  | Yes       | `desc`           | Sort type: `asc`, `desc`                                                                                                                                                                                                                                                                                    |
+| `verify_token`        | boolean | No       | `true`           | Verify token: `true`, `false`                                                                                                                                                                                                                                                                                 |
+| `markets`             | string | No       | `true`           |A comma-separated list of market sources to filter results (supported on Solana). Available options: ['Raydium', 'Raydium CP', 'Raydium Clamm', 'Meteora', 'Meteora DLMM', 'Fluxbeam', 'Pump.fun', 'OpenBook', 'OpenBook V2', 'Orca']                                                                                                                                                                                                                                                                                 |
+| `offset`              | integer | No       | 0           | Offset (0 to 10000)                                                                                                                                                                                                                                                                                 |
+| `limit`               | integer | No       | 20         | Limit (1 to 20)                                                                                                                                                                                                                                                                                    |
+
+**Example Request (cURL):**
+
+```bash
+curl --request GET \
+     --url 'https://public-api.birdeye.so/defi/v3/search?chain=all&target=all&sort_by=volume_24h_usd&sort_type=desc&offset=0&limit=20' \
+     --header 'X-API-KEY: e218eef66dd64c3c9eaffc048daecfd4' \
+     --header 'accept: application/json'
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "type": "token",
+        "result": [
+          {
+            "name": "Aibot",
+            "symbol": "Aib",
+            "address": "HKmJWZDfy7xQxHVfDTBU6zQn4p7ffQhXhRz2tBuQFyQZ",
+            "decimals": 6,
+            "fdv": 8975613766.601074,
+            "market_cap": 8975613719.723822,
+            "liquidity": 0,
+            "volume_24h_change_percent": 636.0023896462911,
+            "price": 0.3983461188939488,
+            "price_change_24h_percent": 0,
+            "network": "solana",
+            "buy_24h": 3,
+            "buy_24h_change_percent": 200,
+            "sell_24h": 1,
+            "sell_24h_change_percent": -100,
+            "trade_24h": 4,
+            "trade_24h_change_percent": 300,
+            "unique_wallet_24h": 1,
+            "unique_view_24h_change_percent": 33.33333333333333,
+            "last_trade_human_time": "2025-02-20T08:27:22.000Z",
+            "last_trade_unix_time": 1740040042,
+            "creation_time": "2025-02-03T10:14:05.655Z",
+            "volume_24h_usd": 5983876073.397627,
+            "logo_uri": "https://gateway.irys.xyz/W1JP-zBnyD7jAVCcEPSvHO3B6jvZ9JzFV-XO72X9l-g",
+            "verified": false
+          }
+        ]
+      },
+      {
+        "type": "market",
+        "result": [
+          {
+            "name": "Aib-AibMini",
+            "address": "7cir8jUUSewjC8yCuy3KnGk1nz697mXesqD7TXwUsPHY",
+            "liquidity": null,
+            "network": "solana",
+            "source": "Dexlab",
+            "trade_24h": 12,
+            "trade_24h_change_percent": 140,
+            "unique_wallet_24h": 1,
+            "unique_wallet_24h_change_percent": 0,
+            "last_trade_human_time": "2025-02-21T14:48:22.000Z",
+            "last_trade_unix_time": 1740149302,
+            "base_mint": "HKmJWZDfy7xQxHVfDTBU6zQn4p7ffQhXhRz2tBuQFyQZ",
+            "quote_mint": "AQ6CLi7w9zzuqYvM3TWYuddazjbH7S8F3odsZJXbzuUA",
+            "amount_base": 985985134.031947,
+            "amout_quote": 277120556.983459,
+            "creation_time": "2025-02-03T10:34:48.114Z",
+            "volume_24h_usd": 6236319676.496048
+          }
+        ]
+      }
+    ]
+  },
+  "success": true
+}
+```
+
+---
