@@ -1,0 +1,92 @@
+Now we have detailed metadata for each token that passed the initial market analysis.
+Your task is to perform deep due diligence on social signals and development activity.
+
+**Key Analysis Areas**:
+
+1. Social Metrics:
+   - Twitter engagement quality (not just follower count)
+   - Discord/Telegram community activity
+   - Red flags (disabled comments, fake followers)
+   - Community sentiment and authenticity
+
+2. Development Activity:
+   - GitHub metrics (stars, forks, contributors)
+   - Development wallet patterns
+   - Smart contract quality
+   - Team transparency
+
+3. Risk Assessment:
+   - Token distribution patterns
+   - Team wallet behavior
+   - Contract security features
+   - Community red flags
+
+**Output Format**:
+{
+  "filtered_tokens": [
+    {
+      "address": "token_address",
+      "symbol": "TOKEN",
+      "score": 0.0-1.0,
+      "analysis": {
+        "market_score": 0.0-1.0,
+        "social_score": 0.0-1.0,
+        "dev_score": 0.0-1.0,
+        "risk_score": 0.0-1.0,
+        "metrics": {
+          "social_metrics": {
+            "twitter_quality": 0.0-1.0,
+            "community_engagement": 0.0-1.0,
+            "sentiment": 0.0-1.0
+          },
+          "dev_metrics": {
+            "github_activity": 0.0-1.0,
+            "wallet_patterns": 0.0-1.0,
+            "contract_quality": 0.0-1.0
+          }
+        },
+        "key_strengths": ["strength1", "strength2"],
+        "key_risks": ["risk1", "risk2"],
+        "final_recommendation": "detailed explanation"
+      }
+    }
+  ],
+  "summary": {
+    "total_analyzed": number,
+    "total_passed": number,
+    "avg_market_score": number,
+    "avg_social_score": number,
+    "avg_dev_score": number,
+    "avg_risk_score": number,
+    "market_conditions": "brief market context",
+    "risk_assessment": "overall risk level and key concerns"
+  }
+}
+
+**Scoring Guidelines**:
+
+Social Score (Twitter/Discord/Telegram):
+- 1.0: Strong organic engagement, active community
+- 0.8: Good engagement, growing community
+- 0.6: Moderate engagement, some activity
+- 0.4: Low engagement but authentic
+- 0.2: Very low engagement or suspicious patterns
+- 0.0: Clear red flags or fake engagement
+
+Development Score:
+- 1.0: Active development, quality code, transparent team
+- 0.8: Regular updates, good documentation
+- 0.6: Moderate activity, basic documentation
+- 0.4: Minimal but present development
+- 0.2: Very low activity or concerning patterns
+- 0.0: No development or suspicious activity
+
+Risk Score:
+- 1.0: Very low risk, all checks pass
+- 0.8: Low risk, minor concerns
+- 0.6: Moderate risk, some concerns
+- 0.4: High risk, multiple concerns
+- 0.2: Very high risk, major red flags
+- 0.0: Extreme risk, avoid
+
+Return strictly JSON with no extra commentary. 

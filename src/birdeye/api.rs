@@ -244,6 +244,60 @@ pub struct TokenOverviewResponse {
     pub number_markets: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TokenV3Response {
+    pub address: String,
+    pub symbol: String,
+    pub name: String,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
+    pub decimals: u8,
+    #[serde(rename = "marketCap")]
+    pub market_cap: Option<f64>,
+    pub fdv: Option<f64>,
+    pub liquidity: Option<f64>,
+    pub price: f64,
+    #[serde(rename = "priceChange24hPercent")]
+    pub price_change_24h: Option<f64>,
+    #[serde(rename = "v24h")]
+    pub volume_24h: Option<f64>,
+    #[serde(rename = "v24hChangePercent")]
+    pub volume_change_24h: Option<f64>,
+    #[serde(rename = "trade24h")]
+    pub trade_24h: Option<i64>,
+    pub holder: Option<i64>,
+    pub extensions: Option<TokenExtensions>,
+    pub social_metrics: Option<SocialMetrics>,
+    pub dev_metrics: Option<DevMetrics>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SocialMetrics {
+    pub twitter_followers: Option<i64>,
+    pub twitter_handle: Option<String>,
+    pub discord_members: Option<i64>,
+    pub telegram_members: Option<i64>,
+    pub comments_disabled: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DevMetrics {
+    pub github_stars: Option<i64>,
+    pub github_forks: Option<i64>,
+    pub github_contributors: Option<i64>,
+    pub last_commit_date: Option<String>,
+    pub dev_wallet_count: Option<i64>,
+    pub dev_activity_30d: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TokenV3ListResponse {
+    pub data: Vec<TokenV3Response>,
+    pub total: i64,
+    pub page: i64,
+    pub limit: i64,
+}
+
 #[async_trait]
 pub trait BirdeyeApi: Send + Sync {
     /// Get detailed market data for a token by address
@@ -254,6 +308,12 @@ pub trait BirdeyeApi: Send + Sync {
 
     /// Get trending tokens data
     async fn get_token_trending(&self) -> Result<Vec<TrendingToken>>;
+
+    /// Get token list with v3 endpoint
+    async fn get_token_list_v3(&self, page: i64, limit: i64) -> Result<TokenV3ListResponse>;
+
+    /// Get token metadata with v3 endpoint
+    async fn get_token_metadata_v3(&self, address: &str) -> Result<TokenV3Response>;
 }
 
 pub struct BirdeyeClient {
@@ -373,6 +433,36 @@ impl BirdeyeApi for BirdeyeClient {
             Err(anyhow!("Failed to get trending tokens: {}", error_msg))
         }
     }
+
+    async fn get_token_list_v3(&self, page: i64, limit: i64) -> Result<TokenV3ListResponse> {
+        let endpoint = format!("/v3/tokens?page={}&limit={}", page, limit);
+        let response = self.get(&endpoint).await?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow!("Failed to get token list: {}", error_text));
+        }
+
+        let token_list = response.json::<TokenV3ListResponse>().await
+            .context("Failed to parse token list response")?;
+
+        Ok(token_list)
+    }
+
+    async fn get_token_metadata_v3(&self, address: &str) -> Result<TokenV3Response> {
+        let endpoint = format!("/v3/token/{}/metadata", address);
+        let response = self.get(&endpoint).await?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow!("Failed to get token metadata: {}", error_text));
+        }
+
+        let token_metadata = response.json::<TokenV3Response>().await
+            .context("Failed to parse token metadata response")?;
+
+        Ok(token_metadata)
+    }
 }
 
 // Mock BirdeyeApi for testing
@@ -381,6 +471,8 @@ pub struct MockBirdeyeApi {
     pub market_data: Option<TokenMarketResponse>,
     pub token_overview: Option<TokenOverviewResponse>,
     pub token_trending: Option<Vec<TrendingToken>>,
+    pub token_list_v3: Option<TokenV3ListResponse>,
+    pub token_metadata_v3: Option<TokenV3Response>,
 }
 
 #[cfg(test)]
@@ -390,7 +482,19 @@ impl MockBirdeyeApi {
             market_data: None,
             token_overview: None,
             token_trending: None,
+            token_list_v3: None,
+            token_metadata_v3: None,
         }
+    }
+
+    pub fn with_token_list_v3(mut self, token_list: TokenV3ListResponse) -> Self {
+        self.token_list_v3 = Some(token_list);
+        self
+    }
+
+    pub fn with_token_metadata_v3(mut self, token_metadata: TokenV3Response) -> Self {
+        self.token_metadata_v3 = Some(token_metadata);
+        self
     }
 }
 
@@ -407,5 +511,13 @@ impl BirdeyeApi for MockBirdeyeApi {
 
     async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
         self.token_trending.clone().ok_or(anyhow!("Mock not set"))
+    }
+
+    async fn get_token_list_v3(&self, _page: i64, _limit: i64) -> Result<TokenV3ListResponse> {
+        self.token_list_v3.clone().ok_or_else(|| anyhow!("No mock token list data"))
+    }
+
+    async fn get_token_metadata_v3(&self, _address: &str) -> Result<TokenV3Response> {
+        self.token_metadata_v3.clone().ok_or_else(|| anyhow!("No mock token metadata"))
     }
 }
