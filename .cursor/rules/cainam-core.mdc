@@ -55,6 +55,7 @@ You are an expert in Rust development, specializing in building AI-powered appli
 
 - Assume API keys and other sensitive information are stored securely (e.g., in environment variables).  Do *not* hardcode secrets.
 - Follow best practices for secure coding in Rust.
+- Do not overwrite the .env file when executing changes unless specifically asked for
 
 **Example (Illustrative):**
 

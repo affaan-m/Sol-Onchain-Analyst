@@ -1,6 +1,8 @@
+use crate::birdeye::api::TokenV3Response;
 use crate::error::{AgentError, AgentResult};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::services::token_analytics::TokenAnalyticsService;
+use anyhow::Result;
 use rig::{
     agent::Agent as RigAgent,
     completion::Prompt,
@@ -8,6 +10,11 @@ use rig::{
 };
 use std::sync::Arc;
 use tracing::{debug, error};
+use serde_json;
+
+const INITIAL_ANALYSIS_PROMPT: &str = include_str!("../prompts/token_filter_initial.txt");
+const METADATA_ANALYSIS_PROMPT: &str = include_str!("../prompts/token_filter_market.txt");
+const SENTIMENT_ANALYSIS_PROMPT: &str = include_str!("../prompts/token_filter_metadata.txt");
 
 pub struct TokenAnalyticsLLM {
     analytics_service: Arc<TokenAnalyticsService>,
@@ -56,7 +63,7 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        match self.agent.prompt(&prompt).await {
+        match self.agent.prompt(prompt).await {
             Ok(analysis) => Ok(analysis),
             Err(e) => {
                 error!("Failed to get LLM analysis: {}", e);
@@ -84,7 +91,7 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        let insights = self.agent.prompt(&prompt).await.map_err(|e| {
+        let insights = self.agent.prompt(prompt).await.map_err(|e| {
             AgentError::MarketAnalysis(format!("Failed to get market insights: {}", e))
         })?;
 
@@ -113,7 +120,7 @@ impl TokenAnalyticsLLM {
 
         // Get LLM analysis
         let comparison =
-            self.agent.prompt(&prompt).await.map_err(|e| {
+            self.agent.prompt(prompt).await.map_err(|e| {
                 AgentError::MarketAnalysis(format!("Failed to compare tokens: {}", e))
             })?;
 
@@ -151,5 +158,67 @@ impl TokenAnalyticsLLM {
         }
 
         Ok(formatted)
+    }
+
+    pub async fn analyze_token_data(&self, token_data: &TokenV3Response) -> Result<TokenAnalytics> {
+        let prompt = format!(
+            "{}\n\nToken Data: {}",
+            INITIAL_ANALYSIS_PROMPT,
+            serde_json::to_string(token_data)?
+        );
+
+        match self.agent.prompt(prompt).await {
+            Ok(response) => {
+                debug!("Received LLM response: {}", response);
+                serde_json::from_str(&response).map_err(|e| {
+                    error!("Failed to parse LLM response: {}", e);
+                    anyhow::anyhow!("Failed to parse token analysis from LLM response: {}", e)
+                })
+            }
+            Err(e) => {
+                error!("LLM prompt failed: {:?}", e);
+                Err(anyhow::anyhow!("Failed to get LLM response: {}", e))
+            }
+        }
+    }
+
+    pub async fn analyze_token_metadata(&self, token: &TokenAnalytics, metadata: &TokenV3Response) -> Result<TokenAnalytics> {
+        let prompt = format!(
+            "{}\n\nToken Analysis: {}\nMetadata: {}",
+            METADATA_ANALYSIS_PROMPT,
+            serde_json::to_string(token)?,
+            serde_json::to_string(metadata)?
+        );
+
+        let insights = self.agent.prompt(prompt).await.map_err(|e| {
+            error!("LLM prompt failed: {:?}", e);
+            anyhow::anyhow!("Failed to get LLM response: {}", e)
+        })?;
+
+        debug!("Received LLM response: {}", insights);
+        serde_json::from_str(&insights).map_err(|e| {
+            error!("Failed to parse LLM response: {}", e);
+            anyhow::anyhow!("Failed to parse token analysis from LLM response: {}", e)
+        })
+    }
+
+    pub async fn analyze_token_sentiment(&self, token: &TokenAnalytics, sentiment_data: &str) -> Result<TokenAnalytics> {
+        let prompt = format!(
+            "{}\n\nToken Analysis: {}\nSentiment Data: {}",
+            SENTIMENT_ANALYSIS_PROMPT,
+            serde_json::to_string(token)?,
+            sentiment_data
+        );
+
+        let insights = self.agent.prompt(prompt).await.map_err(|e| {
+            error!("LLM prompt failed: {:?}", e);
+            anyhow::anyhow!("Failed to get LLM response: {}", e)
+        })?;
+
+        debug!("Received LLM response: {}", insights);
+        serde_json::from_str(&insights).map_err(|e| {
+            error!("Failed to parse LLM response: {}", e);
+            anyhow::anyhow!("Failed to parse token analysis from LLM response: {}", e)
+        })
     }
 }

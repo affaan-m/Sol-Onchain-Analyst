@@ -9,11 +9,15 @@ use tokio::time::sleep;
 use tracing::{info, warn, error, debug};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use serde_json;
+use dotenvy::dotenv;
 
 const SLEEP_DURATION: Duration = Duration::from_secs(300); // 5 minutes between runs
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load environment variables from .env file
+    dotenv().ok();
+
     // Initialize detailed logging
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env()

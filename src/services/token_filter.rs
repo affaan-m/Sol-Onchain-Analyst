@@ -5,7 +5,7 @@ use mongodb::bson::{self, doc, Document};
 use rig::{
     agent::Agent,
     completion::Prompt,
-    providers::openai::{Client as OpenAIClient, CompletionModel, GPT_4_TURBO},
+    providers::openai::{self, Client as OpenAIClient, CompletionModel},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -15,6 +15,7 @@ const DEFAULT_CHUNK_SIZE: i64 = 20;
 const INITIAL_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_initial.txt");
 const MARKET_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_market.txt");
 const METADATA_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_metadata.txt");
+const MODEL: &str = "o3-mini";  // Using o3-mini for better cost efficiency with high context
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BirdeyeFilters {
@@ -98,7 +99,9 @@ impl TokenFilterService {
     ) -> Self {
         let openai_client = OpenAIClient::new(openai_api_key);
         let agent = openai_client
-            .agent(GPT_4_TURBO)
+            .agent(MODEL)
+            .preamble("You are a Solana token analysis expert. You provide clear, concise responses in the exact format requested.")
+            .temperature(0.1) // Low temperature for more consistent outputs
             .build();
 
         Self {
@@ -154,15 +157,23 @@ impl TokenFilterService {
 
     async fn get_birdeye_filters(&self) -> Result<BirdeyeFilters> {
         debug!("Requesting BirdEye filters from LLM with prompt: {}", INITIAL_FILTER_PROMPT);
-        let response = self.agent
-            .prompt(INITIAL_FILTER_PROMPT)
-            .await
-            .context("Failed to get LLM response for filters")?;
+        let response = match self.agent.prompt(INITIAL_FILTER_PROMPT.to_string()).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                error!("LLM prompt failed: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to get LLM response: {}", e));
+            }
+        };
 
         debug!("Received LLM response for filters: {}", response);
 
-        let filters = serde_json::from_str(&response)
-            .context("Failed to parse BirdEye filters from LLM response")?;
+        let filters = match serde_json::from_str(&response) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to parse JSON response: {}\nResponse was: {}", e, response);
+                return Err(anyhow::anyhow!("Failed to parse BirdEye filters from LLM response: {}", e));
+            }
+        };
         
         info!("Generated BirdEye filters: {:?}", filters);
         Ok(filters)
@@ -178,7 +189,7 @@ impl TokenFilterService {
         let analysis_prompt = format!("{}\n\nAnalyze these tokens: {}", MARKET_FILTER_PROMPT, tokens_json);
         
         let response = self.agent
-            .prompt(&analysis_prompt)
+            .prompt(analysis_prompt)
             .await
             .context("Failed to get LLM response for market analysis")?;
 
@@ -201,7 +212,7 @@ impl TokenFilterService {
         let analysis_prompt = format!("{}\n\nAnalyze these tokens with metadata: {}", METADATA_FILTER_PROMPT, analysis_json);
 
         let response = self.agent
-            .prompt(&analysis_prompt)
+            .prompt(analysis_prompt)
             .await
             .context("Failed to get LLM response for metadata analysis")?;
 
