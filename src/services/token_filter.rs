@@ -152,20 +152,27 @@ impl TokenFilterService {
     }
 
     async fn get_birdeye_filters(&self) -> Result<BirdeyeFilters> {
+        debug!("Requesting BirdEye filters from LLM with prompt: {}", INITIAL_FILTER_PROMPT);
         let response = self.agent
             .prompt(INITIAL_FILTER_PROMPT)
             .await
             .context("Failed to get LLM response for filters")?;
 
-        debug!("LLM response for filters: {}", response);
+        debug!("Received LLM response for filters: {}", response);
 
-        serde_json::from_str(&response)
-            .context("Failed to parse BirdEye filters from LLM response")
+        let filters = serde_json::from_str(&response)
+            .context("Failed to parse BirdEye filters from LLM response")?;
+        
+        info!("Generated BirdEye filters: {:?}", filters);
+        Ok(filters)
     }
 
     async fn analyze_market_data(&self, tokens: &[TokenV3Response]) -> Result<FilterResponse> {
         let tokens_json = serde_json::to_string(tokens)
             .context("Failed to serialize tokens for market analysis")?;
+
+        debug!("Analyzing market data for {} tokens", tokens.len());
+        debug!("Market analysis input: {}", tokens_json);
 
         let analysis_prompt = format!("{}\n\nAnalyze these tokens: {}", MARKET_FILTER_PROMPT, tokens_json);
         
@@ -174,13 +181,21 @@ impl TokenFilterService {
             .await
             .context("Failed to get LLM response for market analysis")?;
 
-        serde_json::from_str(&response)
-            .context("Failed to parse market analysis from LLM response")
+        debug!("Received market analysis response: {}", response);
+
+        let analysis = serde_json::from_str(&response)
+            .context("Failed to parse market analysis from LLM response")?;
+
+        info!("Completed market analysis with {} filtered tokens", analysis.filtered_tokens.len());
+        Ok(analysis)
     }
 
     async fn analyze_metadata(&self, tokens: &[(TokenAnalysis, TokenV3Response)]) -> Result<FilterResponse> {
         let analysis_json = serde_json::to_string(tokens)
             .context("Failed to serialize tokens with analysis")?;
+
+        debug!("Analyzing metadata for {} tokens", tokens.len());
+        debug!("Metadata analysis input: {}", analysis_json);
 
         let analysis_prompt = format!("{}\n\nAnalyze these tokens with metadata: {}", METADATA_FILTER_PROMPT, analysis_json);
 
@@ -189,13 +204,20 @@ impl TokenFilterService {
             .await
             .context("Failed to get LLM response for metadata analysis")?;
 
-        serde_json::from_str(&response)
-            .context("Failed to parse metadata analysis from LLM response")
+        debug!("Received metadata analysis response: {}", response);
+
+        let analysis = serde_json::from_str(&response)
+            .context("Failed to parse metadata analysis from LLM response")?;
+
+        info!("Completed metadata analysis with {} final filtered tokens", analysis.filtered_tokens.len());
+        Ok(analysis)
     }
 
     async fn store_analysis_results(&self, analysis: &FilterResponse) -> Result<()> {
         let collection = "token_analytics";
         let timestamp = bson::DateTime::now();
+
+        debug!("Preparing to store analysis results for {} tokens", analysis.filtered_tokens.len());
 
         let documents: Vec<Document> = analysis
             .filtered_tokens
@@ -240,9 +262,14 @@ impl TokenFilterService {
             })
             .collect();
 
+        debug!("Storing {} documents in MongoDB collection '{}'", documents.len(), collection);
+
         self.db_pool
             .insert_token_analytics_documents(collection, documents)
             .await
-            .context("Failed to store token analysis results")
+            .context("Failed to store token analysis results")?;
+
+        info!("Successfully stored analysis results in MongoDB");
+        Ok(())
     }
 } 
