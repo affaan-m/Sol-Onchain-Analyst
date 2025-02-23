@@ -269,3 +269,83 @@ impl DataValidator {
 - Metric collection tuning
 - Dashboard updates
 - Log rotation
+
+## BirdEye V3 API Integration
+
+### Overview
+The BirdEye V3 API integration provides enhanced token analysis capabilities with LLM-based filtering. The system continuously monitors and analyzes Solana tokens, storing valuable insights in MongoDB.
+
+### Key Components
+
+1. BirdeyeApi Trait
+   - Token list retrieval with pagination
+   - Token metadata fetching
+   - Market data analysis
+   - Error handling and retries
+
+2. TokenFilterService
+   - LLM-based token analysis
+   - Multi-stage filtering pipeline
+   - MongoDB storage integration
+   - Continuous processing
+
+### Data Flow
+1. Token Discovery
+   - Fetches token list from BirdEye V3 API
+   - Applies LLM-generated filters
+   - Paginates through results
+
+2. Analysis Pipeline
+   - Initial market data analysis
+   - Token scoring and filtering
+   - Metadata enrichment for promising tokens
+   - Final comprehensive analysis
+
+3. Data Storage
+   - MongoDB document structure
+   - Analytics data organization
+   - Query optimization
+
+### Operational Requirements
+
+1. Environment Setup
+   ```
+   BIRDEYE_API_KEY=<your-key>
+   OPENAI_API_KEY=<your-key>
+   MONGODB_URI=<your-uri>
+   MONGODB_DATABASE=<your-db>
+   ```
+
+2. Running the Service
+   ```bash
+   cargo run --example token_filter
+   ```
+
+3. Monitoring
+   - Log levels: DEBUG for detailed operation
+   - MongoDB collection: token_analytics
+   - Process status in logs
+
+### Maintenance Tasks
+
+1. Regular Checks
+   - Monitor API rate limits
+   - Check MongoDB storage usage
+   - Verify token analysis quality
+
+2. Performance Tuning
+   - Adjust sleep duration between runs
+   - Optimize MongoDB queries
+   - Fine-tune LLM prompts
+
+### Integration Status
+- Feature branch: feature/birdeye-v3-llm-filter
+- Ready for production use
+- All tests passing
+- Documentation updated
+
+### Merge Instructions for Matt
+1. The feature branch is ready to merge into main
+2. All core functionality is tested and working
+3. No breaking changes introduced
+4. MongoDB schema is backward compatible

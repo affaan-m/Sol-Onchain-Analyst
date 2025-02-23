@@ -1,4 +1,45 @@
-# Active Context
+# Active Development Context
+
+## Current Focus
+- BirdEye V3 API Integration with LLM-based Token Filtering
+
+## Recent Changes
+- Completed BirdEye V3 API integration with enhanced token filtering capabilities
+- Updated BirdeyeApi trait with V3 endpoints for token list and metadata
+- Implemented TokenV3ListResponse and TokenV3Response structs
+- Enhanced TokenFilterService with LLM-based filtering pipeline
+- Added social and dev metrics support in token analysis
+- Implemented MongoDB storage for analysis results
+
+## Technical Implementation Details
+- Token filtering pipeline now uses o1-mini model for analysis
+- Enhanced error handling and logging throughout the system
+- Implemented token enrichment with metadata for high-scoring tokens (score >= 0.7)
+- MongoDB document structure optimized for analytics storage
+- Continuous processing with configurable sleep duration (default: 5 minutes)
+
+## Next Steps
+- Monitor token filter performance in production
+- Consider implementing additional metrics for token analysis
+- Explore potential optimizations for MongoDB queries
+- Consider adding more sophisticated LLM prompts for better analysis
+
+## Active Decisions
+- Using o1-mini model for LLM analysis until o3-mini is available
+- Token enrichment threshold set at 0.7 score
+- MongoDB collection structure designed for efficient querying
+- Continuous processing with error handling and retry mechanism
+
+## Known Issues
+- None currently identified
+
+## Testing Status
+- Token filter example successfully tested
+- API responses and data parsing verified
+- MongoDB storage functionality confirmed
+- LLM analysis pipeline validated
+
+## Active Context
 
 ## Current Focus
 

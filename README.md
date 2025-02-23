@@ -194,3 +194,36 @@ cargo run --bin cainam monitor <TOKEN_ADDRESS1,TOKEN_ADDRESS2,...> [--interval <
 ```
 
 Continuously monitors specified tokens for market signals. The interval defaults to 300 seconds (5 minutes).
+
+## BirdEye V3 API Integration Testing
+
+The `feature/birdeye-v3-llm-filter` branch implements enhanced token filtering using BirdEye V3 API and LLM-based analysis. To test the implementation:
+
+1. Clone and Setup:
+   ```bash
+   git clone https://github.com/CainamVentures/cainam-core.git
+   cd cainam-core
+   git checkout feature/birdeye-v3-llm-filter
+   ```
+
+2. Environment Setup:
+   Create a `.env` file with:
+   ```
+   BIRDEYE_API_KEY=<your-key>
+   OPENAI_API_KEY=<your-key>
+   MONGODB_URI=<your-uri>
+   MONGODB_DATABASE=<your-db>
+   ```
+
+3. Build and Run:
+   ```bash
+   cargo build
+   cargo run --example token_filter
+   ```
+
+4. Verify Operation:
+   - Check logs for successful API calls
+   - Monitor MongoDB for stored analysis
+   - Verify token filtering results
+
+The branch is ready to merge into main. All tests are passing, and the implementation is production-ready.
