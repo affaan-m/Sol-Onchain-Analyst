@@ -175,16 +175,6 @@ cargo test
 cargo test --package cainam-core
 ```
 
-### Database Migrations
-
-```bash
-# Apply migrations
-sqlx migrate run
-
-# Create new migration
-sqlx migrate add <name>
-```
-
 ### Code Style
 
 The project uses rustfmt and clippy for code formatting and linting:
