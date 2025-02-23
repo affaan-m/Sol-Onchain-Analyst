@@ -1,9 +1,11 @@
 use crate::error::{AgentError, AgentResult};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::services::token_analytics::TokenAnalyticsService;
-use rig::agent::Agent as RigAgent;
-use rig::completion::Prompt;
-use rig::providers::openai::{Client as OpenAIClient, CompletionModel};
+use rig::{
+    agent::Agent as RigAgent,
+    completion::Prompt,
+    providers::openai::{Client as OpenAIClient, CompletionModel},
+};
 use std::sync::Arc;
 use tracing::{debug, error};
 
@@ -54,7 +56,7 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        match self.agent.prompt(prompt).await {
+        match self.agent.prompt(&prompt).await {
             Ok(analysis) => Ok(analysis),
             Err(e) => {
                 error!("Failed to get LLM analysis: {}", e);
@@ -82,7 +84,7 @@ impl TokenAnalyticsLLM {
         );
 
         // Get LLM analysis
-        let insights = self.agent.prompt(prompt).await.map_err(|e| {
+        let insights = self.agent.prompt(&prompt).await.map_err(|e| {
             AgentError::MarketAnalysis(format!("Failed to get market insights: {}", e))
         })?;
 
@@ -111,7 +113,7 @@ impl TokenAnalyticsLLM {
 
         // Get LLM analysis
         let comparison =
-            self.agent.prompt(prompt).await.map_err(|e| {
+            self.agent.prompt(&prompt).await.map_err(|e| {
                 AgentError::MarketAnalysis(format!("Failed to compare tokens: {}", e))
             })?;
 

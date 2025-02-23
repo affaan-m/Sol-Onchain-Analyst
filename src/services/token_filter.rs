@@ -2,8 +2,9 @@ use crate::birdeye::api::{BirdeyeApi, TokenV3Response};
 use crate::config::mongodb::{MongoDbPool, TokenAnalyticsDataExt};
 use anyhow::{Context, Result};
 use mongodb::bson::{self, doc, Document};
-use rig_core::{
+use rig::{
     agent::Agent,
+    completion::Prompt,
     providers::openai::{Client as OpenAIClient, CompletionModel, GPT_4_TURBO},
 };
 use serde::{Deserialize, Serialize};
@@ -86,7 +87,7 @@ pub struct FilterResponse {
 pub struct TokenFilterService {
     birdeye: Arc<dyn BirdeyeApi>,
     db_pool: Arc<MongoDbPool>,
-    agent: Agent,
+    agent: Agent<CompletionModel>,
 }
 
 impl TokenFilterService {
@@ -183,7 +184,7 @@ impl TokenFilterService {
 
         debug!("Received market analysis response: {}", response);
 
-        let analysis = serde_json::from_str(&response)
+        let analysis: FilterResponse = serde_json::from_str(&response)
             .context("Failed to parse market analysis from LLM response")?;
 
         info!("Completed market analysis with {} filtered tokens", analysis.filtered_tokens.len());
@@ -206,7 +207,7 @@ impl TokenFilterService {
 
         debug!("Received metadata analysis response: {}", response);
 
-        let analysis = serde_json::from_str(&response)
+        let analysis: FilterResponse = serde_json::from_str(&response)
             .context("Failed to parse metadata analysis from LLM response")?;
 
         info!("Completed metadata analysis with {} final filtered tokens", analysis.filtered_tokens.len());
