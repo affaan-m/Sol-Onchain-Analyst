@@ -12,11 +12,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
-const DEFAULT_CHUNK_SIZE: i64 = 20;
 const INITIAL_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_initial.txt");
-const MARKET_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_market.txt");
-const METADATA_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_metadata.txt");
 const MODEL: &str = openai::O1_MINI;  // Using O1_MINI until O3_MINI is available in RIG
+
+const PIPELINE_STEP_1: &str = "PIPELINE STEP 1: BirdEye Filter Selection";
+const PIPELINE_STEP_2: &str = "PIPELINE STEP 2: Token List Retrieval";
+const PIPELINE_STEP_3: &str = "PIPELINE STEP 3: Market Analysis";
+const PIPELINE_STEP_4: &str = "PIPELINE STEP 4: Metadata Analysis";
+const PIPELINE_STEP_5: &str = "PIPELINE STEP 5: Final Filtering & Storage";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BirdeyeFilters {
@@ -108,7 +111,6 @@ impl TokenFilterService {
     }
 
     async fn get_completion(&self, prompt: &str) -> Result<String> {
-        debug!("Sending completion request with prompt: {}", prompt);
         debug!("Using model: {}", MODEL);
         
         let request = CompletionRequest {
@@ -118,10 +120,10 @@ impl TokenFilterService {
             chat_history: vec![],
             preamble: None,
             tools: vec![],
-            temperature: None,  // Remove temperature since some models don't support it
+            temperature: None,
             additional_params: None,
             documents: vec![],
-            max_tokens: None,  // Let the model decide max tokens
+            max_tokens: None,
         };
         
         let completion = match self.openai_client
@@ -138,170 +140,266 @@ impl TokenFilterService {
                 }
             };
 
-        // Extract the first text content from the response
         let result = completion.choice
             .into_iter()
             .find_map(|content| match content {
-                rig::message::AssistantContent::Text(text) => {
-                    debug!("Found text content: {}", text.text);
-                    Some(text.text)
-                },
-                _other => {
-                    debug!("Found non-text content type");
-                    None
-                }
+                rig::message::AssistantContent::Text(text) => Some(text.text),
+                _other => None
             })
             .ok_or_else(|| anyhow::anyhow!("No text response from completion"))?;
 
-        debug!("Extracted result: {}", result);
         Ok(result)
     }
 
     pub async fn filter_tokens(&self, page: i64, _limit: Option<i64>) -> Result<FilterResponse> {
-        // Step 1: Get LLM to choose BirdEye filters
-        info!("Getting LLM to choose BirdEye filters");
-        let filters = self.get_birdeye_filters().await
-            .context("Failed to get BirdEye filters")?;
+        info!("\n{}\n{}", PIPELINE_STEP_1, "=".repeat(50));
         
-        // Step 2: Get initial token list from Birdeye v3
-        info!("Fetching token list from Birdeye v3 API");
-        let token_list = self.birdeye
-            .get_token_list_v3(page, filters.limit, Some(&filters.filters))
-            .await
-            .context("Failed to fetch token list")?;
+        // Get BirdEye filters
+        let filters = self.get_birdeye_filters().await?;
+        info!("Selected filters: min_liquidity={}, min_market_cap={}, min_holder={}", 
+            filters.filters.get("min_liquidity").unwrap_or(&serde_json::Value::Null),
+            filters.filters.get("min_market_cap").unwrap_or(&serde_json::Value::Null),
+            filters.filters.get("min_holder").unwrap_or(&serde_json::Value::Null)
+        );
 
-        // Step 3: First LLM analysis of market data
-        info!("Performing initial market analysis");
-        let initial_analysis = self.analyze_market_data(&token_list.data.items).await
-            .context("Failed to analyze market data")?;
+        info!("\n{}\n{}", PIPELINE_STEP_2, "=".repeat(50));
+        
+        // Get token list using v3 endpoint with correct parameters
+        let tokens = self.birdeye
+            .get_token_list_v3(
+                page,
+                filters.limit,
+                Some(&filters.filters)
+            )
+            .await?;
+            
+        info!("Retrieved {} tokens from BirdEye API", tokens.data.items.len());
 
-        // Step 4: Get additional metadata for promising tokens
-        info!("Fetching metadata for filtered tokens");
-        let mut enriched_tokens = Vec::new();
-        for token in &initial_analysis.filtered_tokens {
-            if token.score >= 0.7 {
-                match self.birdeye.get_token_metadata_v3(&token.address).await {
-                    Ok(metadata) => enriched_tokens.push((token.clone(), metadata)),
-                    Err(e) => {
-                        error!("Failed to fetch metadata for token {}: {}", token.address, e);
-                        continue;
-                    }
-                }
-            }
-        }
+        info!("\n{}\n{}", PIPELINE_STEP_3, "=".repeat(50));
+        
+        // Analyze market data
+        let market_analysis = self.analyze_market_data(&tokens.data.items).await?;
+        
+        // Get metadata for filtered tokens
+        let token_pairs: Vec<(TokenAnalysis, TokenV3Response)> = market_analysis
+            .filtered_tokens
+            .into_iter()
+            .filter_map(|analysis| {
+                tokens.data.items
+                    .iter()
+                    .find(|t| t.address == analysis.address)
+                    .map(|t| (analysis, t.clone()))
+            })
+            .collect();
 
-        // Step 5: Final LLM analysis with social and dev metrics
-        info!("Performing final analysis with metadata");
-        let final_analysis = self.analyze_metadata(&enriched_tokens).await
-            .context("Failed to analyze metadata")?;
+        info!("\n{}\n{}", PIPELINE_STEP_4, "=".repeat(50));
+        
+        // Analyze metadata
+        let metadata_analysis = self.analyze_metadata(&token_pairs).await?;
 
-        // Step 6: Store results in MongoDB
-        info!("Storing analysis results");
-        self.store_analysis_results(&final_analysis).await
-            .context("Failed to store analysis results")?;
-
-        Ok(final_analysis)
+        info!("\n{}\n{}", PIPELINE_STEP_5, "=".repeat(50));
+        
+        // Store results
+        self.store_analysis_results(&metadata_analysis).await?;
+        info!("Analysis complete - {} tokens stored in recommendations", metadata_analysis.filtered_tokens.len());
+        
+        Ok(metadata_analysis)
     }
 
     async fn get_birdeye_filters(&self) -> Result<BirdeyeFilters> {
-        debug!("Loading initial filter prompt from file");
-        debug!("Initial filter prompt content: {}", INITIAL_FILTER_PROMPT);
-        
         let prompt = format!(
             "Return BirdEye filter parameters as JSON.\n\n{}",
             INITIAL_FILTER_PROMPT
         );
         
-        debug!("Constructed prompt: {}", prompt);
+        let response = self.get_completion(&prompt).await?;
         
-        let response = match self.get_completion(&prompt).await {
-            Ok(resp) => {
-                debug!("Got successful response from completion");
-                resp
-            },
-            Err(e) => {
-                error!("Failed to get completion response: {:?}", e);
-                return Err(anyhow::anyhow!("Failed to get LLM response: {}", e));
-            }
-        };
-
-        debug!("Attempting to parse response as JSON: {}", response);
-
-        // Strip markdown code block markers if present
-        let json_str = response
+        // Clean the response by removing markdown code blocks
+        let clean_response = response
             .trim()
             .trim_start_matches("```json")
+            .trim_start_matches("```")
             .trim_end_matches("```")
             .trim();
-
-        let filters = match serde_json::from_str(json_str) {
-            Ok(f) => {
-                debug!("Successfully parsed JSON response");
-                f
-            },
-            Err(e) => {
-                error!("Failed to parse JSON response: {}\nResponse was: {}", e, response);
-                return Err(anyhow::anyhow!("Failed to parse BirdEye filters from LLM response: {}", e));
-            }
+            
+        // Parse the raw filter parameters into a HashMap
+        let filter_params: std::collections::HashMap<String, serde_json::Value> = 
+            serde_json::from_str(clean_response)
+                .context("Failed to parse filter parameters")?;
+                
+        // Construct BirdeyeFilters with mandatory parameters
+        let filters = BirdeyeFilters {
+            sort_by: "liquidity".to_string(),
+            sort_type: "desc".to_string(),
+            limit: 100,
+            offset: Some(0),
+            filters: filter_params,
         };
-        
-        info!("Generated BirdEye filters: {:?}", filters);
+            
         Ok(filters)
     }
 
     async fn analyze_market_data(&self, tokens: &[TokenV3Response]) -> Result<FilterResponse> {
-        let tokens_json = serde_json::to_string(tokens)
-            .context("Failed to serialize tokens for market analysis")?;
-
-        debug!("Analyzing market data for {} tokens", tokens.len());
-        debug!("Market analysis input: {}", tokens_json);
-
         let prompt = format!(
-            "As a Solana token analyst, analyze these tokens and provide results in JSON format.\n\n{}\n\nTokens to analyze: {}",
-            MARKET_FILTER_PROMPT,
-            tokens_json
+            r#"You are an expert Solana trader analyzing market data for potential investments.
+
+Analyze these tokens based on market metrics and return a FilterResponse with:
+1. filtered_tokens: Array of tokens that pass analysis
+2. summary: Overall market analysis summary
+
+For each token calculate:
+- Liquidity Score (0.0-1.0): Based on liquidity depth
+- Volume Score (0.0-1.0): Based on trading volume
+- Momentum Score (0.0-1.0): Based on price action
+
+Return response in this format:
+{{
+  "filtered_tokens": [
+    {{
+      "address": "token_address",
+      "symbol": "TOKEN",
+      "score": 0.75,
+      "analysis": {{
+        "market_score": 0.8,
+        "social_score": 0.0,
+        "dev_score": 0.0,
+        "risk_score": 0.7,
+        "metrics": null,
+        "key_strengths": ["Good liquidity", "Active trading"],
+        "key_risks": ["New token", "Limited history"],
+        "final_recommendation": "Consider small position"
+      }}
+    }}
+  ],
+  "summary": {{
+    "total_analyzed": 10,
+    "total_passed": 3,
+    "avg_market_score": 0.65,
+    "avg_social_score": 0.0,
+    "avg_dev_score": 0.0,
+    "avg_risk_score": 0.7,
+    "market_conditions": "Mixed with some promising candidates",
+    "risk_assessment": "High risk due to limited history"
+  }}
+}}
+
+Tokens to analyze: {}"#,
+            serde_json::to_string_pretty(tokens)?
+        );
+
+        debug!("Sending market analysis prompt...");
+        let response = self.get_completion(&prompt).await?;
+        
+        // Clean and parse response
+        let clean_response = response
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+            
+        debug!("Parsing market analysis response...");
+        let analysis: FilterResponse = serde_json::from_str(clean_response)
+            .context("Failed to parse market analysis response")?;
+
+        info!("Market analysis complete - {} of {} tokens passed initial filtering", 
+            analysis.summary.total_passed, 
+            analysis.summary.total_analyzed
         );
         
-        let response = self.get_completion(&prompt).await?;
-
-        debug!("Received market analysis response: {}", response);
-
-        let analysis: FilterResponse = serde_json::from_str(&response)
-            .context("Failed to parse market analysis from LLM response")?;
-
-        info!("Completed market analysis with {} filtered tokens", analysis.filtered_tokens.len());
         Ok(analysis)
     }
 
     async fn analyze_metadata(&self, tokens: &[(TokenAnalysis, TokenV3Response)]) -> Result<FilterResponse> {
-        let analysis_json = serde_json::to_string(tokens)
-            .context("Failed to serialize tokens with analysis")?;
-
-        debug!("Analyzing metadata for {} tokens", tokens.len());
-        debug!("Metadata analysis input: {}", analysis_json);
-
         let prompt = format!(
-            "As a Solana token analyst, analyze these tokens with their metadata and provide results in JSON format.\n\n{}\n\nTokens with metadata to analyze: {}",
-            METADATA_FILTER_PROMPT,
-            analysis_json
+            r#"You are an expert Solana trader analyzing token metadata and social signals.
+
+Analyze these tokens and return a FilterResponse with:
+1. filtered_tokens: Array of tokens that pass analysis
+2. summary: Overall analysis summary
+
+For each token analyze:
+Social & Community Metrics:
+- Twitter Quality (engagement, followers)
+- Community Activity (telegram, discord)
+- Overall Sentiment
+
+Development Metrics:
+- GitHub Activity
+- Contract Quality
+- Wallet Patterns
+
+Risk Factors:
+- Team Transparency
+- Token Distribution
+- Smart Contract Security
+- Market Manipulation Risk
+
+Return response in this format:
+{{
+  "filtered_tokens": [
+    {{
+      "address": "token_address",
+      "symbol": "TOKEN",
+      "score": 0.75,
+      "analysis": {{
+        "market_score": 0.8,
+        "social_score": 0.4,
+        "dev_score": 0.2,
+        "risk_score": 0.7,
+        "metrics": null,
+        "key_strengths": ["Good liquidity", "Active community"],
+        "key_risks": ["Limited development", "High manipulation risk"],
+        "final_recommendation": "Consider small position"
+      }}
+    }}
+  ],
+  "summary": {{
+    "total_analyzed": 4,
+    "total_passed": 2,
+    "avg_market_score": 0.65,
+    "avg_social_score": 0.3,
+    "avg_dev_score": 0.2,
+    "avg_risk_score": 0.7,
+    "market_conditions": "Mixed with some promising candidates",
+    "risk_assessment": "High risk due to limited history"
+  }}
+}}
+
+Return strictly JSON with no commentary.
+
+Tokens to analyze: {}"#,
+            serde_json::to_string_pretty(tokens)?
         );
 
+        debug!("Sending metadata analysis prompt...");
         let response = self.get_completion(&prompt).await?;
+        
+        // Clean and parse response
+        let clean_response = response
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+            
+        debug!("Parsing metadata analysis response...");
+        let analysis: FilterResponse = serde_json::from_str(clean_response)
+            .context("Failed to parse metadata analysis response")?;
 
-        debug!("Received metadata analysis response: {}", response);
-
-        let analysis: FilterResponse = serde_json::from_str(&response)
-            .context("Failed to parse metadata analysis from LLM response")?;
-
-        info!("Completed metadata analysis with {} final filtered tokens", analysis.filtered_tokens.len());
+        info!("Metadata analysis complete - {} of {} tokens passed final filtering", 
+            analysis.summary.total_passed, 
+            analysis.summary.total_analyzed
+        );
+        
         Ok(analysis)
     }
 
     async fn store_analysis_results(&self, analysis: &FilterResponse) -> Result<()> {
-        let collection = "token_analytics";
+        let collection = "token_recommendations";
         let timestamp = bson::DateTime::now();
 
-        debug!("Preparing to store analysis results for {} tokens", analysis.filtered_tokens.len());
+        debug!("Preparing to store token recommendations for {} tokens", analysis.filtered_tokens.len());
 
         let documents: Vec<Document> = analysis
             .filtered_tokens
