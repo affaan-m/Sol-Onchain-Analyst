@@ -1,16 +1,19 @@
-use crate::birdeye::api::{BirdeyeApi, TokenV3ListResponse, TokenV3Response};
+use crate::birdeye::api::{BirdeyeApi, TokenV3Response};
 use crate::config::mongodb::{MongoDbPool, TokenAnalyticsDataExt};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use mongodb::bson::{self, doc, Document};
-use rig::prelude::*;
+use rig_core::{
+    agent::Agent,
+    providers::openai::{Client as OpenAIClient, CompletionModel, GPT_4_TURBO},
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
 const DEFAULT_CHUNK_SIZE: i64 = 20;
-const INITIAL_FILTER_PROMPT_PATH: &str = "src/prompts/token_filter_initial.txt";
-const MARKET_FILTER_PROMPT_PATH: &str = "src/prompts/token_filter_market.txt";
-const METADATA_FILTER_PROMPT_PATH: &str = "src/prompts/token_filter_metadata.txt";
+const INITIAL_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_initial.txt");
+const MARKET_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_market.txt");
+const METADATA_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_metadata.txt");
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BirdeyeFilters {
@@ -83,26 +86,31 @@ pub struct FilterResponse {
 pub struct TokenFilterService {
     birdeye: Arc<dyn BirdeyeApi>,
     db_pool: Arc<MongoDbPool>,
-    llm: Arc<dyn CompletionModel>,
+    agent: Agent,
 }
 
 impl TokenFilterService {
     pub fn new(
         birdeye: Arc<dyn BirdeyeApi>,
         db_pool: Arc<MongoDbPool>,
-        llm: Arc<dyn CompletionModel>,
+        openai_api_key: &str,
     ) -> Self {
+        let openai_client = OpenAIClient::new(openai_api_key);
+        let agent = openai_client
+            .agent(GPT_4_TURBO)
+            .build();
+
         Self {
             birdeye,
             db_pool,
-            llm,
+            agent,
         }
     }
 
-    pub async fn filter_tokens(&self, page: i64, limit: Option<i64>) -> Result<FilterResponse> {
+    pub async fn filter_tokens(&self, page: i64, _limit: Option<i64>) -> Result<FilterResponse> {
         // Step 1: Get LLM to choose BirdEye filters
         info!("Getting LLM to choose BirdEye filters");
-        let filters = self.get_birdeye_filters(limit).await
+        let filters = self.get_birdeye_filters().await
             .context("Failed to get BirdEye filters")?;
         
         // Step 2: Get initial token list from Birdeye v3
@@ -112,7 +120,7 @@ impl TokenFilterService {
 
         // Step 3: First LLM analysis of market data
         info!("Performing initial market analysis");
-        let initial_analysis = self.analyze_market_data(&token_list).await
+        let initial_analysis = self.analyze_market_data(&token_list.data).await
             .context("Failed to analyze market data")?;
 
         // Step 4: Get additional metadata for promising tokens
@@ -143,108 +151,98 @@ impl TokenFilterService {
         Ok(final_analysis)
     }
 
-    async fn get_birdeye_filters(&self, limit: Option<i64>) -> Result<BirdeyeFilters> {
-        let prompt = std::fs::read_to_string(INITIAL_FILTER_PROMPT_PATH)
-            .context("Failed to read initial filter prompt")?;
+    async fn get_birdeye_filters(&self) -> Result<BirdeyeFilters> {
+        let response = self.agent
+            .prompt(INITIAL_FILTER_PROMPT)
+            .await
+            .context("Failed to get LLM response for filters")?;
 
-        let response = self.llm.complete(&[
-            Message::system(&prompt),
-            Message::user("Choose the optimal filter parameters for finding promising early-stage Solana memecoins."),
-        ]).await.context("Failed to get LLM response")?;
+        debug!("LLM response for filters: {}", response);
 
-        let filters: BirdeyeFilters = serde_json::from_str(&response.content)
-            .context("Failed to parse LLM filter response")?;
-
-        Ok(BirdeyeFilters {
-            limit: limit.unwrap_or(filters.limit),
-            ..filters
-        })
+        serde_json::from_str(&response)
+            .context("Failed to parse BirdEye filters from LLM response")
     }
 
-    async fn analyze_market_data(&self, token_list: &TokenV3ListResponse) -> Result<FilterResponse> {
-        let prompt = std::fs::read_to_string(MARKET_FILTER_PROMPT_PATH)
-            .context("Failed to read market filter prompt")?;
+    async fn analyze_market_data(&self, tokens: &[TokenV3Response]) -> Result<FilterResponse> {
+        let tokens_json = serde_json::to_string(tokens)
+            .context("Failed to serialize tokens for market analysis")?;
 
-        let tokens_json = serde_json::to_string(&token_list.data)
-            .context("Failed to serialize token list")?;
+        let analysis_prompt = format!("{}\n\nAnalyze these tokens: {}", MARKET_FILTER_PROMPT, tokens_json);
+        
+        let response = self.agent
+            .prompt(&analysis_prompt)
+            .await
+            .context("Failed to get LLM response for market analysis")?;
 
-        let response = self.llm.complete(&[
-            Message::system(&prompt),
-            Message::user(&format!("Analyze these tokens based on market metrics: {}", tokens_json)),
-        ]).await.context("Failed to get LLM response")?;
-
-        let filter_response: FilterResponse = serde_json::from_str(&response.content)
-            .context("Failed to parse LLM response")?;
-
-        Ok(filter_response)
+        serde_json::from_str(&response)
+            .context("Failed to parse market analysis from LLM response")
     }
 
     async fn analyze_metadata(&self, tokens: &[(TokenAnalysis, TokenV3Response)]) -> Result<FilterResponse> {
-        let prompt = std::fs::read_to_string(METADATA_FILTER_PROMPT_PATH)
-            .context("Failed to read metadata filter prompt")?;
-
         let analysis_json = serde_json::to_string(tokens)
             .context("Failed to serialize tokens with analysis")?;
 
-        let response = self.llm.complete(&[
-            Message::system(&prompt),
-            Message::user(&format!(
-                "Perform deep analysis on these tokens with full market data, social metrics, and development activity: {}",
-                analysis_json
-            )),
-        ]).await.context("Failed to get LLM response")?;
+        let analysis_prompt = format!("{}\n\nAnalyze these tokens with metadata: {}", METADATA_FILTER_PROMPT, analysis_json);
 
-        let filter_response: FilterResponse = serde_json::from_str(&response.content)
-            .context("Failed to parse LLM response")?;
+        let response = self.agent
+            .prompt(&analysis_prompt)
+            .await
+            .context("Failed to get LLM response for metadata analysis")?;
 
-        Ok(filter_response)
+        serde_json::from_str(&response)
+            .context("Failed to parse metadata analysis from LLM response")
     }
 
     async fn store_analysis_results(&self, analysis: &FilterResponse) -> Result<()> {
-        let collection_name = "token_analysis";
+        let collection = "token_analytics";
         let timestamp = bson::DateTime::now();
 
-        let documents: Vec<Document> = analysis.filtered_tokens.iter().map(|token| {
-            doc! {
-                "token_address": &token.address,
-                "token_symbol": &token.symbol,
-                "score": token.score,
-                "market_score": token.analysis.market_score,
-                "social_score": token.analysis.social_score,
-                "dev_score": token.analysis.dev_score,
-                "risk_score": token.analysis.risk_score,
-                "metrics": token.analysis.metrics.as_ref().map(|m| doc! {
-                    "social_metrics": {
-                        "twitter_quality": m.social_metrics.as_ref().map(|s| s.twitter_quality),
-                        "community_engagement": m.social_metrics.as_ref().map(|s| s.community_engagement),
-                        "sentiment": m.social_metrics.as_ref().map(|s| s.sentiment),
+        let documents: Vec<Document> = analysis
+            .filtered_tokens
+            .iter()
+            .map(|token| {
+                doc! {
+                    "token_address": &token.address,
+                    "token_symbol": &token.symbol,
+                    "analysis_type": "filtered",
+                    "timestamp": timestamp,
+                    "scores": {
+                        "overall": token.score,
+                        "market": token.analysis.market_score,
+                        "social": token.analysis.social_score,
+                        "development": token.analysis.dev_score,
+                        "risk": token.analysis.risk_score
                     },
-                    "dev_metrics": {
-                        "github_activity": m.dev_metrics.as_ref().map(|d| d.github_activity),
-                        "wallet_patterns": m.dev_metrics.as_ref().map(|d| d.wallet_patterns),
-                        "contract_quality": m.dev_metrics.as_ref().map(|d| d.contract_quality),
+                    "metrics": token.analysis.metrics.as_ref().map(|m| doc! {
+                        "social": {
+                            "twitter_quality": m.social_metrics.as_ref().map(|s| s.twitter_quality),
+                            "community_engagement": m.social_metrics.as_ref().map(|s| s.community_engagement),
+                            "sentiment": m.social_metrics.as_ref().map(|s| s.sentiment)
+                        },
+                        "development": {
+                            "github_activity": m.dev_metrics.as_ref().map(|d| d.github_activity),
+                            "wallet_patterns": m.dev_metrics.as_ref().map(|d| d.wallet_patterns),
+                            "contract_quality": m.dev_metrics.as_ref().map(|d| d.contract_quality)
+                        }
+                    }),
+                    "analysis": {
+                        "strengths": &token.analysis.key_strengths,
+                        "risks": &token.analysis.key_risks,
+                        "recommendation": &token.analysis.final_recommendation
+                    },
+                    "market_context": {
+                        "total_analyzed": analysis.summary.total_analyzed,
+                        "total_passed": analysis.summary.total_passed,
+                        "market_conditions": &analysis.summary.market_conditions,
+                        "risk_assessment": &analysis.summary.risk_assessment
                     }
-                }),
-                "key_strengths": &token.analysis.key_strengths,
-                "key_risks": &token.analysis.key_risks,
-                "recommendation": &token.analysis.final_recommendation,
-                "timestamp": timestamp,
-                "summary": {
-                    "total_analyzed": analysis.summary.total_analyzed,
-                    "total_passed": analysis.summary.total_passed,
-                    "avg_market_score": analysis.summary.avg_market_score,
-                    "avg_social_score": analysis.summary.avg_social_score,
-                    "avg_dev_score": analysis.summary.avg_dev_score,
-                    "avg_risk_score": analysis.summary.avg_risk_score,
-                    "market_conditions": &analysis.summary.market_conditions,
-                    "risk_assessment": &analysis.summary.risk_assessment,
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
-        self.db_pool.insert_token_analytics_documents(collection_name, documents).await
-            .context("Failed to store analysis results in MongoDB")?;
-
-        Ok(())
+        self.db_pool
+            .insert_token_analytics_documents(collection, documents)
+            .await
+            .context("Failed to store token analysis results")
     }
 } 
