@@ -3,9 +3,10 @@ use crate::config::mongodb::{MongoDbPool, TokenAnalyticsDataExt};
 use anyhow::{Context, Result};
 use mongodb::bson::{self, doc, Document};
 use rig::{
-    agent::Agent,
-    completion::Prompt,
-    providers::openai::{self, Client as OpenAIClient, CompletionModel},
+    completion::{CompletionModel, CompletionRequest},
+    message::{Message, UserContent},
+    one_or_many::OneOrMany,
+    providers::openai::{self, Client as OpenAIClient},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -15,7 +16,7 @@ const DEFAULT_CHUNK_SIZE: i64 = 20;
 const INITIAL_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_initial.txt");
 const MARKET_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_market.txt");
 const METADATA_FILTER_PROMPT: &str = include_str!("../prompts/token_filter_metadata.txt");
-const MODEL: &str = "o3-mini";  // Using o3-mini for better cost efficiency with high context
+const MODEL: &str = openai::O1_MINI;  // Using O1_MINI until O3_MINI is available in RIG
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BirdeyeFilters {
@@ -88,7 +89,7 @@ pub struct FilterResponse {
 pub struct TokenFilterService {
     birdeye: Arc<dyn BirdeyeApi>,
     db_pool: Arc<MongoDbPool>,
-    agent: Agent<CompletionModel>,
+    openai_client: OpenAIClient,
 }
 
 impl TokenFilterService {
@@ -98,17 +99,62 @@ impl TokenFilterService {
         openai_api_key: &str,
     ) -> Self {
         let openai_client = OpenAIClient::new(openai_api_key);
-        let agent = openai_client
-            .agent(MODEL)
-            .preamble("You are a Solana token analysis expert. You provide clear, concise responses in the exact format requested.")
-            .temperature(0.1) // Low temperature for more consistent outputs
-            .build();
 
         Self {
             birdeye,
             db_pool,
-            agent,
+            openai_client,
         }
+    }
+
+    async fn get_completion(&self, prompt: &str) -> Result<String> {
+        debug!("Sending completion request with prompt: {}", prompt);
+        debug!("Using model: {}", MODEL);
+        
+        let request = CompletionRequest {
+            prompt: Message::User {
+                content: OneOrMany::one(UserContent::text(prompt.to_string())),
+            },
+            chat_history: vec![],
+            preamble: None,
+            tools: vec![],
+            temperature: None,  // Remove temperature since some models don't support it
+            additional_params: None,
+            documents: vec![],
+            max_tokens: None,  // Let the model decide max tokens
+        };
+        
+        let completion = match self.openai_client
+            .completion_model(MODEL)
+            .completion(request)
+            .await {
+                Ok(c) => {
+                    debug!("Got successful completion response");
+                    c
+                },
+                Err(e) => {
+                    error!("Completion request failed: {:?}", e);
+                    return Err(anyhow::anyhow!("Failed to get completion: {}", e));
+                }
+            };
+
+        // Extract the first text content from the response
+        let result = completion.choice
+            .into_iter()
+            .find_map(|content| match content {
+                rig::message::AssistantContent::Text(text) => {
+                    debug!("Found text content: {}", text.text);
+                    Some(text.text)
+                },
+                _other => {
+                    debug!("Found non-text content type");
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("No text response from completion"))?;
+
+        debug!("Extracted result: {}", result);
+        Ok(result)
     }
 
     pub async fn filter_tokens(&self, page: i64, _limit: Option<i64>) -> Result<FilterResponse> {
@@ -119,12 +165,14 @@ impl TokenFilterService {
         
         // Step 2: Get initial token list from Birdeye v3
         info!("Fetching token list from Birdeye v3 API");
-        let token_list = self.birdeye.get_token_list_v3(page, filters.limit).await
+        let token_list = self.birdeye
+            .get_token_list_v3(page, filters.limit, Some(&filters.filters))
+            .await
             .context("Failed to fetch token list")?;
 
         // Step 3: First LLM analysis of market data
         info!("Performing initial market analysis");
-        let initial_analysis = self.analyze_market_data(&token_list.data).await
+        let initial_analysis = self.analyze_market_data(&token_list.data.items).await
             .context("Failed to analyze market data")?;
 
         // Step 4: Get additional metadata for promising tokens
@@ -156,19 +204,41 @@ impl TokenFilterService {
     }
 
     async fn get_birdeye_filters(&self) -> Result<BirdeyeFilters> {
-        debug!("Requesting BirdEye filters from LLM with prompt: {}", INITIAL_FILTER_PROMPT);
-        let response = match self.agent.prompt(INITIAL_FILTER_PROMPT.to_string()).await {
-            Ok(resp) => resp,
+        debug!("Loading initial filter prompt from file");
+        debug!("Initial filter prompt content: {}", INITIAL_FILTER_PROMPT);
+        
+        let prompt = format!(
+            "Return BirdEye filter parameters as JSON.\n\n{}",
+            INITIAL_FILTER_PROMPT
+        );
+        
+        debug!("Constructed prompt: {}", prompt);
+        
+        let response = match self.get_completion(&prompt).await {
+            Ok(resp) => {
+                debug!("Got successful response from completion");
+                resp
+            },
             Err(e) => {
-                error!("LLM prompt failed: {:?}", e);
+                error!("Failed to get completion response: {:?}", e);
                 return Err(anyhow::anyhow!("Failed to get LLM response: {}", e));
             }
         };
 
-        debug!("Received LLM response for filters: {}", response);
+        debug!("Attempting to parse response as JSON: {}", response);
 
-        let filters = match serde_json::from_str(&response) {
-            Ok(f) => f,
+        // Strip markdown code block markers if present
+        let json_str = response
+            .trim()
+            .trim_start_matches("```json")
+            .trim_end_matches("```")
+            .trim();
+
+        let filters = match serde_json::from_str(json_str) {
+            Ok(f) => {
+                debug!("Successfully parsed JSON response");
+                f
+            },
             Err(e) => {
                 error!("Failed to parse JSON response: {}\nResponse was: {}", e, response);
                 return Err(anyhow::anyhow!("Failed to parse BirdEye filters from LLM response: {}", e));
@@ -186,12 +256,13 @@ impl TokenFilterService {
         debug!("Analyzing market data for {} tokens", tokens.len());
         debug!("Market analysis input: {}", tokens_json);
 
-        let analysis_prompt = format!("{}\n\nAnalyze these tokens: {}", MARKET_FILTER_PROMPT, tokens_json);
+        let prompt = format!(
+            "As a Solana token analyst, analyze these tokens and provide results in JSON format.\n\n{}\n\nTokens to analyze: {}",
+            MARKET_FILTER_PROMPT,
+            tokens_json
+        );
         
-        let response = self.agent
-            .prompt(analysis_prompt)
-            .await
-            .context("Failed to get LLM response for market analysis")?;
+        let response = self.get_completion(&prompt).await?;
 
         debug!("Received market analysis response: {}", response);
 
@@ -209,12 +280,13 @@ impl TokenFilterService {
         debug!("Analyzing metadata for {} tokens", tokens.len());
         debug!("Metadata analysis input: {}", analysis_json);
 
-        let analysis_prompt = format!("{}\n\nAnalyze these tokens with metadata: {}", METADATA_FILTER_PROMPT, analysis_json);
+        let prompt = format!(
+            "As a Solana token analyst, analyze these tokens with their metadata and provide results in JSON format.\n\n{}\n\nTokens with metadata to analyze: {}",
+            METADATA_FILTER_PROMPT,
+            analysis_json
+        );
 
-        let response = self.agent
-            .prompt(analysis_prompt)
-            .await
-            .context("Failed to get LLM response for metadata analysis")?;
+        let response = self.get_completion(&prompt).await?;
 
         debug!("Received metadata analysis response: {}", response);
 
