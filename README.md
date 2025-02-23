@@ -264,6 +264,42 @@ cargo run --bin cainam monitor <TOKEN_ADDRESS1,TOKEN_ADDRESS2,...> [--interval <
 
 Continuously monitors specified tokens for market signals. The interval defaults to 300 seconds (5 minutes).
 
+### CLI Usage
+
+The token filter pipeline can be run through a user-friendly CLI interface that provides real-time feedback and colored output:
+
+```bash
+# Run the token filter with continuous monitoring
+cargo run --example token_filter_cli filter --continuous
+
+# Run a single token filter pass
+cargo run --example token_filter_cli filter
+```
+
+The CLI provides:
+- Colored section headers and progress indicators
+- Real-time token analysis with detailed metrics
+- Visual score bars for different metrics
+- Color-coded market signals and risk assessments
+
+Example output includes:
+- Token information (name, symbol, price) in bold white
+- Prices in green
+- Market cap in yellow
+- Volume in blue
+- Price changes (positive in green, negative in red)
+- Score bars (green ≥0.8, yellow ≥0.6, red <0.6)
+- Progress spinners for long-running operations
+
+### CLI Features
+
+- **Progress Tracking**: Real-time progress indicators for long-running operations
+- **Color-Coded Output**: Intuitive color scheme for different metrics
+- **Visual Score Bars**: Progress bar style visualization of scores
+- **Section Headers**: Clear organization of output with colored headers
+- **Market Signals**: Detailed market signal information with confidence scores
+- **Analysis Summary**: Overview of token analysis with pass/fail counts
+
 ## BirdEye V3 API Integration Testing
 
 The `feature/birdeye-v3-llm-filter` branch implements enhanced token filtering using BirdEye V3 API and LLM-based analysis. To test the implementation:

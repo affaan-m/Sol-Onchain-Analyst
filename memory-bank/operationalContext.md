@@ -1,6 +1,6 @@
 # Operational Context
 
-Last Updated: 2025-01-30
+Last Updated: 2024-02-23
 
 ## System Operation
 
@@ -36,20 +36,23 @@ Last Updated: 2025-01-30
    - Risk validation
    - Transaction signing
 
-3. **Agent Coordination Service**
+3. **CLI Service**
 
    ```rust
-   pub struct AgentCoordinator {
-       agents: Vec<Box<dyn Agent>>,
-       message_bus: MessageBus,
-       state_manager: StateManager,
+   pub struct CliProgress {
+       progress_bar: ProgressBar,
+   }
+   
+   impl CliProgress {
+       pub fn new(msg: &str) -> Self
+       pub fn finish_with_message(&self, msg: &str)
    }
    ```
 
-   - Agent lifecycle management
-   - Inter-agent communication
-   - State synchronization
-   - Performance monitoring
+   - Real-time progress tracking
+   - Color-coded output
+   - Visual score bars
+   - Market signal display
 
 ### Error Handling Patterns
 
@@ -89,23 +92,23 @@ Last Updated: 2025-01-30
    - Authentication handling
    - Request retries
 
-3. **Trading Errors**
+3. **CLI Errors**
 
    ```rust
    #[derive(Error, Debug)]
-   pub enum TradingError {
-       #[error("Insufficient funds: {0}")]
-       InsufficientFunds(String),
-       #[error("Invalid trade: {0}")]
-       InvalidTrade(String),
-       #[error("Execution failed: {0}")]
-       ExecutionError(String),
+   pub enum CliError {
+       #[error("Invalid command: {0}")]
+       InvalidCommand(String),
+       #[error("Display error: {0}")]
+       DisplayError(String),
+       #[error("Progress tracking error: {0}")]
+       ProgressError(String),
    }
    ```
 
-   - Position validation
-   - Balance checks
-   - Transaction verification
+   - Command validation
+   - Display formatting
+   - Progress tracking
 
 ### Infrastructure Requirements
 
@@ -122,11 +125,11 @@ Last Updated: 2025-01-30
    - DDoS protection
    - SSL/TLS encryption
 
-3. **Compute**
-   - Multi-core CPU
-   - Minimum 32GB RAM
-   - Load balancing
-   - Auto-scaling
+3. **CLI Environment**
+   - Terminal with ANSI color support
+   - Unicode support for progress bars
+   - Minimum terminal width: 80 columns
+   - Recommended terminal height: 24 lines
 
 ### Performance Requirements
 
@@ -138,6 +141,7 @@ Last Updated: 2025-01-30
        market_data_refresh_ms: u64, // Target: < 1000ms
        signal_processing_ms: u64,   // Target: < 200ms
        db_query_ms: u64,           // Target: < 100ms
+       cli_update_ms: u64,         // Target: < 50ms
    }
    ```
 
@@ -146,12 +150,14 @@ Last Updated: 2025-01-30
    - 100+ trades/minute
    - 10000+ database operations/second
    - 100+ concurrent agents
+   - 60+ CLI updates/second
 
 3. **Resource Utilization**
    - CPU: < 70% sustained
    - Memory: < 80% usage
    - Disk I/O: < 70% utilization
    - Network: < 50% capacity
+   - Terminal I/O: < 30% capacity
 
 ## Monitoring and Alerting
 
@@ -171,18 +177,21 @@ pub struct HealthCheck {
    - Database connectivity
    - Agent status
    - Memory usage
+   - CLI responsiveness
 
 2. **Performance Metrics**
    - Trade execution latency
    - Market data freshness
    - Database query performance
    - Network latency
+   - CLI update frequency
 
 3. **Business Metrics**
    - Trade success rate
    - Agent performance
    - Portfolio returns
    - Risk exposure
+   - User interaction metrics
 
 ### Alert Thresholds
 
@@ -191,36 +200,25 @@ pub struct HealthCheck {
    - Database connectivity issues
    - API authentication errors
    - Memory exhaustion
+   - CLI display failures
 
 2. **Warning Alerts**
    - High latency
    - Elevated error rates
    - Resource utilization
    - Rate limit warnings
+   - Terminal I/O issues
 
 3. **Information Alerts**
    - Agent state changes
    - Database maintenance
    - Performance optimization
    - System updates
+   - CLI version updates
 
 ## Recovery Procedures
 
-### 1. Database Recovery
-
-```sql
--- Point-in-time recovery
-SELECT * FROM market_signals
-WHERE timestamp >= '2025-01-30 00:00:00'
-  AND timestamp < '2025-01-30 01:00:00';
-
--- Reprocess failed trades
-SELECT * FROM trade_executions
-WHERE status = 'FAILED'
-  AND execution_time > now() - interval '1 hour';
-```
-
-### 2. Service Recovery
+### Service Recovery
 
 ```rust
 impl RecoveryManager {
@@ -234,41 +232,39 @@ impl RecoveryManager {
 }
 ```
 
-### 3. Data Integrity
+### CLI Recovery
 
 ```rust
-impl DataValidator {
-    async fn validate_market_data(&self) -> Result<()> {
-        // 1. Check data consistency
-        // 2. Verify calculations
-        // 3. Compare with backup sources
-        // 4. Report discrepancies
+impl CliManager {
+    fn recover_display(&self) -> Result<()> {
+        // 1. Clear screen
+        // 2. Reset progress bars
+        // 3. Redraw interface
+        // 4. Verify display
+        // 5. Resume updates
     }
 }
 ```
 
 ## Maintenance Procedures
 
-### 1. Database Maintenance
+1. **Regular Maintenance**
+   - Database optimization
+   - Log rotation
+   - Cache clearing
+   - CLI cache cleanup
 
-- Daily backup verification
-- Weekly index optimization
-- Monthly data archival
-- Quarterly performance review
+2. **Emergency Procedures**
+   - Service restart
+   - Database recovery
+   - State restoration
+   - CLI reset
 
-### 2. System Updates
-
-- Security patches
-- Dependency updates
-- Performance optimizations
-- Feature deployments
-
-### 3. Monitoring Updates
-
-- Alert threshold adjustments
-- Metric collection tuning
-- Dashboard updates
-- Log rotation
+3. **Upgrade Procedures**
+   - Service updates
+   - Database migrations
+   - Configuration updates
+   - CLI version upgrades
 
 ## BirdEye V3 API Integration
 
@@ -345,7 +341,7 @@ The BirdEye V3 API integration provides enhanced token analysis capabilities wit
 - Documentation updated
 
 ### Merge Instructions for Matt
-1. The feature branch is ready to merge into main
+1. The feature (Affaan: Birdeye-V3-LLM-Filter) branch is ready to merge into main
 2. All core functionality is tested and working
 3. No breaking changes introduced
 4. MongoDB schema is backward compatible
