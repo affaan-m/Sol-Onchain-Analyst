@@ -8,6 +8,7 @@
 - Tokio async runtime
 - MongoDB for data storage
 - Birdeye API integration
+- Claude 3.7 Sonnet integration (planned)
 
 ### Database
 
@@ -15,8 +16,23 @@
 - Collections:
   - `token_trending`
   - `token_analytics`
-  - Vector store support for embeddings
+  - `token_recommendations`
+  - `kol_wallets`
+- Vector store support for embeddings
 - Compound indexing for efficient queries
+
+### AI & ML
+
+- OpenAI API integration
+  - Current: o1-mini model
+  - Planned: o3-mini model
+- Claude 3.7 Sonnet integration (planned)
+  - Superior reasoning capabilities
+  - Enhanced context window
+  - Detailed thought process documentation
+- Vector embeddings for similarity search
+  - Dimension: 1536
+  - Similarity metric: cosine
 
 ### APIs and Integration
 
@@ -30,12 +46,17 @@
     - Supply information (total, circulating)
     - Extended metadata (fdv, holder metrics)
     - Trading data (last trade time, market count)
+- Twitter API (planned)
+  - Sentiment analysis
+  - Community growth tracking
+  - Engagement metrics
 
 ### Development Tools
 
 - Cargo for build and dependency management
 - Environment configuration via `.env`
 - Tracing for logging and debugging
+- Colored CLI output with indicatif
 
 ## Key Dependencies
 
@@ -58,12 +79,21 @@ solana-program = "2.2.1"
 spl-token = "7.0"
 ```
 
+### AI & ML
+
+```toml
+openai = "0.8.0"
+claude-api-rs = "0.1.0"  # Planned
+```
+
 ### Utilities
 
 ```toml
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 dotenvy = "0.15.7"
+colored = "2.0"
+indicatif = "0.17"
 ```
 
 ## Architecture Components
@@ -80,11 +110,44 @@ dotenvy = "0.15.7"
    - Calculates technical indicators
    - Stores comprehensive market data
 
-### Services
+### Token Filter Pipeline
 
-- TokenAnalyticsService
-- TokenDataService
-- BirdeyeClient
+1. BirdEye Filter Selection
+   - Applies mandatory filters
+   - Ensures minimum quality baseline
+   - Logs filter parameters prominently
+
+2. Token List Retrieval
+   - Fetches and validates token data
+   - Handles null and edge cases
+   - Error recovery and logging
+
+3. Multi-stage Analysis
+   - Market metrics analysis
+   - Social and development metrics evaluation
+   - KOL ownership tracking
+   - Detailed decision reasoning
+
+### KOL Wallet Tracker
+
+- Monitors influential trader wallets
+- Documents token ownership by KOLs
+- Updates token recommendations with ownership data
+- Provides social proof validation
+
+### MongoDB Vector Search
+
+- 1536-dimensional embeddings
+- Cosine similarity search
+- Batch document insertion
+- Connection pooling with error handling
+
+## Cloud Deployment (Planned)
+
+- Continuous operation on cloud infrastructure
+- Scheduled analysis runs
+- Centralized database access
+- Alert system for high-potential tokens
 
 ## Development Setup
 
@@ -92,6 +155,7 @@ dotenvy = "0.15.7"
 2. Environment variables in `.env`
 3. Rust toolchain setup
 4. Birdeye API key configuration
+5. OpenAI API key configuration
 
 ## Technical Constraints
 
@@ -99,81 +163,11 @@ dotenvy = "0.15.7"
 - MongoDB Atlas connection limits
 - Memory usage for vector operations
 - Network latency considerations
+- Model context window limitations
 
-## Vector Store Implementation
+## Advanced Analytics (Planned)
 
-### MongoDB Atlas Setup
-
-- Enabled Atlas Search for vector similarity search capabilities
-- Created token_analytics collection with document structure for embeddings
-- Implemented vector search index for efficient similarity search using cosine distance
-- Added vector store integration with proper connection pooling
-
-### Database Schema
-
-The vector store implementation uses the following document structure:
-
-```json
-{
-    "_id": ObjectId,
-    "token_address": String,
-    "token_name": String,
-    "token_symbol": String,
-    "embedding": Array<float>,
-    "created_at": ISODate
-}
-```
-
-### Search Configuration
-
-Implemented MongoDB vector search with:
-
-- Vector search index on embedding field
-- Cosine similarity for distance calculation
-- Configurable search parameters:
-  - Exact matching option
-  - Number of candidates
-  - Field specification for embedding search
-
-### Integration Notes
-
-- Using OpenAI's text-embedding-3-small model (1536 dimensions)
-- Configured with MongoDB Atlas Search for vector similarity
-- Supports batch document insertion
-- Includes proper connection pooling
-- Implements retry logic for operations
-
-### Current Implementation
-
-1. MongoDB Connection Pool
-   - Configurable min/max pool size
-   - Connection timeout settings
-   - Error handling for connection issues
-
-2. Vector Store Operations
-   - Document insertion with embeddings
-   - Vector similarity search
-   - Top-N query support
-   - Proper error handling
-
-3. Data Models
-   - TokenAnalyticsData structure
-   - Proper serialization/deserialization
-   - ObjectId handling
-   - Embedding field management
-
-### Error Handling
-
-- Comprehensive error types for MongoDB operations
-- Connection error handling
-- Vector store operation error handling
-- Proper error propagation
-- Logging integration with tracing
-
-### Pending Improvements
-
-1. SearchParams configuration refinement
-2. Enhanced error context for vector operations
-3. Additional logging for debugging
-4. Performance optimization for batch operations
-5. Connection pool monitoring
+- Twitter sentiment analysis
+- GitHub development activity metrics
+- On-chain transaction pattern analysis
+- Correlation with macro market trends

@@ -1,6 +1,7 @@
 ---
 description: Rules for building the Cainam Core Agent, a decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
 globs: 
+alwaysApply: false
 ---
 You are an expert in Rust development, specializing in building AI-powered applications using the RIG framework and integrating with MongoDB for vector storage.  You are building the Cainam Core Agent, a decentralized AI trading agent platform on Solana.
 
