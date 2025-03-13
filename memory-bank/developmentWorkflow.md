@@ -158,3 +158,75 @@ let search_params = SearchParams::new()
 - Connection pool monitoring
 - Error log analysis
 - Performance tuning
+
+## Token Filter Pipeline Implementation
+
+### Setup and Requirements
+1. Environment Variables Required:
+   - BIRDEYE_API_KEY
+   - OPENAI_API_KEY
+   - MONGODB_URI
+   - MONGODB_DATABASE
+
+### Running the Token Filter Example
+```bash
+# Clone the repository
+git clone https://github.com/CainamVentures/cainam-core.git
+cd cainam-core
+
+# Switch to the feature branch
+git checkout feature/birdeye-v3-llm-filter
+
+# Install dependencies
+cargo build
+
+# Run the token filter example
+cargo run --example token_filter
+```
+
+### Pipeline Flow
+1. Token List Retrieval
+   - Fetches tokens from BirdEye V3 API
+   - Uses pagination and sorting
+   - Applies LLM-generated filters
+
+2. Initial Analysis
+   - Analyzes market data for each token
+   - Scores tokens based on various metrics
+   - Filters promising tokens (score >= 0.7)
+
+3. Metadata Enrichment
+   - Fetches additional metadata for high-scoring tokens
+   - Includes social and development metrics
+   - Enhances analysis with detailed information
+
+4. Final Analysis
+   - Performs comprehensive analysis with enriched data
+   - Generates final recommendations
+   - Prepares data for storage
+
+5. Storage
+   - Stores results in MongoDB
+   - Optimized document structure
+   - Includes all analysis metrics
+
+### Error Handling
+- Retry mechanism for API failures
+- Graceful error recovery
+- Detailed logging at each step
+
+### Testing
+1. Unit Tests
+   - Mock BirdeyeApi implementation
+   - Test data structures and conversions
+
+2. Integration Tests
+   - End-to-end pipeline testing
+   - MongoDB integration verification
+   - API response handling
+
+### Deployment
+1. Ensure all environment variables are set
+2. Run the example to verify setup
+3. Monitor logs for any issues
+4. Check MongoDB for data storage

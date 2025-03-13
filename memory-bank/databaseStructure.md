@@ -296,3 +296,101 @@ This document outlines the collections within the `cainam` database, their purpo
 * **Indexes:**
   * `{ transaction_hash: 1, timestamp: -1 }`
   * `{ check_type: 1, result: 1 }`
+
+### 6. Token Recommendations and KOL Tracking
+
+#### 6.1. `token_recommendations`
+
+* **Purpose:** Stores final filtered token recommendations with detailed analysis and reasoning.
+* **API Endpoint:** None (Internally generated).
+* **Update Frequency:** Continuously after filtering process.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "token_address": string,
+        "symbol": string,
+        "name": string,
+        "decimals": number,
+        "logo_uri": string,
+        "analysis_date": date,
+        
+        // Scores
+        "overall_score": number,
+        "market_score": number,
+        "social_score": number,
+        "dev_score": number,
+        "risk_score": number,
+        
+        // Market metrics
+        "price": number,
+        "liquidity": number,
+        "market_cap": number,
+        "volume_24h": number,
+        "holders": number,
+        
+        // Analysis outputs
+        "strengths": [string],
+        "risks": [string],
+        "recommendation": string,
+        
+        // KOL ownership data
+        "kol_ownership": [
+            {
+                "kol_id": string,
+                "name": string,
+                "wallet_address": string,
+                "position_size": number,
+                "entry_time": date
+            }
+        ],
+        
+        // Decision reasoning (O3-mini/Claude output)
+        "decision_reasoning": {
+            "market_analysis": string,
+            "sentiment_analysis": string,
+            "social_signals": string,
+            "risk_assessment": string,
+            "final_reasoning": string
+        },
+        
+        // Vector embedding for similarity search
+        "embedding": array
+    }
+    ```
+
+* **Indexes:**
+  * Compound: `{ token_address: 1, analysis_date: -1 }`
+  * Single: `{ overall_score: -1 }`
+  * Single: `{ "kol_ownership.kol_id": 1 }`
+  * Vector: `{ embedding: "vector", metadata.analysis_date: -1 }`
+* **Relationship:** Fed by token filter pipeline. Primary output collection for recommendations.
+
+#### 6.2. `kol_wallets`
+
+* **Purpose:** Stores Key Opinion Leader wallet information for tracking token purchases.
+* **API Endpoint:** None (Manually curated).
+* **Update Frequency:** As needed.
+* **Schema:**
+
+    ```json
+    {
+        "_id": objectId,
+        "name": string,
+        "description": string,
+        "wallet_addresses": [string],
+        "influence_score": number,
+        "category": string,        // "Trader", "Developer", "Influencer", "VC", "Protocol", "Whale"
+        "twitter_handle": string,  // Optional
+        "last_updated": date,
+        "active": boolean          // Whether to include in analysis
+    }
+    ```
+
+* **Indexes:**
+  * Single: `{ name: 1 }`
+  * Single: `{ influence_score: -1 }`
+  * Single: `{ category: 1 }`
+  * Single: `{ "wallet_addresses": 1 }`  // For fast lookup by wallet address
+* **Relationship:** Used by wallet tracker component to identify KOL token ownership.

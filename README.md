@@ -1,6 +1,83 @@
 # Cainam Core
 
-Core functionality for the Cainam project - A decentralized network of autonomous AI trading agents for the $CAINAM token platform on Solana.
+A decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
+
+## Token Filter Pipeline
+
+The token filter pipeline is a core component that analyzes and filters Solana tokens using the BirdEye API and LLM-based analysis. The pipeline consists of five stages:
+
+1. **BirdEye Filter Selection**: Intelligent selection of filtering parameters using LLM
+2. **Token List Retrieval**: Fetching and filtering tokens from BirdEye API
+3. **Market Analysis**: Deep analysis of market metrics and trading patterns
+4. **Metadata Analysis**: Evaluation of social signals and development metrics
+5. **Final Filtering & Storage**: Storage of filtered tokens with comprehensive analysis
+
+### Features
+
+- Fully automated token analysis and filtering
+- Integration with BirdEye API for real-time market data
+- MongoDB storage for token recommendations
+- LLM-powered market analysis and risk assessment
+- Comprehensive scoring system for token evaluation
+
+### Technical Stack
+
+- **Language**: Rust
+- **APIs**: BirdEye API (Solana)
+- **Database**: MongoDB
+- **LLM Integration**: RIG with O1-MINI model
+- **Data Storage**: Vector storage for token analysis
+
+### Getting Started
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   cargo build
+   ```
+3. Set up environment variables:
+   ```bash
+   BIRDEYE_API_KEY=your_api_key
+   OPENAI_API_KEY=your_api_key
+   MONGODB_URI=your_mongodb_uri
+   ```
+4. Run the token filter example:
+   ```bash
+   cargo run --example token_filter
+   ```
+
+### Pipeline Configuration
+
+The token filter pipeline can be configured through:
+- BirdEye API parameters in `src/prompts/token_filter_initial.txt`
+- MongoDB collection settings in `src/services/token_filter.rs`
+- LLM model selection in environment variables
+
+### Data Structures
+
+- **BirdeyeFilters**: API query parameters
+- **TokenAnalysis**: Token evaluation data
+- **FilterResponse**: Analysis results
+- **FilterSummary**: Market statistics
+
+### Next Steps
+
+- [ ] Add visualization layer for analysis results
+- [ ] Implement real-time monitoring
+- [ ] Enhance social/dev metrics analysis
+- [ ] Create web dashboard for token recommendations
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Overview
 
@@ -98,16 +175,6 @@ cargo test
 cargo test --package cainam-core
 ```
 
-### Database Migrations
-
-```bash
-# Apply migrations
-sqlx migrate run
-
-# Create new migration
-sqlx migrate add <name>
-```
-
 ### Code Style
 
 The project uses rustfmt and clippy for code formatting and linting:
@@ -137,14 +204,6 @@ Core dependencies include:
 - tokio-postgres (database)
 - qdrant-client (vector store)
 - rig-core (framework)
-
-## Contributing
-
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to the project.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Contact
 
@@ -194,3 +253,72 @@ cargo run --bin cainam monitor <TOKEN_ADDRESS1,TOKEN_ADDRESS2,...> [--interval <
 ```
 
 Continuously monitors specified tokens for market signals. The interval defaults to 300 seconds (5 minutes).
+
+### CLI Usage
+
+The token filter pipeline can be run through a user-friendly CLI interface that provides real-time feedback and colored output:
+
+```bash
+# Run the token filter with continuous monitoring
+cargo run --example token_filter_cli filter --continuous
+
+# Run a single token filter pass
+cargo run --example token_filter_cli filter
+```
+
+The CLI provides:
+- Colored section headers and progress indicators
+- Real-time token analysis with detailed metrics
+- Visual score bars for different metrics
+- Color-coded market signals and risk assessments
+
+Example output includes:
+- Token information (name, symbol, price) in bold white
+- Prices in green
+- Market cap in yellow
+- Volume in blue
+- Price changes (positive in green, negative in red)
+- Score bars (green ≥0.8, yellow ≥0.6, red <0.6)
+- Progress spinners for long-running operations
+
+### CLI Features
+
+- **Progress Tracking**: Real-time progress indicators for long-running operations
+- **Color-Coded Output**: Intuitive color scheme for different metrics
+- **Visual Score Bars**: Progress bar style visualization of scores
+- **Section Headers**: Clear organization of output with colored headers
+- **Market Signals**: Detailed market signal information with confidence scores
+- **Analysis Summary**: Overview of token analysis with pass/fail counts
+
+## BirdEye V3 API Integration Testing
+
+The `feature/birdeye-v3-llm-filter` branch implements enhanced token filtering using BirdEye V3 API and LLM-based analysis. To test the implementation:
+
+1. Clone and Setup:
+   ```bash
+   git clone https://github.com/CainamVentures/cainam-core.git
+   cd cainam-core
+   git checkout feature/birdeye-v3-llm-filter
+   ```
+
+2. Environment Setup:
+   Create a `.env` file with:
+   ```
+   BIRDEYE_API_KEY=<your-key>
+   OPENAI_API_KEY=<your-key>
+   MONGODB_URI=<your-uri>
+   MONGODB_DATABASE=<your-db>
+   ```
+
+3. Build and Run:
+   ```bash
+   cargo build
+   cargo run --example token_filter
+   ```
+
+4. Verify Operation:
+   - Check logs for successful API calls
+   - Monitor MongoDB for stored analysis
+   - Verify token filtering results
+
+The branch is ready to merge into main. All tests are passing, and the implementation is production-ready.

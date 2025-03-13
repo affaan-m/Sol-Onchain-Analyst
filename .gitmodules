@@ -1,0 +1,3 @@
+[submodule "docs/rig-docs"]
+	path = docs/rig-docs
+	url = https://github.com/0xPlaygrounds/rig.git

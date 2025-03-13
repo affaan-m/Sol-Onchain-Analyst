@@ -8,6 +8,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, error};
+use serde_json;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -244,6 +245,63 @@ pub struct TokenOverviewResponse {
     pub number_markets: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TokenV3Response {
+    pub address: String,
+    pub symbol: String,
+    pub name: String,
+    #[serde(rename = "logoURI")]
+    pub logo_uri: Option<String>,
+    pub decimals: u8,
+    #[serde(rename = "marketCap")]
+    pub market_cap: Option<f64>,
+    pub fdv: Option<f64>,
+    pub liquidity: Option<f64>,
+    pub price: f64,
+    #[serde(rename = "priceChange24hPercent")]
+    pub price_change_24h: Option<f64>,
+    #[serde(rename = "v24h")]
+    pub volume_24h: Option<f64>,
+    #[serde(rename = "v24hChangePercent")]
+    pub volume_change_24h: Option<f64>,
+    #[serde(rename = "trade24h")]
+    pub trade_24h: Option<i64>,
+    pub holder: Option<i64>,
+    pub extensions: Option<TokenExtensions>,
+    pub social_metrics: Option<SocialMetrics>,
+    pub dev_metrics: Option<DevMetrics>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SocialMetrics {
+    pub twitter_followers: Option<i64>,
+    pub twitter_handle: Option<String>,
+    pub discord_members: Option<i64>,
+    pub telegram_members: Option<i64>,
+    pub comments_disabled: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DevMetrics {
+    pub github_stars: Option<i64>,
+    pub github_forks: Option<i64>,
+    pub github_contributors: Option<i64>,
+    pub last_commit_date: Option<String>,
+    pub dev_wallet_count: Option<i64>,
+    pub dev_activity_30d: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TokenV3ListResponse {
+    pub success: bool,
+    pub data: TokenV3ListData,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TokenV3ListData {
+    pub items: Vec<TokenV3Response>,
+}
+
 #[async_trait]
 pub trait BirdeyeApi: Send + Sync {
     /// Get detailed market data for a token by address
@@ -254,6 +312,12 @@ pub trait BirdeyeApi: Send + Sync {
 
     /// Get trending tokens data
     async fn get_token_trending(&self) -> Result<Vec<TrendingToken>>;
+
+    /// Get token list with v3 endpoint
+    async fn get_token_list_v3(&self, page: i64, limit: i64, filters: Option<&HashMap<String, serde_json::Value>>) -> Result<TokenV3ListResponse>;
+
+    /// Get token metadata with v3 endpoint
+    async fn get_token_metadata_v3(&self, address: &str) -> Result<TokenV3Response>;
 }
 
 pub struct BirdeyeClient {
@@ -266,9 +330,14 @@ impl BirdeyeClient {
         let client = Client::builder()
             .build()
             .expect("Failed to create reqwest client");
-        BirdeyeClient { client, api_key }
+        BirdeyeClient { 
+            client, 
+            api_key,
+        }
     }
+}
 
+impl BirdeyeClient {
     async fn get(&self, endpoint: &str) -> Result<reqwest::Response> {
         let url = format!("{}{}", BIRDEYE_API_URL, endpoint);
         debug!("Making GET request to: {}", url);
@@ -373,6 +442,101 @@ impl BirdeyeApi for BirdeyeClient {
             Err(anyhow!("Failed to get trending tokens: {}", error_msg))
         }
     }
+
+    async fn get_token_list_v3(&self, page: i64, limit: i64, filters: Option<&HashMap<String, serde_json::Value>>) -> Result<TokenV3ListResponse> {
+        let mut params = vec![
+            ("sort_by", "recent_listing_time".to_string()),
+            ("sort_type", "desc".to_string()),
+            ("offset", ((page - 1) * limit).to_string()),
+            ("limit", limit.to_string())
+        ];
+
+        // Add any additional filters if provided
+        if let Some(filter_map) = filters {
+            for (key, value) in filter_map {
+                if let Some(val) = value.as_f64() {
+                    params.push((key.as_str(), val.to_string()));
+                } else if let Some(val) = value.as_str() {
+                    params.push((key.as_str(), val.to_string()));
+                }
+            }
+        }
+
+        let query_string = params.iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+        
+        let endpoint = format!("/defi/v3/token/list?{}", query_string);
+        
+        debug!("Making request to token list endpoint: {}", endpoint);
+        
+        let response = self
+            .client
+            .get(&format!("{}{}", BIRDEYE_API_URL, endpoint))
+            .header("X-API-KEY", &self.api_key)
+            .header("accept", "application/json")
+            .header("x-chain", "solana")
+            .send()
+            .await
+            .context("Failed to send request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            error!("Failed to get token list: {}", error_text);
+            return Err(anyhow!("Failed to get token list: {}", error_text));
+        }
+
+        let token_list = response.json::<TokenV3ListResponse>().await
+            .context("Failed to parse token list response")?;
+
+        if !token_list.success {
+            error!("Token list request was not successful");
+            return Err(anyhow!("Token list request was not successful"));
+        }
+
+        debug!("Successfully retrieved token list with {} items", token_list.data.items.len());
+        Ok(token_list)
+    }
+
+    async fn get_token_metadata_v3(&self, address: &str) -> Result<TokenV3Response> {
+        let endpoint = format!("/defi/v3/token/meta-data/single?address={}", address);
+        
+        debug!("Making request to token metadata endpoint: {}", endpoint);
+        
+        let response = self
+            .client
+            .get(&format!("{}{}", BIRDEYE_API_URL, endpoint))
+            .header("X-API-KEY", &self.api_key)
+            .header("accept", "application/json")
+            .header("x-chain", "solana")
+            .send()
+            .await
+            .context("Failed to send request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            error!("Failed to get token metadata: {}", error_text);
+            return Err(anyhow!("Failed to get token metadata: {}", error_text));
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct MetadataResponse {
+            success: bool,
+            data: TokenV3Response,
+        }
+
+        let metadata_response = response.json::<MetadataResponse>().await
+            .context("Failed to parse token metadata response")?;
+
+        if !metadata_response.success {
+            error!("Token metadata request was not successful");
+            return Err(anyhow!("Token metadata request was not successful"));
+        }
+
+        debug!("Successfully retrieved metadata for token {}", address);
+        Ok(metadata_response.data)
+    }
 }
 
 // Mock BirdeyeApi for testing
@@ -381,6 +545,8 @@ pub struct MockBirdeyeApi {
     pub market_data: Option<TokenMarketResponse>,
     pub token_overview: Option<TokenOverviewResponse>,
     pub token_trending: Option<Vec<TrendingToken>>,
+    pub token_list_v3: Option<TokenV3ListResponse>,
+    pub token_metadata_v3: Option<TokenV3Response>,
 }
 
 #[cfg(test)]
@@ -390,7 +556,19 @@ impl MockBirdeyeApi {
             market_data: None,
             token_overview: None,
             token_trending: None,
+            token_list_v3: None,
+            token_metadata_v3: None,
         }
+    }
+
+    pub fn with_token_list_v3(mut self, token_list: TokenV3ListResponse) -> Self {
+        self.token_list_v3 = Some(token_list);
+        self
+    }
+
+    pub fn with_token_metadata_v3(mut self, token_metadata: TokenV3Response) -> Self {
+        self.token_metadata_v3 = Some(token_metadata);
+        self
     }
 }
 
@@ -407,5 +585,13 @@ impl BirdeyeApi for MockBirdeyeApi {
 
     async fn get_token_trending(&self) -> Result<Vec<TrendingToken>> {
         self.token_trending.clone().ok_or(anyhow!("Mock not set"))
+    }
+
+    async fn get_token_list_v3(&self, _page: i64, _limit: i64, _filters: Option<&HashMap<String, serde_json::Value>>) -> Result<TokenV3ListResponse> {
+        self.token_list_v3.clone().ok_or_else(|| anyhow!("No mock token list data"))
+    }
+
+    async fn get_token_metadata_v3(&self, _address: &str) -> Result<TokenV3Response> {
+        self.token_metadata_v3.clone().ok_or_else(|| anyhow!("No mock token metadata"))
     }
 }

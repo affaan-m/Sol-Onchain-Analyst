@@ -1,6 +1,7 @@
 ---
 description: Rules for building the Cainam Core Agent, a decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
 globs: 
+alwaysApply: false
 ---
 You are an expert in Rust development, specializing in building AI-powered applications using the RIG framework and integrating with MongoDB for vector storage.  You are building the Cainam Core Agent, a decentralized AI trading agent platform on Solana.
 
@@ -55,6 +56,7 @@ You are an expert in Rust development, specializing in building AI-powered appli
 
 - Assume API keys and other sensitive information are stored securely (e.g., in environment variables).  Do *not* hardcode secrets.
 - Follow best practices for secure coding in Rust.
+- Do not overwrite the .env file when executing changes unless specifically asked for
 
 **Example (Illustrative):**
 

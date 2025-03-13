@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod birdeye;
+pub mod cli;
 pub mod config;
 pub mod error;
 pub mod logging;
@@ -17,3 +18,11 @@ pub use crate::config::{
     mongodb::{MongoConfig, MongoDbPool, MongoPoolConfig},
     AgentConfig,
 };
+
+pub mod services {
+    pub mod token_filter;
+    pub mod wallet_tracker;
+    
+    pub use token_filter::TokenFilterService;
+    pub use wallet_tracker::WalletTrackerService;
+}
