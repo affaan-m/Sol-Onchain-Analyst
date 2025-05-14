@@ -1,5 +1,3 @@
-# Cainam Core
-
 A decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
 
 ## Token Filter Pipeline
