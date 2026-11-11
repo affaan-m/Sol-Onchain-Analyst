@@ -1,0 +1,69 @@
+---
+description: Rules for building the Cainam Core Agent, a decentralized AI trading agent platform on Solana, leveraging RIG for LLM interactions and MongoDB for vector storage.
+globs: 
+alwaysApply: false
+---
+You are an expert in Rust development, specializing in building AI-powered applications using the RIG framework and integrating with MongoDB for vector storage.  You are building the Cainam Core Agent, a decentralized AI trading agent platform on Solana.
+
+**General Guidelines:**
+
+- Prioritize writing secure, efficient, and maintainable Rust code.
+- Follow best practices for asynchronous programming and error handling using `anyhow`.
+- Adhere to the project structure and conventions defined in the `memory-bank`.
+- Leverage the `rig-core` (referred to as `rig`) crate for LLM interactions.
+
+**RIG-Specific Guidelines:**
+
+- Use `rig` for all interactions with Large Language Models (LLMs).  This includes:
+    - Creating and managing `CompletionModel` and `EmbeddingModel` instances.
+    - Building and configuring `Agent` instances, including setting preambles and using `dynamic_context` for RAG.
+    - Utilizing `Tool` and `ToolSet` for function calling capabilities.
+    - Leveraging `EmbeddingsBuilder` for generating embeddings.
+    - Using `rig::providers::openai` for interacting with OpenAI models.
+- Refer to the RIG documentation (provided in the context) for API details and usage examples.
+- When using `rig-mongodb`, refer to it as `rig_mongodb`.
+
+**MongoDB and Vector Store Guidelines:**
+
+- Use `rig_mongodb` to interact with MongoDB Atlas, specifically for vector store operations.
+- Understand the `MongoDbPool` and `MongoDbVectorIndex` implementations in `src/config/mongodb.rs`.
+- Adhere to the `SearchParams` configuration, ensuring you include the `fields` parameter when performing vector searches.  This is a CRITICAL point, as highlighted in the `memory-bank/codeReview.md` and `memory-bank/activeContext.md`.
+- Refer to `TokenAnalyticsDataExt` trait for database interaction methods.
+- Ensure all MongoDB interactions include proper error handling with context, using `.context(...)` from the `anyhow` crate.
+- Follow the connection pooling configuration defined in `MongoPoolConfig`.
+- Be aware of the document structure for `TokenAnalyticsData` in `src/config/mongodb.rs`.
+
+**Memory Bank Usage:**
+
+- Consult the `memory-bank` for crucial project information:
+    - `memory-bank/activeContext.md`:  Provides the current task, action plan, and technical context.  Pay close attention to "Current Issues" and "Next Steps."
+    - `memory-bank/codeReview.md`:  Highlights code review guidelines, common issues, and best practices.  *This is extremely important for ensuring code quality.*
+    - `memory-bank/developmentWorkflow.md`: Outlines the implementation plan, testing strategy, and project standards.
+    - `memory-bank/operationalContext.md`: Describes the system's operational aspects, including error handling patterns and infrastructure requirements.
+    - `memory-bank/productContext.md`:  Explains the core problem, key components, workflows, and product direction.
+    - `memory-bank/projectBoundaries.md`: Defines technical constraints, scale requirements, hard limitations, and non-negotiables.
+    - `memory-bank/techContext.md`: Details the vector store implementation, including MongoDB Atlas setup, database schema, search configuration, and integration notes.
+ - Use the information in the memory bank to guide your code generation and decision-making.
+
+**Code Style and Conventions:**
+
+- Follow Rust naming conventions (e.g., `snake_case` for variables and functions, `PascalCase` for structs and enums).
+- Include comprehensive documentation for functions, structs, and enums, as outlined in `memory-bank/codeReview.md`.
+- Use descriptive variable and function names.
+- Prioritize clarity and readability.
+
+**Security:**
+
+- Assume API keys and other sensitive information are stored securely (e.g., in environment variables).  Do *not* hardcode secrets.
+- Follow best practices for secure coding in Rust.
+- Do not overwrite the .env file when executing changes unless specifically asked for
+
+**Example (Illustrative):**
+
+If asked to "fix the vector search," you should:
+
+1.  Check `memory-bank/activeContext.md` and `memory-bank/codeReview.md` to understand the known issues (missing `fields` in `SearchParams`).
+2.  Examine `src/config/mongodb.rs`, specifically the `top_n` function within the `TokenAnalyticsDataExt` implementation.
+3.  Modify the `SearchParams` initialization to include the `fields` parameter, referencing the embedding field name ("embedding").
+4.  Add error context using `.context(...)` if it's missing.
+5. Explain the changes.

@@ -1,0 +1,32 @@
+# Environment variables
+.env
+.env.local
+
+# Build
+target/
+
+# Local Artifacts
+.DS_Store
+
+# IDE
+.vscode/
+.devcontainer/
+
+# Node
+node_modules/
+
+# Characters
+characters/
+
+# Goose
+.goose/
+
+docs/examples/*
+.repomix-output.txt
+
+# Cargo
+Cargo.lock
+
+# Digest
+digest_src.txt
+digest_trader.txt
