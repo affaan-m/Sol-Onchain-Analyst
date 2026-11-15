@@ -9,15 +9,19 @@ use crate::logging::{log_market_metrics, log_market_signal, log_performance, Req
 use crate::models::market_signal::{MarketSignal, MarketSignalBuilder, SignalType};
 use crate::models::token_analytics::TokenAnalytics;
 use crate::utils::f64_to_decimal;
-use bigdecimal::{BigDecimal, ToPrimitive};
+use bigdecimal::BigDecimal;
 use bson::{doc, DateTime};
 use chrono::{Duration as ChronoDuration, Utc};
+use fin_primitives::signals::indicators::{BollingerB, Ema, Macd, Rsi};
+use fin_primitives::signals::{BarInput, Signal, SignalValue};
 use futures::StreamExt;
 use mongodb::{
     options::{FindOneOptions, FindOptions},
     Collection,
 };
+use rust_decimal::Decimal;
 use serde_json::json;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info};
@@ -160,26 +164,27 @@ impl TokenAnalyticsService {
 
         let (rsi, macd, macd_signal, bollinger_upper, bollinger_lower) =
             if !price_history.is_empty() {
-                let prices: Vec<f64> = price_history
+                let prices: Vec<Decimal> = price_history
                     .iter()
-                    .map(|h| h.price.to_f64().unwrap_or_default())
+                    .filter_map(|h| bigdecimal_to_decimal(&h.price))
                     .collect();
 
                 // Calculate RSI (14 periods)
-                let rsi = self.calculate_rsi(&prices, 14);
+                let rsi = Self::calculate_rsi(&prices, 14);
 
                 // Calculate MACD (12, 26, 9)
-                let (macd, signal) = self.calculate_macd(&prices, 12, 26, 9);
+                let macd = Self::calculate_macd(&prices, 12, 26, 9);
 
                 // Calculate Bollinger Bands (20 periods, 2 standard deviations)
-                let (upper, lower) = self.calculate_bollinger_bands(&prices, 20, 2.0);
+                let bands = Self::calculate_bollinger_bands(&prices, 20, Decimal::TWO);
 
+                // Each indicator is None until there is enough history to compute it
                 (
-                    Some(f64_to_decimal(rsi)),
-                    Some(f64_to_decimal(macd)),
-                    Some(f64_to_decimal(signal)),
-                    Some(f64_to_decimal(upper)),
-                    Some(f64_to_decimal(lower)),
+                    rsi.map(decimal_to_bigdecimal),
+                    macd.map(|(line, _)| decimal_to_bigdecimal(line)),
+                    macd.map(|(_, signal)| decimal_to_bigdecimal(signal)),
+                    bands.map(|(upper, _)| decimal_to_bigdecimal(upper)),
+                    bands.map(|(_, lower)| decimal_to_bigdecimal(lower)),
                 )
             } else {
                 (None, None, None, None, None)
@@ -257,99 +262,42 @@ impl TokenAnalyticsService {
         })
     }
 
-    fn calculate_rsi(&self, prices: &[f64], period: usize) -> f64 {
-        if prices.len() < period + 1 {
-            return 50.0; // Default value if not enough data
-        }
-
-        let mut gains = Vec::new();
-        let mut losses = Vec::new();
-
-        for i in 1..prices.len() {
-            let diff = prices[i] - prices[i - 1];
-            if diff >= 0.0 {
-                gains.push(diff);
-                losses.push(0.0);
-            } else {
-                gains.push(0.0);
-                losses.push(-diff);
-            }
-        }
-
-        let avg_gain = gains.iter().take(period).sum::<f64>() / period as f64;
-        let avg_loss = losses.iter().take(period).sum::<f64>() / period as f64;
-
-        if avg_loss == 0.0 {
-            return 100.0;
-        }
-
-        let rs = avg_gain / avg_loss;
-        100.0 - (100.0 / (1.0 + rs))
+    fn calculate_rsi(prices: &[Decimal], period: usize) -> Option<Decimal> {
+        // Wilder-smoothed RSI over the whole series
+        let mut rsi = Rsi::new("rsi", period).ok()?;
+        last_value(&mut rsi, prices)
     }
 
+    /// Returns `(macd_line, signal_line)`, or None until the signal EMA has warmed up.
     fn calculate_macd(
-        &self,
-        prices: &[f64],
+        prices: &[Decimal],
         fast_period: usize,
         slow_period: usize,
         signal_period: usize,
-    ) -> (f64, f64) {
-        if prices.len() < slow_period {
-            return (0.0, 0.0);
-        }
+    ) -> Option<(Decimal, Decimal)> {
+        let mut fast_ema = Ema::new("ema_fast", fast_period).ok()?;
+        let mut slow_ema = Ema::new("ema_slow", slow_period).ok()?;
+        let mut macd = Macd::new("macd", fast_period, slow_period, signal_period).ok()?;
 
-        let fast_ema = self.calculate_ema(prices, fast_period);
-        let slow_ema = self.calculate_ema(prices, slow_period);
-        let macd_line = fast_ema - slow_ema;
+        let fast = last_value(&mut fast_ema, prices)?;
+        let slow = last_value(&mut slow_ema, prices)?;
+        let histogram = last_value(&mut macd, prices)?;
 
-        let signal_line = self.calculate_ema(&vec![macd_line], signal_period);
-
-        (macd_line, signal_line)
+        // Macd yields the histogram (macd_line - signal_line), so recover the signal line from it
+        let macd_line = fast - slow;
+        Some((macd_line, macd_line - histogram))
     }
 
-    fn calculate_ema(&self, prices: &[f64], period: usize) -> f64 {
-        if prices.is_empty() {
-            return 0.0;
-        }
-
-        let multiplier = 2.0 / (period as f64 + 1.0);
-        let mut ema = prices[0];
-
-        for price in prices.iter().skip(1) {
-            ema = (price - ema) * multiplier + ema;
-        }
-
-        ema
-    }
-
+    /// Returns `(upper, lower)` over the most recent `period` prices.
     fn calculate_bollinger_bands(
-        &self,
-        prices: &[f64],
+        prices: &[Decimal],
         period: usize,
-        num_std_dev: f64,
-    ) -> (f64, f64) {
-        if prices.len() < period {
-            return (prices[prices.len() - 1], prices[prices.len() - 1]);
-        }
-
-        let sma = prices.iter().take(period).sum::<f64>() / period as f64;
-
-        let variance = prices
-            .iter()
-            .take(period)
-            .map(|price| {
-                let diff = price - sma;
-                diff * diff
-            })
-            .sum::<f64>()
-            / period as f64;
-
-        let std_dev = variance.sqrt();
-
-        let upper_band = sma + (std_dev * num_std_dev);
-        let lower_band = sma - (std_dev * num_std_dev);
-
-        (upper_band, lower_band)
+        num_std_dev: Decimal,
+    ) -> Option<(Decimal, Decimal)> {
+        let mut bollinger = BollingerB::new("bollinger", period, num_std_dev).ok()?;
+        last_value(&mut bollinger, prices)?;
+        let (upper, _middle, lower) = bollinger.bands()?;
+        Some((upper, lower))
     }
 
     pub async fn get_previous_analytics(
@@ -627,5 +575,91 @@ impl TokenAnalyticsService {
         } else {
             Ok(None)
         }
+    }
+}
+
+/// Feeds every price into `signal` and returns its final value, or None while it is still warming up.
+fn last_value<S: Signal>(signal: &mut S, prices: &[Decimal]) -> Option<Decimal> {
+    let mut value = SignalValue::Unavailable;
+    for price in prices {
+        value = signal.update(&BarInput::from_close(*price)).ok()?;
+    }
+    value.as_decimal()
+}
+
+fn bigdecimal_to_decimal(value: &BigDecimal) -> Option<Decimal> {
+    let s = value.to_string();
+    Decimal::from_str(&s)
+        .or_else(|_| Decimal::from_scientific(&s))
+        .ok()
+}
+
+fn decimal_to_bigdecimal(value: Decimal) -> BigDecimal {
+    BigDecimal::from_str(&value.to_string()).unwrap_or_else(|_| BigDecimal::from(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decimals(values: &[&str]) -> Vec<Decimal> {
+        values
+            .iter()
+            .map(|v| Decimal::from_str(v).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn test_rsi_uses_wilder_smoothing() {
+        // Wilder's worked example: average gain / loss over the first 14 changes
+        let prices = decimals(&[
+            "44.34", "44.09", "44.15", "43.61", "44.33", "44.83", "45.10", "45.42", "45.84",
+            "46.08", "45.89", "46.03", "45.61", "46.28", "46.28", "46.00", "46.03", "46.41",
+        ]);
+        let rsi = TokenAnalyticsService::calculate_rsi(&prices[..15], 14).unwrap();
+        assert_eq!(rsi.round_dp(2), Decimal::from_str("70.46").unwrap());
+
+        // Later changes are folded in with Wilder smoothing
+        let rsi = TokenAnalyticsService::calculate_rsi(&prices, 14).unwrap();
+        assert_eq!(rsi.round_dp(2), Decimal::from_str("69.35").unwrap());
+
+        // Not enough history yet
+        assert!(TokenAnalyticsService::calculate_rsi(&prices[..14], 14).is_none());
+    }
+
+    #[test]
+    fn test_macd_signal_line_is_ema_of_macd_line() {
+        let prices: Vec<Decimal> = (0..40).map(|i| Decimal::from(100 + i * i % 17)).collect();
+        let (macd_line, signal_line) =
+            TokenAnalyticsService::calculate_macd(&prices, 12, 26, 9).unwrap();
+        assert_eq!(
+            macd_line.round_dp(6),
+            Decimal::from_str("0.043907").unwrap()
+        );
+        assert_eq!(
+            signal_line.round_dp(6),
+            Decimal::from_str("-0.174441").unwrap()
+        );
+
+        // Needs slow_period + signal_period - 1 prices before the signal line exists
+        assert!(TokenAnalyticsService::calculate_macd(&prices[..33], 12, 26, 9).is_none());
+        assert!(TokenAnalyticsService::calculate_macd(&prices[..34], 12, 26, 9).is_some());
+    }
+
+    #[test]
+    fn test_bollinger_bands_use_latest_window() {
+        let mut prices = vec![Decimal::from(1000); 20];
+        prices.extend(vec![Decimal::from(10); 20]);
+        let (upper, lower) =
+            TokenAnalyticsService::calculate_bollinger_bands(&prices, 20, Decimal::TWO).unwrap();
+        assert_eq!(upper, Decimal::from(10));
+        assert_eq!(lower, Decimal::from(10));
+    }
+
+    #[test]
+    fn test_decimal_round_trip() {
+        let price = BigDecimal::from_str("0.000012345678901234").unwrap();
+        let decimal = bigdecimal_to_decimal(&price).unwrap();
+        assert_eq!(decimal_to_bigdecimal(decimal), price);
     }
 }
